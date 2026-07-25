@@ -113,3 +113,17 @@ Rollback:
     Verification: `make validate` і `git diff --check` виконано успішно.
     Risks: Відсутність provenance/signature evidence не має компенсувати функціональні або security defects; exception без owner/expiry/controls неприйнятний.
     Rollback: Повернути додаткові supply-chain controls окремою reviewed зміною, не послаблюючи три Critical функціональні Gate B checks.
+
+2026-07-25 — Task 2.5: fork remediation implementation та локальні regression tests
+    Context: Upstream SMTP2Graph v1.1.5 був відхилений через `Retry-After`, permanent-error-to-`failed` і durable SMTP acknowledgement blocker-и.
+    Change: У окремому fork `smtp2graph-gateway` від exact tag `v1.1.5` реалізовано Graph `Retry-After` для delta-seconds та HTTP-date з bounded jittered backoff, atomic transfer permanent error у `failed`, а також durable enqueue через rename і `fsync` EML/queue directory до SMTP `250`. Додано unit та queue regression tests; TLS test зроблено сумісним з актуальним OpenSSL error text.
+    Verification: 6 unit tests, `npm run build` і `npm run test:receive` (28 passed) виконано успішно у fork. Fork commits: `6d23ee0`, `3483c5b`.
+    Risks: Fork ще не має release image digest, Trivy exact-digest scan/exception record, Syft CycloneDX SBOM, OCI metadata record або повторного Gate B decision.
+    Rollback: Повернутися до exact upstream baseline або попереднього reviewed fork commit; upstream `v1.1.5` не є production rollback target.
+
+2026-07-25 — Task 2.5: non-production Microsoft 365 allowed-mailbox evidence
+    Context: Gate B вимагав evidence реальної Graph/Exchange Online доставки без production credentials і recipient data.
+    Change: У контрольованому non-production tenant виконано synthetic `npm run test:send` suite після надання app permission `Mail.Read` для test mailbox verification. Підтверджено delivery, plain text, HTML, To/CC/BCC/Reply-To, attachments, inline attachments, відсутні From/To/CC headers і proxy flow.
+    Verification: 10/10 non-production send scenarios passed. Локальний `.env` з credential values залишається ignored by Git і не виводився в logs.
+    Risks: Certificate credential mode, Exchange display-name behavior і `DENIED_MAILBOX` → `ErrorAccessDenied` → `failed` evidence ще не завершені; negative test потребує deterministic Message-ID у test harness.
+    Rollback: Припинити використання non-production app або відкликати test secret/permission; не переносити test credentials чи messages у Git або production.

@@ -126,4 +126,39 @@ Rollback:
     Change: У контрольованому non-production tenant виконано synthetic `npm run test:send` suite після надання app permission `Mail.Read` для test mailbox verification. Підтверджено delivery, plain text, HTML, To/CC/BCC/Reply-To, attachments, inline attachments, відсутні From/To/CC headers і proxy flow.
     Verification: 10/10 non-production send scenarios passed. Локальний `.env` з credential values залишається ignored by Git і не виводився в logs.
     Risks: Certificate credential mode, Exchange display-name behavior і `DENIED_MAILBOX` → `ErrorAccessDenied` → `failed` evidence ще не завершені; negative test потребує deterministic Message-ID у test harness.
-    Rollback: Припинити використання non-production app або відкликати test secret/permission; не переносити test credentials чи messages у Git або production.
+Rollback: Припинити використання non-production app або відкликати test secret/permission; не переносити test credentials чи messages у Git або production.
+
+2026-07-25 — Task 2.5: локальний fork checkout зафіксовано в AI context
+    Context: Control plane потребував фактичного посилання на доступний build-plane checkout після remediation implementation.
+    Change: `docs/AI_CONTEXT.md` тепер посилається на `/opt/smtp2graph-gateway`, branch `patched-v1.1.5`, HEAD `8d99940` і remediation commits; зафіксовано, що fork ще не має завершеного exact-digest Gate B approval.
+    Verification: Перевірено clean git state fork, remotes, HEAD і наявність remediation commits; виконано `git diff --check`.
+    Risks: Локальний checkout не є immutable release artifact і не може використовуватися для production deployment.
+    Rollback: Відкотити лише документаційний запис reviewed зміною; fork source та runtime state не змінювалися.
+
+2026-07-25 — Task 2.5: non-production Microsoft 365 denied-mailbox evidence
+    Context: Після 10 позитивних send scenarios залишався незавершеним Critical blocker сценарій `DENIED_MAILBOX` → `ErrorAccessDenied` → `failed`.
+    Change: У fork виправлено test-harness звернення до `result.messageId`; лише `test/02send/03accessDenied.spec.ts` виконано проти non-production tenant.
+    Verification: 1/1 scenario passed: SMTP submission повернув message ID, а `ErrorAccessDenied` payload знайдено в `mailroot/failed` після durable SMTP acknowledgement. Секретні значення `.env` не виводилися.
+    Risks: Certificate credential mode, Exchange display-name behavior, exact fork image digest, Trivy scan/exception, Syft CycloneDX SBOM та OCI metadata ще не завершені; Gate B не пройдений.
+    Rollback: Не використовувати fork у production; synthetic failed payloads очищувати за погодженою процедурою без внесення у Git.
+
+2026-07-25 — CI/CD: gateway caller template перенесено до build plane quarantine
+    Context: Koha-specific workflow у control plane не відповідав межі repository ownership і не міг безпечно будувати gateway image.
+    Change: Legacy template видалено з `mzhk-repo/smtp2graph`; adapted inactive caller template додано до `/opt/smtp2graph-gateway/.github/quarantine/main.yml.disabled`. Template містить PR validation без secrets/deploy, planned `dev`/`main` mapping, least permissions, concurrency, activation blockers і mutable `@main` як explicit temporary exception.
+    Verification: YAML structure, `git diff --check` і local quality checks виконуються перед handoff; файл залишається поза GitHub Actions discovery path.
+    Risks: `@main` є mutable supply-chain reference; shared workflow secret interface, protected environments, orchestration script, exact digest verification і Gate B ще не готові для activation.
+    Rollback: Не переносити template до `.github/workflows/`; повернути лише документаційний/template move reviewed зміною без activation або deploy.
+
+2026-07-25 — Roadmap: CI/CD scope перенесено з Task 2.5 до Task 5.3
+    Context: Task 2.5 змішував functional Gate B qualification із CI/CD build/release, digest і supply-chain automation.
+    Change: Task 2.5 тепер охоплює remediation, protocol/runtime/Microsoft 365 evidence та Gate B review. Task 5.3 є власником workflow activation, build/push, exact digest, Trivy exception record, Syft CycloneDX SBOM, OCI metadata та immutable artifact retention.
+    Verification: Перевірено Phase 2 → Phase 5 dependency: Gate B зберігає applicability review release evidence, а Task 5.3 не стає передумовою Phase 2.
+    Risks: Перенесення не послаблює Gate B: fork не стає production component без applicable digest-scoped release evidence і Gate B decision.
+    Rollback: Повернути roadmap wording reviewed зміною; не переносити CI/CD implementation назад у Gate B task без перегляду phase dependency.
+
+2026-07-25 — Task 2.5: non-production Microsoft 365 certificate credential evidence
+    Context: Certificate-file authentication was the remaining credential-mode gap for the fork Gate B review after client-secret delivery evidence.
+    Change: Added an isolated certificate-only send test; gateway configuration omits `appReg.secret` and uses `AZURE_CERT_THUMBPRINT` plus `AZURE_CERT_PRIVATE_KEY_PATH`.
+    Verification: 1/1 synthetic send-and-read scenario passed. The private key was not printed; its local path was corrected after repository rename and confirmed with mode `0600`.
+    Risks: Exchange display-name behavior, exact fork image digest, Trivy scan/exception, Syft CycloneDX SBOM and OCI metadata remain incomplete; Gate B is not passed.
+    Rollback: Do not use the fork in production; retain the local key only until a separately approved SOPS + age and versioned Docker Secret cutover.

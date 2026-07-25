@@ -433,7 +433,7 @@ Implementation task готова до виконання, лише якщо:
 ### Task 2.5 — Gate B review
 
 - **Priority:** Must
-- **Goal:** відхилити неприйнятний upstream candidate, обрати remediation path і повторити Gate B для нового exact digest.
+- **Goal:** відхилити неприйнятний upstream candidate, обрати remediation path і повторити функціональний Gate B review для нового fork release.
 - **Depends on:** Tasks 2.1–2.4.
 - **Definition of Ready:** Tasks 2.2–2.4 мають відтворюваний evidence; Critical gaps класифіковані; remediation owner і review roles визначені.
 - **Gate B Decision:** upstream SMTP2Graph `v1.1.5` має статус `reject` і не є production component. Підтверджені Critical blocker-и:
@@ -444,31 +444,32 @@ Implementation task готова до виконання, лише якщо:
 
   | Варіант | Орієнтовна робота | Орієнтовні AI-токени | Складність | Ризик повторної кваліфікації | Рішення |
   |---|---:|---:|---|---|---|
-  | Мінімальний fork від exact `v1.1.5` | 8–15 engineer-days | 120–250 тис. | Середня; три локалізовані зміни та регресійні тести | Середній; повторюються змінені та Critical сценарії, supply-chain evidence формується для нового digest | **Selected** |
+  | Мінімальний fork від exact `v1.1.5` | 8–15 engineer-days | 120–250 тис. | Середня; три локалізовані зміни та регресійні тести | Середній; повторюються змінені та Critical сценарії; CI/CD evidence automation належить Task 5.3 | **Selected** |
   | Інший upstream gateway | 15–30 engineer-days | 200–450 тис. | Середня/висока; нові runtime та configuration contracts | Високий; Gate B фактично повторюється повністю, а durable queue може бути відсутня | Не обрано |
   | Власний Go/Rust/Python Production Minimum | 30–90 engineer-days | 500 тис.–1,6 млн | Висока; власні SMTP, durability, retry, recovery та observability | Високий; новий компонент проходить повний Gate B | Fallback: Python |
 
   Для власного компонента Python обрано як fallback відповідно до наявної компетенції команди; Go має кращий deployment/runtime profile, а Rust — сильні compile-time гарантії, але обидва варіанти не вкладаються у погоджений горизонт 2–4 тижні без додаткового ownership і toolchain investment.
-- **Component Decision:** створити мінімальний fork від exact upstream `v1.1.5`, зберігати малий reviewable patch-set, випускати immutable image digest і запропонувати зміни upstream окремими PR. Fork стає новим qualification candidate, але не production component до повторного Gate B. Якщо patch-set неможливо безпечно підтримувати або upstream diverges настільки, що мінімальний rebase втрачається, створити окремий ADR для власного Python Production Minimum і повторити повний Gate B.
+
+- **Component Decision:** створити мінімальний fork від exact upstream `v1.1.5`, зберігати малий reviewable patch-set і запропонувати зміни upstream окремими PR. Build/release CI/CD, immutable image digest та supply-chain artifact automation реалізуються у Task 5.3. Fork стає новим qualification candidate, але не production component до повторного Gate B. Якщо patch-set неможливо безпечно підтримувати або upstream diverges настільки, що мінімальний rebase втрачається, створити окремий ADR для власного Python Production Minimum і повторити повний Gate B.
 - **Implementation Steps:**
   1. Створити fork від exact upstream tag `v1.1.5`; задокументувати upstream commit, license obligations і patch ownership.
   2. Реалізувати bounded exponential backoff із jitter та підтримкою Graph `Retry-After` у форматах delta-seconds і HTTP-date; валідний bounded `Retry-After` має пріоритет над локальною затримкою.
   3. Класифікувати permanent Graph errors і атомарно переміщувати відповідні payloads із live queue до `failed` без нескінченного retry.
   4. Перенести SMTP success boundary після durable enqueue: atomic rename, `fsync` queue-файла та queue-каталогу; при помилці durability повертати temporary SMTP failure, а не `250`.
   5. Повторити protocol, MIME, BCC, UTF-8, attachment, restart, durability та failure-injection tests; окремо перевірити crash одразу після SMTP `250` і відсутність duplicate enqueue.
-  6. Виконати non-production Microsoft 365 checks; для exact fork image digest виконати Trivy image scan із Formal Exception Record, створити CycloneDX SBOM через Syft і перевірити OCI labels для source/release metadata.
+  6. Виконати non-production Microsoft 365 checks і зберегти redacted functional evidence; CI/CD build/release, exact-digest supply-chain artifacts та їх automation належать Task 5.3.
   7. Провести повторний architecture/security/operations review; лише після нового Gate B decision оновити ADR-0002 та `docs/AI_CONTEXT.md`.
-- **Files / Directories:** fork source repository; `docs/TEST_PLAN.md`; `deploy/config/gateway-version.md`; `docs/adr/ADR-0002-*`; `docs/AI_CONTEXT.md`; immutable Gate B evidence location.
-- **Artifacts:** upstream rejection record; fork patch inventory; test evidence; Trivy image scan/exception record; CycloneDX SBOM; OCI metadata record; exact fork digest; повторний Gate B decision record.
+- **Files / Directories:** fork source repository; `docs/TEST_PLAN.md`; `docs/adr/ADR-0002-*`; `docs/AI_CONTEXT.md`; immutable Gate B functional-evidence location.
+- **Artifacts:** upstream rejection record; fork patch inventory; protocol/runtime/Microsoft 365 test evidence; повторний Gate B decision record.
 - **Acceptance Criteria:**
   - Upstream `v1.1.5` однозначно позначений rejected candidate і не використовується як production component.
   - Fork проходить `Retry-After`, permanent-error-to-failed та durable-acknowledgement blocker scenarios.
   - MIME, BCC, UTF-8, attachments і queue restart не мають регресій.
-  - Gate B decision посилається на exact fork digest, Trivy image scan/exception record, CycloneDX SBOM та OCI metadata record.
+  - Gate B decision посилається на exact fork source revision, functional evidence та applicable release evidence; CI/CD generation and retention of digest-scoped artifacts є scope Task 5.3.
   - `conditional pass` заборонений, якщо будь-який із трьох Critical blocker-ів залишається відкритим.
   - Evidence upstream digest не переноситься на fork автоматично; кожен reused artifact має applicability review.
   - Phase 3 залишається заблокованою до `pass` або `conditional pass` нового candidate без Critical gaps.
-- **Validation Commands:** виконати task-specific test harnesses; `make validate`; `git diff --check`; вручну перевірити links, artifact hashes, digest applicability і approval record.
+- **Validation Commands:** виконати task-specific test harnesses; `make validate`; `git diff --check`; вручну перевірити links, functional-evidence applicability і approval record.
 - **Risks:** patch-set drift, GPL obligations, upstream security fixes, помилкова інтерпретація filesystem durability та schedule pressure можуть знизити якість gate.
 - **Rollback Notes:** fork candidate можна відхилити без production migration; повернення до іншого upstream або власного Python component потребує нового/оновленого ADR і повного Gate B для нового digest.
 
@@ -597,10 +598,15 @@ Implementation task готова до виконання, лише якщо:
 - **Goal:** зберігати encrypted env source і безпечно матеріалізувати immutable runtime secrets.
 - **Depends on:** Task 3.1; trusted deployment boundary.
 - **Definition of Ready:** age recipients, recovery custody, CI trust і secret naming погоджені.
-- **Implementation Steps:** додати `.sops.yaml`; encrypted dev/prod files лише з placeholders під час bootstrap; decrypt directly to secret creation channel; version secret names; redact logs; описати rotation/revocation.
-- **Files / Directories:** `.sops.yaml`, `env.dev.enc`, `env.prod.enc`, `scripts/lib/`, `.github/workflows/`, `docs/scripts_runbook.md`.
-- **Artifacts:** secret inventory metadata без values.
-- **Acceptance Criteria:** age private identity поза repo/untrusted CI; plaintext не лишається на disk/artifact; old secret видаляється лише після verified cutover.
+- **Implementation Steps:**
+  1. Додати `.sops.yaml`; під час bootstrap `env.dev.enc` і `env.prod.enc` містять лише placeholders.
+  2. Зберігати в `env.*.enc` encrypted PEM content для `private.key` як `GRAPH_CERT_PRIVATE_KEY_PEM`; plaintext key, його copy або base64 derivative не потрапляють у Git, image, `.env`, rendered config, CI artifact чи log.
+  3. Decrypt виконувати лише у `/dev/shm` через `mktemp` з mode `0600`; перед роботою встановлювати cleanup trap і передавати material напряму до Docker Secret creation channel.
+  4. Створювати versioned Docker Secret `smtp2graph_graph_client_private_key_v<N>` та передавати gateway лише file path у `/run/secrets/`; після verified cutover оновлювати mapping на нову версію.
+  5. Redact logs; описати rotation, revocation і контрольоване видалення попереднього Docker Secret.
+- **Files / Directories:** `.sops.yaml`, `env.dev.enc`, `env.prod.enc`, `deploy/config/`, `scripts/lib/`, `.github/workflows/`, `docs/scripts_runbook.md`.
+- **Artifacts:** secret inventory metadata без values, включно з `GRAPH_CERT_PRIVATE_KEY_PEM` → versioned Docker Secret mapping.
+- **Acceptance Criteria:** age private identity поза repo/untrusted CI; private key exists in source control only as SOPS-encrypted content in `env.*.enc`; plaintext не лишається на persistent disk/artifact; runtime отримує key тільки з versioned Docker Secret mount; old secret видаляється лише після verified cutover.
 - **Validation Commands:**
   ```bash
   sops filestatus env.dev.enc
@@ -608,8 +614,8 @@ Implementation task готова до виконання, лише якщо:
   gitleaks detect --no-banner --redact
   ./tests/security/test-secret-surfaces.sh
   ```
-- **Risks:** CI output leakage; loss of age recovery key.
-- **Rollback Notes:** retain previous versioned Docker Secret до successful smoke; escrow recovery перевіряється без розкриття key.
+- **Risks:** CI output leakage; loss of age recovery key; malformed PEM serialization або неправильний secret-version mapping.
+- **Rollback Notes:** retain previous versioned Docker Secret до successful smoke; rollback повертає лише explicit prior secret mapping; escrow recovery перевіряється без розкриття key; local `private.key` не видаляється до separately approved verified cutover.
 
 ### Task 4.4 — Container hardening і security automation
 
@@ -700,21 +706,21 @@ Implementation task готова до виконання, лише якщо:
 ### Task 5.3 — Secure CI/CD pipeline
 
 - **Priority:** Must
-- **Goal:** validate every change й deploy only approved immutable releases.
+- **Goal:** validate every change, build/publish digest-pinned fork releases with required supply-chain evidence й deploy only approved immutable releases.
 - **Depends on:** Tasks 5.1–5.2.
 - **Definition of Ready:** branch/environment protection і trusted runner model погоджені.
-- **Implementation Steps:** replace Koha workflow; least permissions; pin actions by commit; lint/tests/scans/SBOM; build or verify digest; staging deploy; release-triggered protected production approval; concurrency lock; log redaction.
-- **Files / Directories:** `.github/workflows/main.yml`, `.github/workflows/security.yml`, `CODEOWNERS`, CI config.
-- **Artifacts:** pipeline threat notes і required checks list.
-- **Acceptance Criteria:** PR не deploy-ить production; markdown-only changes все одно проходять релевантний docs/security validation; production only approved tag/digest; secrets недоступні untrusted PR.
+- **Implementation Steps:** replace the quarantined gateway caller template only after its activation blockers are closed; least permissions; pin actions by commit; lint/tests/security scans; build and push the fork image; resolve and verify its exact digest; generate Trivy image scan with Formal Exception Record, Syft CycloneDX SBOM and OCI source/release/upstream-base labels for that digest; retain hashes and immutable artifact links; staging deploy; protected production approval; concurrency lock; log redaction.
+- **Files / Directories:** build repository `.github/workflows/main.yml`, `.github/workflows/security.yml`, `.github/quarantine/main.yml.disabled`, `CODEOWNERS`, CI config; control-plane digest/evidence metadata.
+- **Artifacts:** pipeline threat notes; required checks list; exact fork image digest; Trivy scan/exception record; Syft CycloneDX SBOM; OCI metadata record; immutable artifact hashes/links.
+- **Acceptance Criteria:** PR не deploy-ить production; markdown-only changes все одно проходять релевантний docs/security validation; secrets недоступні untrusted PR; build output resolves to an exact digest rather than a mutable tag; Trivy, Syft and OCI records are generated for that digest and retained immutably; production consumes only an approved tag/digest pair after protected-environment approval.
 - **Validation Commands:**
   ```bash
   actionlint
   zizmor .github/workflows/
   gitleaks detect --no-banner --redact
   ```
-- **Risks:** reusable workflow pinned to mutable `@main`; fork PR secret exposure.
-- **Rollback Notes:** disable deploy job, не validation; prior workflow не відновлювати, якщо він Koha-specific/unsafe.
+- **Risks:** reusable workflow pinned to mutable `@main`; fork PR secret exposure; artifact incorrectly associated with another digest.
+- **Rollback Notes:** disable deploy job, не validation; retain prior approved digest and its evidence; prior workflow не відновлювати, якщо він Koha-specific/unsafe.
 
 ### Task 5.4 — Staging deploy, upgrade і rollback rehearsal
 

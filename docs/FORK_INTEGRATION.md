@@ -7,14 +7,14 @@
 | Область | Репозиторій | Відповідальність |
 |---|---|---|
 | Control plane | `mzhk-repo/smtp2graph` | IaC, deployment digest pinning, qualification evidence, integration tests і документація |
-| Build plane | `mzhk-repo/smtp2graph-gateway` (створити) | Fork source, локальні патчі, gateway unit/regression tests, Docker build та публікація в GHCR |
+| Build plane | `mzhk-repo/smtp2graph-build` (створити) | Fork source, локальні патчі, gateway unit/regression tests, Docker build та публікація в GHCR |
 
 Поточний repository не містить gateway source tree, не збирає gateway image і не є GitHub fork network. Build repository має містити повну історію upstream або відтворюваний import exact tag. Це усуває конфлікт між upstream application code та control-plane файлами.
 
 ## Вихідна база й remotes
 
 - Перший fork baseline: upstream `SMTP2Graph/SMTP2Graph` tag `v1.1.5`, commit `3a1ab485ed6c50265889cb230d8fbf73e2587e06`.
-- `origin` у build repository: writable `https://github.com/mzhk-repo/smtp2graph-gateway.git`.
+- `origin` у build repository: writable `https://github.com/mzhk-repo/smtp2graph-build.git`.
 - `upstream`: read-only `https://github.com/SMTP2Graph/SMTP2Graph.git`.
 - `upstream` ніколи не є ціллю `push`; mutable upstream branch не є deployment input.
 
@@ -52,6 +52,12 @@ Build repository веде `docs/PATCH_INVENTORY.md`. Для кожного па�
 
 ## Shared CI/CD: фактичний caller contract
 
+Неактивний caller template зберігається у build repository за шляхом
+`.github/quarantine/main.yml.disabled`. Він не є GitHub Actions workflow, доки
+окремий reviewed change не перенесе його до `.github/workflows/` після закриття
+activation blockers. Koha-specific template більше не належить control-plane
+repository.
+
 Build repository викликає reusable workflow `shared-workflows/.github/workflows/shared-ci-cd-swarm.yml`. Сам shared workflow має лише trigger `workflow_call`; він не визначає гілки. Caller workflow має реалізовувати й зберігати такий mapping:
 
 | Caller push | `environment_name` | `deploy` | Очікуваний результат |
@@ -59,7 +65,7 @@ Build repository викликає reusable workflow `shared-workflows/.github/wo
 | `dev` | `development` | `true` | GHCR build/push і автоматичний deploy у development |
 | `main` | `production` | `true` | GHCR build/push і автоматичний deploy у production |
 
-Для обох гілок caller передає `build_and_push_docker: true`, `docker_image_name: smtp2graph-gateway`, шлях до orchestration script та мінімально необхідні shared secrets. `push_docker_image` не потрібен за `deploy: true`, оскільки shared workflow у цьому режимі вже пушить image.
+Для обох гілок caller передає `build_and_push_docker: true`, `docker_image_name: smtp2graph-build`, шлях до orchestration script та мінімально необхідні shared secrets. `push_docker_image` не потрібен за `deploy: true`, оскільки shared workflow у цьому режимі вже пушить image.
 
 Приклад структури caller (імена secret mappings належать конкретному репозиторію):
 
@@ -76,7 +82,7 @@ jobs:
       environment_name: development
       deploy: true
       build_and_push_docker: true
-      docker_image_name: smtp2graph-gateway
+      docker_image_name: smtp2graph-build
     secrets: inherit
 
   deploy-production:
@@ -86,15 +92,19 @@ jobs:
       environment_name: production
       deploy: true
       build_and_push_docker: true
-      docker_image_name: smtp2graph-gateway
+      docker_image_name: smtp2graph-build
     secrets: inherit
 ```
 
 `secrets: inherit` у прикладі допустимий лише для trusted same-organization reusable workflow. Для менш широкого trust boundary caller має явно передавати тільки secrets, перелічені у workflow contract. `main` та production environment мають бути protected; автоматичний production deploy є поточною policy, а не Gate B approval.
 
+Поточний quarantined template використовує mutable `@main` на явний запит
+repository owner. Це тимчасовий security exception: до activation reference
+має бути замінений на immutable commit SHA після review shared workflow.
+
 ## Поточна поведінка build і deploy
 
-Shared workflow спершу виконує CI checks, file-system Trivy scan, Gitleaks, Hadolint і compose validation. Якщо `build_and_push_docker: true`, він будує `ghcr.io/${owner}/smtp2graph-gateway`; metadata-action створює branch tag (`main` або `dev`) і SHA tag. За push у `main` або `dev` image пушиться, бо `deploy: true`.
+Shared workflow спершу виконує CI checks, file-system Trivy scan, Gitleaks, Hadolint і compose validation. Якщо `build_and_push_docker: true`, він будує `ghcr.io/${owner}/smtp2graph-build`; metadata-action створює branch tag (`main` або `dev`) і SHA tag. За push у `main` або `dev` image пушиться, бо `deploy: true`.
 
 Після CI job `cd-deploy` отримує deployment credentials: SSH, Tailscale OAuth і SOPS age private key. Він decrypts environment file, підключається до remote host, checkout-ить exact caller commit (`DEPLOY_REF=${github.sha}`), потім виконує local orchestration script або Swarm compose fallback. Отже shared CI/CD фактично виконує автоматичний deploy у відповідне середовище; він не є build-only workflow.
 

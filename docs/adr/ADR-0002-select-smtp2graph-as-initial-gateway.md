@@ -12,7 +12,7 @@ The project needs one maintainable SMTP-to-Graph component for the production mi
 
 Reject upstream SMTP2Graph v1.1.5, pinned to the multi-platform digest recorded in [`deploy/config/gateway-version.md`](../../deploy/config/gateway-version.md), as a production gateway component. Gate B confirmed three Critical blockers: Graph `Retry-After` is ignored; permanent Graph errors can remain in the live queue rather than atomically moving to `failed`; and SMTP `250` precedes confirmed durable queue persistence.
 
-The roadmap selects a minimal fork of the exact upstream release as a remediation path only. It is not an approved production component or a qualified candidate until it has its own immutable digest and a complete, digest-scoped Gate B review. Production implementation remains blocked.
+The roadmap selects a minimal fork of the exact upstream release as a remediation path only. It is not an approved production component. Functional candidate qualification is decided in Gate B; GHCR build/push, immutable digest and digest-scoped release evidence are deferred to Task 5.3 and are mandatory before staging or production promotion.
 
 ## Alternatives Considered
 
@@ -27,7 +27,7 @@ The roadmap selects a minimal fork of the exact upstream release as a remediatio
 - Upstream v1.1.5 is prohibited as a production component; its existing digest, scan and runtime evidence cannot be transferred automatically to a fork.
 - The qualification wrapper remains a synthetic prototype and does not approve any production secret lifecycle.
 - The fork must implement and test `Retry-After`, permanent-error-to-`failed`, and durable SMTP acknowledgement behavior without MIME, BCC, UTF-8, attachment or restart regressions.
-- A successful fork review requires an immutable image digest, Trivy image scan with Formal Exception Record where needed, CycloneDX SBOM through Syft, OCI metadata labels, non-production Microsoft 365 checks and a new Gate B decision record.
+- A successful functional fork review requires the three remediation behaviors, non-production Microsoft 365 checks and a new Gate B decision record. Task 5.3 separately requires immutable image digest, Trivy image scan with Formal Exception Record where needed, CycloneDX SBOM through Syft and OCI metadata labels before staging or production promotion.
 - Synthetic fixtures and isolated tenant resources remain required for protocol and runtime tests.
 
 ## Поточний стан remediation
@@ -36,6 +36,6 @@ The roadmap selects a minimal fork of the exact upstream release as a remediatio
 
 У non-production Microsoft 365 tenant пройдено 10 client-secret delivery/proxy scenarios, окремий `DENIED_MAILBOX` → `ErrorAccessDenied` → `failed` scenario і certificate-only send-and-read scenario. Certificate test конфігурує gateway через thumbprint і path до private key та не передає `appReg.secret`; ключ не виводився у логи. Це є функціональним evidence fork, але не замінює digest-scoped release qualification.
 
-Кваліфікація display name 2026-07-27 показала, що Exchange Online замінює synthetic MIME `From` display name на display name mailbox `noreply`. Отже, одна mailbox не підтримує окремі видимі імена клієнтів; production має використовувати погоджену в ADR-0004 модель окремих service mailbox. Gate B досі не пройдений: для конкретного fork release image потрібні immutable exact digest, Trivy image scan із Formal Exception Record за потреби, Syft CycloneDX SBOM та OCI metadata labels. Automation для build/push, artifact retention і формування цих evidence належить Task 5.3, однак Gate B має перевірити їх застосовність до exact digest перед новим decision record.
+Кваліфікація display name 2026-07-27 показала, що Exchange Online замінює synthetic MIME `From` display name на display name mailbox `noreply`. Отже, одна mailbox не підтримує окремі видимі імена клієнтів; production має використовувати погоджену в ADR-0004 модель окремих service mailbox. Functional Gate B досі не пройдений до повторного review fork source revision і functional evidence. GHCR build/push, immutable exact digest, Trivy image scan із Formal Exception Record за потреби, Syft CycloneDX SBOM, OCI metadata labels та artifact retention належать виключно Task 5.3 і є обов'язковими перед staging або production promotion.
 
 До закриття цих умов заборонено activation CI/CD template, production deployment fork та використання локального `private.key` як production secret. Перенесення ключа в SOPS-encrypted `env.*.enc` і versioned Docker Secret lifecycle є окремою Task 4.3 та потребує окремо погодженого cutover.

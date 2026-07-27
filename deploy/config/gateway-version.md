@@ -35,9 +35,9 @@ The digest was resolved from the Docker Registry manifest and then pulled by dig
 | License | Preliminary pass | GPL-3.0 metadata found; project compatibility review remains required |
 | Image architecture | Pass for amd64/arm64 | Both platform manifests are present |
 | Image signature verification | Out of Gate B scope | Signature verification is not one of the three agreed Gate B supply-chain artifacts |
-| Trivy image scan | Pending | Exact-digest scan and Formal Exception Record are required for Gate B |
-| CycloneDX SBOM | Pending | Syft-generated SBOM is required for Gate B |
-| OCI metadata labels | Pending | Fork release tag, source revision and upstream base commit must be recorded for Gate B |
+| Trivy image scan | Deferred to Task 5.3 | Exact-digest scan and Formal Exception Record are required before staging/production promotion |
+| CycloneDX SBOM | Deferred to Task 5.3 | Syft-generated SBOM is required before staging/production promotion |
+| OCI metadata labels | Deferred to Task 5.3 | Fork release tag, source revision and upstream base commit are recorded by Task 5.3 |
 | Certificate file path | Preliminary pass | Task 2.3 renders `privateKeyPath` from a Docker Secret mount and starts the candidate with a synthetic certificate |
 | Client-secret fallback | Preliminary pass | Task 2.3 renders a secret-file value only into tmpfs; synthetic value is absent from inspect and logs |
 | Non-root/read-only compatibility | Preliminary pass | Task 2.3 passed as UID/GID `65532:65532` with `/runtime` and `/tmp` tmpfs; the upstream image itself still has no configured `USER` |

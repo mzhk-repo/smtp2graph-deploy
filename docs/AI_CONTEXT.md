@@ -4,7 +4,7 @@
 
 `smtp2graph` is an infrastructure project for a private SMTP-to-Microsoft Graph gateway. It enables Grafana, Moodle, DSpace, Koha, and Matomo to send mail through Microsoft 365 while Microsoft Entra Security Defaults remain enabled. The target is a secure, maintainable production minimum, not a general-purpose mail platform.
 
-Upstream SMTP2Graph v1.1.5 was the initial gateway candidate and is rejected by Gate B. A minimal fork is a remediation path only; it is not a production component until a new exact digest passes Gate B.
+Upstream SMTP2Graph v1.1.5 was the initial gateway candidate and is rejected by Gate B. A minimal fork is a remediation path only; functional Gate B qualifies source behavior, while Task 5.3 alone builds/pushes a GHCR release and records its exact digest-scoped supply-chain evidence before staging or production promotion.
 
 ## Current Status
 
@@ -16,7 +16,7 @@ Upstream SMTP2Graph v1.1.5 was the initial gateway candidate and is rejected by 
 - Task 1.2 local quality baseline is complete. `make validate` runs pinned Markdown, YAML, and shell-format checks plus `git diff --check`; Gitleaks and ShellCheck remain CI-owned checks.
 - Task 1.3 experimental configuration contract is complete. `.env.example` contains safe development values and versioned-secret-name placeholders only; `verify-env.sh --example-only` validates the allowlisted keys without sourcing an environment file.
 - Task 1.4 documentation baseline is complete. `README.md`, `AI_CONTEXT.md`, the changelog index/active volume, roadmap documentation map, and the roadmap phase transition map are present and linked.
-- Task 2.1 ADR baseline is complete. `docs/adr/ADR-0001` through `ADR-0007` record the SMTP-to-Graph boundary, initial gateway candidate, Swarm topology, sender mailbox, Graph mailbox scope, secret boundary, and cold-recovery model. Task 2.5 rejected upstream SMTP2Graph v1.1.5 in ADR-0002; Phase 3 remains blocked pending a new fork candidate and Gate B.
+- Task 2.1 ADR baseline is complete. `docs/adr/ADR-0001` through `ADR-0007` record the SMTP-to-Graph boundary, initial gateway candidate, Swarm topology, sender mailbox, Graph mailbox scope, secret boundary, and cold-recovery model. Task 2.5 rejected upstream SMTP2Graph v1.1.5 in ADR-0002; Phase 3 remains blocked pending a new fork source revision and functional Gate B.
 - Task 2.3 runtime compatibility spike is complete with synthetic inputs. The prototype renders configuration in tmpfs, supports certificate-file and client-secret fallback modes, and passes non-root/read-only startup, listener, stop/restart and secret-surface checks; Graph token and delivery behavior remain unqualified.
 - Task 2.4 protocol qualification is complete against an isolated token/Graph mock. MIME and queue-restart checks pass, but Graph `Retry-After` is ignored, `ErrorAccessDenied` does not move payloads to failed state, and SMTP `250` precedes proven durable enqueue. Task 2.5 therefore rejected upstream v1.1.5.
 - Gateway fork integration contract is defined. The current repository remains control plane; the build-plane checkout is available at `/opt/smtp2graph-build` on branch `patched-v1.1.5`, remote `mzhk-repo/smtp2graph-build`, HEAD `10679c0`. Commits `6d23ee0` and `3483c5b` implement the three remediation areas and their queue regression coverage; `8d99940` adds the access-denied regression case, while `10679c0` adds certificate-credential qualification. The Dockerfile now pins its Node base image and defines the OCI release-metadata contract; the fork still has no recorded immutable release digest or completed Gate B approval.
@@ -52,8 +52,8 @@ The target queue is durable but bounded to 1 GiB. At 80% utilization, new SMTP s
 
 ## Tech Stack
 
-- Rejected upstream gateway: SMTP2Graph v1.1.5, immutable digest recorded in `deploy/config/gateway-version.md`. A minimal fork is the selected remediation path, but it has no qualified digest or production approval; it must close the three Critical Gate B blockers and supply Trivy scan/exception, Syft CycloneDX SBOM, OCI metadata and non-production Microsoft 365 evidence.
-- Fork release interface: `/opt/smtp2graph-build` is the local build-plane checkout for `ghcr.io/mzhk-repo/smtp2graph-build`. The shared CI/CD workflow automatically builds, pushes and deploys `dev` to development and `main` to production when invoked by its caller; it does not yet record the three agreed Gate B supply-chain artifacts. The control plane may consume only a verified digest paired with fork source, Trivy scan/exception record, CycloneDX SBOM, OCI labels and Gate B evidence as defined in `docs/FORK_INTEGRATION.md`.
+- Rejected upstream gateway: SMTP2Graph v1.1.5, immutable digest recorded in `deploy/config/gateway-version.md`. A minimal fork is the selected remediation path; functional Gate B must close the three Critical blockers and capture non-production Microsoft 365 evidence. Task 5.3 alone creates its qualified GHCR digest, Trivy scan/exception, Syft CycloneDX SBOM and OCI metadata before staging or production promotion.
+- Fork release interface: `/opt/smtp2graph-build` is the local build-plane checkout for `ghcr.io/mzhk-repo/smtp2graph-build`. The shared CI/CD workflow builds, pushes and deploys only when invoked by its caller in Task 5.3; it is not a Phase 2 activity. The control plane may consume only a verified Task 5.3 digest paired with fork source, Trivy scan/exception record, CycloneDX SBOM and OCI labels as defined in `docs/FORK_INTEGRATION.md`.
 - Runtime/orchestration: Docker Swarm, single node, one service replica.
 - Secrets: Docker Secrets, SOPS + age.
 - Identity and mail delivery: Microsoft Entra ID, Microsoft Graph, Exchange Online RBAC for Applications.
@@ -153,7 +153,8 @@ If this file conflicts with `docs/SPEC.md`, `docs/ROADMAP.md`, or an applicable 
 
 - Which owners may approve the protected branches, releases and GHCR package for `mzhk-repo/smtp2graph-build`?
 - How will the shared CI/CD workflow pass, verify and deploy the exact GHCR digest rather than mutable `main`/`dev` tags?
-- Does the fork pass Gate B with a new immutable digest, Trivy scan/exception record, CycloneDX SBOM and OCI labels?
+- Does the fork pass functional Gate B with its source revision and functional evidence?
+- Can Task 5.3 produce and retain the immutable GHCR digest, Trivy scan/exception record, CycloneDX SBOM and OCI labels required for staging/production promotion?
 - What TLS certificate source and trust model will clients use?
 - What non-production test tenant/mailbox and recipient allowlist are available?
 - What is the final independent alert transport and who owns on-call response?
@@ -161,4 +162,4 @@ If this file conflicts with `docs/SPEC.md`, `docs/ROADMAP.md`, or an applicable 
 
 ## Last Updated
 
-2026-07-27 — Task 2.5 fork checkout is available at `/opt/smtp2graph-build` on `patched-v1.1.5` (`10679c0`) with the three remediation areas, access-denied regression coverage and certificate-credential qualification. Non-production Microsoft 365 delivery, denied-mailbox, certificate-credential and display-name checks pass. Exchange Online replaces the synthetic MIME display name with mailbox display name `noreply`, so production must use the already approved per-service mailbox model. The fork Dockerfile pins its Node base image and defines OCI release metadata, but no immutable fork digest exists yet. The fork remains unapproved until exact-digest Gate B evidence is complete. A non-active CI/CD caller template now resides in the build plane; it must not be activated before its explicit blockers are closed.
+2026-07-27 — Task 2.5 fork checkout is available at `/opt/smtp2graph-build` on `patched-v1.1.5` (`10679c0`) with the three remediation areas, access-denied regression coverage and certificate-credential qualification. Non-production Microsoft 365 delivery, denied-mailbox, certificate-credential and display-name checks pass. Exchange Online replaces the synthetic MIME display name with mailbox display name `noreply`, so production must use the already approved per-service mailbox model. The fork Dockerfile pins its Node base image and defines OCI release metadata. Functional Gate B remains pending its source/evidence review; all GHCR build/push, exact-digest and supply-chain evidence work is deferred to Task 5.3. A non-active CI/CD caller template now resides in the build plane; it must not be activated before its explicit blockers are closed.

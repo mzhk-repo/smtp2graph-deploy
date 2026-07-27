@@ -192,3 +192,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Registry manifest digest базового образу розв'язано через `docker buildx imagetools inspect`; local metadata build без push пройшов і підтвердив усі required OCI labels.
     Risks: Підготовчий patch не створює fork image digest, Trivy record, CycloneDX SBOM або immutable artifact retention; CI/CD лишається inactive.
     Rollback: Повернути Dockerfile і contract окремою reviewed зміною; не підміняти fork release mutable base-image tag або local image ID.
+
+2026-07-27 — Roadmap: GHCR release evidence deferred to Task 5.3
+    Context: Exact fork digest, GHCR build/push, Trivy, Syft and OCI release-artifact generation previously overlapped with functional Gate B, creating a Phase 2 → Task 5.3 dependency conflict.
+    Change: SPEC, roadmap, ADR-0002, fork integration contract and AI context now separate functional Gate B from release supply-chain work. Task 5.3 exclusively owns GHCR build/push, exact digest, Trivy scan/exception, CycloneDX SBOM, OCI metadata and immutable artifact retention; these gate staging/production promotion, not Phase 3 entry.
+    Verification: Documentation cross-references and phase/task ownership reviewed; `make validate` and `git diff --check` run after the documentation change.
+    Risks: A functional Gate B pass is not production approval and cannot authorize a deployment without Task 5.3 release evidence.
+    Rollback: Restore the prior gate boundary only through a reviewed SPEC/roadmap/ADR change; do not perform GHCR build/push outside Task 5.3.

@@ -965,7 +965,7 @@ ADR не створюються для легко зворотних парам�
 - non-root/read-only compatibility;
 - MIME/BCC/attachments tests;
 - queue durability та acknowledgement semantics (асинхронний Store-and-Forward);
-- supply-chain evidence для exact image digest: Trivy image scan із Formal Exception Record для будь-якого дозволеного Critical/High finding, CycloneDX SBOM через Syft і OCI labels для source/release metadata tracking.
+- Функціональна Gate B qualification не включає build або push image. Exact fork release digest, Trivy image scan із Formal Exception Record для будь-якого дозволеного Critical/High finding, CycloneDX SBOM через Syft, OCI labels і immutable artifact retention реалізуються лише в Task 5.3 та є передумовою staging/production promotion.
 
 ## Gate C: погодження Microsoft 365 authorization
 

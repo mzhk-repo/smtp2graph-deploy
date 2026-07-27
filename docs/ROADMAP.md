@@ -14,7 +14,7 @@
 | Фаза | Призначення | Очікуваний результат | Умова переходу |
 |---|---|---|---|
 | [Phase 1](#phase-1--repository-tooling-and-local-development-baseline) | Repository, tooling та local development baseline | `v0.1`: безпечна структура, контекст, contract і локальні checks | Phase 1 Quality Gate пройдений; configuration contract reviewed |
-| [Phase 2](#phase-2--core-architecture-and-gateway-qualification) | Core architecture та gateway qualification | `v0.2`: evidence bundle і рішення Gate B | Gate B `pass` або `conditional pass` без Critical blocker |
+| [Phase 2](#phase-2--core-architecture-and-gateway-qualification) | Core architecture та gateway functional qualification | `v0.2`: functional evidence bundle і рішення Gate B | Functional Gate B `pass` або `conditional pass` без Critical blocker |
 | [Phase 3](#phase-3--core-functional-implementation) | Local functional MVP | `v0.3`: відтворюваний non-production SMTP-to-Graph skeleton | Phase 3 Quality Gate пройдений; локальні negative/restart тести зелені |
 | [Phase 4](#phase-4--authentication-authorization-and-security-baseline) | Authentication, authorization і security baseline | `v0.4`: Gate C evidence, TLS, secret boundary та hardening | Gate C пройдений на non-production evidence |
 | [Phase 5](#phase-5--deployment-and-gitsecops) | Deployment та GitSecOps | `v0.5`: staging deployment candidate з rollback | staging deploy, no-op redeploy і rollback rehearsal успішні |
@@ -29,7 +29,7 @@
 `Gate A → Phase 1 → Phase 1 Quality Gate → Phase 2 → Gate B → Phase 3 → Phase 4 → Gate C → Phase 5 → Phase 6 → Phase 7 → Gate D → v1.0 → Phase 8 (optional)`
 
 - Невдалий Phase 1 Quality Gate повертає роботу в Phase 1; production implementation не починається.
-- Gate B `reject` повертає рішення до ADR/roadmap review і блокує Phase 3; `conditional pass` дозволяє Phase 3 лише без Critical gaps.
+- Functional Gate B `reject` повертає рішення до ADR/roadmap review і блокує Phase 3; `conditional pass` дозволяє Phase 3 лише без Critical gaps. Build/push та digest-scoped release evidence належать Task 5.3 і блокують staging/production promotion, а не Phase 3.
 - Невдалий Gate C повертає роботу до Phase 4 security boundary; Phase 5 production-capable deployment не дозволяється.
 - Невдалий Gate D повертає роботу до Phase 7 operations/recovery; `v1.0` не оголошується.
 - Phase 8 запускається лише після `v1.0` за окремим approved trigger і не змінює попередні acceptance gates.
@@ -100,9 +100,9 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 ## v0.2 — Qualified SMTP2Graph Candidate
 
 - **Goal:** закрити Gate B до інвестування у production deployment.
-- **Included capabilities:** pinned version/digest; provenance, SBOM і scan; secret-file/certificate compatibility; non-root/read-only; MIME, queue та acknowledgement probes; ADR-0001…0003.
+- **Included capabilities:** pinned source version/revision; secret-file/certificate compatibility; non-root/read-only; MIME, queue та acknowledgement probes; ADR-0001…0003.
 - **Excluded capabilities:** production tenant, production mailbox, SLA.
-- **Exit criteria:** Gate B має evidence bundle і рішення `pass`, `conditional pass` або `reject`; `reject` не дозволяє переходити до реалізації SMTP2Graph.
+- **Exit criteria:** Functional Gate B має evidence bundle і рішення `pass`, `conditional pass` або `reject`; `reject` не дозволяє переходити до реалізації SMTP2Graph. GHCR release digest та supply-chain artifacts створюються тільки в Task 5.3.
 
 ## v0.3 — Local Functional MVP
 
@@ -373,25 +373,23 @@ Implementation task готова до виконання, лише якщо:
 - **Risks:** decision без evidence.
 - **Rollback Notes:** Proposed ADR можна змінити; Accepted supersede-иться новим ADR, не переписується мовчки.
 
-### Task 2.2 — Supply-chain qualification pinned release
+### Task 2.2 — Source identity та release-evidence contract
 
 - **Priority:** Must
-- **Goal:** зафіксувати exact SMTP2Graph version/digest і три погоджені supply-chain evidence-артефакти.
+- **Goal:** зафіксувати exact upstream source identity та contract для release evidence, яке буде згенероване в Task 5.3.
 - **Depends on:** Task 2.1.
-- **Definition of Ready:** upstream source/image/release доступні; scan policy та severity threshold визначені.
-- **Implementation Steps:** зафіксувати exact version/digest; виконати Trivy image scan exact digest і оформити Formal Exception Record для дозволеного Critical/High finding; згенерувати CycloneDX SBOM через Syft; перевірити OCI labels для source/release metadata.
+- **Definition of Ready:** upstream source/release доступні; scan policy та severity threshold визначені.
+- **Implementation Steps:** зафіксувати exact upstream version, source commit і license obligations; визначити required OCI labels, Trivy exception policy та Syft CycloneDX format; описати передачу exact release digest і immutable artifacts із Task 5.3 до control plane.
 - **Files / Directories:** `deploy/config/gateway-version.*`, `tests/acceptance/`, `.github/workflows/`.
-- **Artifacts:** Gate B evidence: Trivy image scan/exception record, CycloneDX SBOM і OCI metadata record; оновлений ADR-0002.
-- **Acceptance Criteria:** Trivy scan виконано для exact digest; кожен дозволений Critical/High finding має Formal Exception Record; CycloneDX SBOM і OCI labels пов'язані з exact digest; mutable tag не використовується для deployment.
+- **Artifacts:** source identity record, release-evidence contract і оновлений ADR-0002.
+- **Acceptance Criteria:** required Trivy/Syft/OCI artifact contract визначено; mutable tag не визначається deployment artifact; фактичні GHCR build/push, exact digest і artifact generation відкладені до Task 5.3.
 - **Validation Commands:**
   ```bash
-  docker pull "${GATEWAY_IMAGE_REF}"
-  docker inspect --format '{{index .RepoDigests 0}}' "${GATEWAY_IMAGE_REF}"
-  trivy image --severity HIGH,CRITICAL --exit-code 1 "${GATEWAY_IMAGE_DIGEST}"
-  syft "${GATEWAY_IMAGE_DIGEST}" -o cyclonedx-json
+  git show "${UPSTREAM_SOURCE_COMMIT}"
+  rg -n 'Trivy|Syft|CycloneDX|OCI|exact digest' docs/FORK_INTEGRATION.md docs/ROADMAP.md
   ```
 - **Risks:** scanner false positives або надто широкий Formal Exception Record.
-- **Rollback Notes:** зберігати попередній approved digest; exception потребує owner і expiry.
+- **Rollback Notes:** release evidence не створюється в Phase 2; Task 5.3 зберігає попередній approved digest, а exception потребує owner і expiry.
 
 ### Task 2.3 — Runtime, secret і container compatibility spike
 
@@ -433,7 +431,7 @@ Implementation task готова до виконання, лише якщо:
 ### Task 2.5 — Gate B review
 
 - **Priority:** Must
-- **Goal:** відхилити неприйнятний upstream candidate, обрати remediation path і повторити функціональний Gate B review для нового fork release.
+- **Goal:** відхилити неприйнятний upstream candidate, обрати remediation path і повторити functional Gate B review для нового fork source revision.
 - **Depends on:** Tasks 2.1–2.4.
 - **Definition of Ready:** Tasks 2.2–2.4 мають відтворюваний evidence; Critical gaps класифіковані; remediation owner і review roles визначені.
 - **Gate B Decision:** upstream SMTP2Graph `v1.1.5` має статус `reject` і не є production component. Підтверджені Critical blocker-и:
@@ -457,15 +455,15 @@ Implementation task готова до виконання, лише якщо:
   3. Класифікувати permanent Graph errors і атомарно переміщувати відповідні payloads із live queue до `failed` без нескінченного retry.
   4. Перенести SMTP success boundary після durable enqueue: atomic rename, `fsync` queue-файла та queue-каталогу; при помилці durability повертати temporary SMTP failure, а не `250`.
   5. Повторити protocol, MIME, BCC, UTF-8, attachment, restart, durability та failure-injection tests; окремо перевірити crash одразу після SMTP `250` і відсутність duplicate enqueue.
-  6. Виконати non-production Microsoft 365 checks і зберегти redacted functional evidence; CI/CD build/release, exact-digest supply-chain artifacts та їх automation належать Task 5.3.
-  7. Провести повторний architecture/security/operations review; лише після нового Gate B decision оновити ADR-0002 та `docs/AI_CONTEXT.md`.
+  6. Виконати non-production Microsoft 365 checks і зберегти redacted functional evidence.
+  7. Провести повторний architecture/security/operations review; після functional Gate B decision оновити ADR-0002 та `docs/AI_CONTEXT.md`. CI/CD build/release, GHCR push, exact-digest supply-chain artifacts та їх automation належать виключно Task 5.3.
 - **Files / Directories:** fork source repository; `docs/TEST_PLAN.md`; `docs/adr/ADR-0002-*`; `docs/AI_CONTEXT.md`; immutable Gate B functional-evidence location.
 - **Artifacts:** upstream rejection record; fork patch inventory; protocol/runtime/Microsoft 365 test evidence; повторний Gate B decision record.
 - **Acceptance Criteria:**
   - Upstream `v1.1.5` однозначно позначений rejected candidate і не використовується як production component.
   - Fork проходить `Retry-After`, permanent-error-to-failed та durable-acknowledgement blocker scenarios.
   - MIME, BCC, UTF-8, attachments і queue restart не мають регресій.
-  - Gate B decision посилається на exact fork source revision, functional evidence та applicable release evidence; CI/CD generation and retention of digest-scoped artifacts є scope Task 5.3.
+  - Functional Gate B decision посилається на exact fork source revision і functional evidence; Task 5.3 окремо генерує та зберігає digest-scoped release evidence перед staging/production promotion.
   - `conditional pass` заборонений, якщо будь-який із трьох Critical blocker-ів залишається відкритим.
   - Evidence upstream digest не переноситься на fork автоматично; кожен reused artifact має applicability review.
   - Phase 3 залишається заблокованою до `pass` або `conditional pass` нового candidate без Critical gaps.
@@ -477,14 +475,14 @@ Implementation task готова до виконання, лише якщо:
 
 - [ ] Upstream `v1.1.5` rejection і remediation decision approved.
 - [ ] Повторний Gate B для fork candidate approved без Critical gaps.
-- [ ] Fork version і digest pinned; Trivy image scan/exception record, CycloneDX SBOM та OCI metadata record збережені.
+- [ ] Fork source revision pinned; functional evidence complete. GHCR digest, Trivy scan/exception record, CycloneDX SBOM та OCI metadata record є scope Task 5.3.
 - [ ] Secret, non-root/read-only, MIME, queue і acknowledgement behavior доведені.
 - [ ] ADR та AI_CONTEXT актуальні.
 
 ## Phase 3 — Core Functional Implementation
 
 **Objective:** реалізувати локальний functional MVP без production identity.
-**Dependencies:** Gate B pass; Phase 1 config contract.
+**Dependencies:** Functional Gate B pass; Phase 1 config contract.
 **Deliverables:** gateway config, safe wrapper, queue layout, local smoke/negative tests.
 **Phase risks:** prototype shortcuts стають production defaults.
 **Phase rollback:** local artifacts versioned; persistent test volume disposable й не містить реальних листів.

@@ -20,7 +20,7 @@ Upstream SMTP2Graph v1.1.5 was the initial gateway candidate and is rejected by 
 - Task 2.3 runtime compatibility spike is complete with synthetic inputs. The prototype renders configuration in tmpfs, supports certificate-file and client-secret fallback modes, and passes non-root/read-only startup, listener, stop/restart and secret-surface checks; Graph token and delivery behavior remain unqualified.
 - Task 2.4 protocol qualification is complete against an isolated token/Graph mock. MIME and queue-restart checks pass, but Graph `Retry-After` is ignored, `ErrorAccessDenied` does not move payloads to failed state, and SMTP `250` precedes proven durable enqueue. Task 2.5 therefore rejected upstream v1.1.5.
 - Gateway fork integration contract is defined. The current repository remains control plane; the build-plane checkout is available at `/opt/smtp2graph-build` on branch `patched-v1.1.5`, remote `mzhk-repo/smtp2graph-build`, HEAD `8d99940`. Commits `6d23ee0` and `3483c5b` implement the three remediation areas and their queue regression coverage; `8d99940` adds the access-denied regression case. The fork still has no recorded immutable release digest or completed Gate B approval.
-- Fork Step 6 non-production Microsoft 365 checks pass for both client-secret and certificate paths: 10 positive delivery/proxy client-secret scenarios, the `DENIED_MAILBOX` negative scenario, and one certificate-only synthetic delivery. The denied scenario proves `ErrorAccessDenied` is moved to `mailroot/failed` after SMTP acknowledgement. Exchange display-name behavior remains unqualified.
+- Fork Step 6 non-production Microsoft 365 checks pass for both client-secret and certificate paths: 10 positive delivery/proxy client-secret scenarios, the `DENIED_MAILBOX` negative scenario, one certificate-only synthetic delivery, and display-name qualification. The denied scenario proves `ErrorAccessDenied` is moved to `mailroot/failed` after SMTP acknowledgement. Exchange Online replaces the synthetic MIME `From` display name with mailbox display name `noreply`; a single mailbox therefore cannot provide client-specific visible names.
 
 ## Key Decisions
 
@@ -154,13 +154,11 @@ If this file conflicts with `docs/SPEC.md`, `docs/ROADMAP.md`, or an applicable 
 - Which owners may approve the protected branches, releases and GHCR package for `mzhk-repo/smtp2graph-build`?
 - How will the shared CI/CD workflow pass, verify and deploy the exact GHCR digest rather than mutable `main`/`dev` tags?
 - Does the fork pass Gate B with a new immutable digest, Trivy scan/exception record, CycloneDX SBOM and OCI labels?
-- Does the fork preserve the expected Exchange display-name behavior?
 - What TLS certificate source and trust model will clients use?
 - What non-production test tenant/mailbox and recipient allowlist are available?
 - What is the final independent alert transport and who owns on-call response?
-- Does Exchange Online preserve client-provided display names for the single sender mailbox?
 - What approved SOPS age recipient, recovery custody, CI trust boundary, and secret naming convention will be used?
 
 ## Last Updated
 
-2026-07-25 — Task 2.5 fork checkout is available at `/opt/smtp2graph-build` on `patched-v1.1.5` (`8d99940`) with the three remediation areas and access-denied regression coverage. Non-production Microsoft 365 delivery, denied-mailbox and certificate-credential checks pass. The fork remains unapproved until display-name qualification and exact-digest Gate B evidence are complete. A non-active CI/CD caller template now resides in the build plane; it must not be activated before its explicit blockers are closed.
+2026-07-27 — Task 2.5 fork checkout is available at `/opt/smtp2graph-build` on `patched-v1.1.5` (`8d99940`) with the three remediation areas and access-denied regression coverage. Non-production Microsoft 365 delivery, denied-mailbox, certificate-credential and display-name checks pass. Exchange Online replaces the synthetic MIME display name with mailbox display name `noreply`, so production must use the already approved per-service mailbox model. The fork remains unapproved until exact-digest Gate B evidence is complete. A non-active CI/CD caller template now resides in the build plane; it must not be activated before its explicit blockers are closed.

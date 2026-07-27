@@ -178,3 +178,10 @@ Rollback: Припинити використання non-production app або 
     Open items: Display-name qualification, exact fork digest, Trivy scan/exception, Syft CycloneDX SBOM, OCI metadata labels; `make validate` має stale pre-commit cache issue, а `tsc --noEmit` у build plane — pre-existing `jsbn` typings issue.
     Risks: ADR не є новим Gate B decision або production approval; CI/CD template лишається inactive, а `private.key` не можна переносити чи видаляти до окремо approved SOPS + age / Docker Secret cutover.
     Rollback: Відкотити цей документаційний status update reviewed зміною; не скасовувати upstream rejection без нового digest-scoped Gate B decision.
+
+2026-07-27 — Task 2.5: non-production Exchange display-name qualification
+    Context: Gate B вимагав встановити, чи може одна sender mailbox передавати різні client display name через MIME `From`.
+    Change: У fork додано isolated send scenario з synthetic display name. У control plane додано test plan та оновлено ADR-0002 і AI context з фактичним результатом.
+    Verification: `test/02send/05displayName.spec.ts` пройшов у non-production tenant. Exchange Online зберіг адресу відправника, але замінив synthetic MIME display name на mailbox display name `noreply`.
+    Risks: Одна mailbox не забезпечує окрему видиму ідентичність клієнтів; production має використовувати погоджену per-service mailbox model. Gate B досі blocked до exact fork digest, Trivy scan/exception, Syft CycloneDX SBOM та OCI metadata.
+    Rollback: Відкотити test і documentation record окремою reviewed зміною лише якщо non-production evidence визнано неактуальним; не трактувати qualification як Gate B approval або production authorization.

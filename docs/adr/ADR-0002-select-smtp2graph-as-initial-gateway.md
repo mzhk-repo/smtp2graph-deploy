@@ -2,7 +2,7 @@
 
 - **Status:** Rejected
 - **Date:** 2026-07-22
-- **Related:** `docs/SPEC.md` sections 2, 4, 5, 14; Gate B; Tasks 2.2–2.5
+- **Related:** `docs/SPEC.md` sections 2, 4, 5, 14; `docs/FORK_INTEGRATION.md`; Gate B; Tasks 2.2–2.5, 5.3
 
 ## Context
 
@@ -29,3 +29,13 @@ The roadmap selects a minimal fork of the exact upstream release as a remediatio
 - The fork must implement and test `Retry-After`, permanent-error-to-`failed`, and durable SMTP acknowledgement behavior without MIME, BCC, UTF-8, attachment or restart regressions.
 - A successful fork review requires an immutable image digest, Trivy image scan with Formal Exception Record where needed, CycloneDX SBOM through Syft, OCI metadata labels, non-production Microsoft 365 checks and a new Gate B decision record.
 - Synthetic fixtures and isolated tenant resources remain required for protocol and runtime tests.
+
+## Поточний стан remediation
+
+Історичне рішення про відхилення upstream не змінюється. Remediation виконується в окремому build-plane checkout `/opt/smtp2graph-build` (`mzhk-repo/smtp2graph-build`, branch `patched-v1.1.5`), що походить від exact upstream `v1.1.5`. Наявні source commits `6d23ee0`, `3483c5b` і `8d99940` реалізують та покривають regression-тестами відповідно `Retry-After`, atomic permanent-error-to-`failed` і durable SMTP acknowledgement. Поточний checkout та його локальні тестові зміни не є release artifact і не можуть бути джерелом production deployment.
+
+У non-production Microsoft 365 tenant пройдено 10 client-secret delivery/proxy scenarios, окремий `DENIED_MAILBOX` → `ErrorAccessDenied` → `failed` scenario і certificate-only send-and-read scenario. Certificate test конфігурує gateway через thumbprint і path до private key та не передає `appReg.secret`; ключ не виводився у логи. Це є функціональним evidence fork, але не замінює digest-scoped release qualification.
+
+Gate B досі не пройдений. Потрібно кваліфікувати Exchange display-name behavior і отримати для конкретного fork release image: immutable exact digest, Trivy image scan із Formal Exception Record за потреби, Syft CycloneDX SBOM та OCI metadata labels. Automation для build/push, artifact retention і формування цих evidence належить Task 5.3, однак Gate B має перевірити їх застосовність до exact digest перед новим decision record.
+
+До закриття цих умов заборонено activation CI/CD template, production deployment fork та використання локального `private.key` як production secret. Перенесення ключа в SOPS-encrypted `env.*.enc` і versioned Docker Secret lifecycle є окремою Task 4.3 та потребує окремо погодженого cutover.

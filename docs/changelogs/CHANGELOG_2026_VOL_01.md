@@ -162,3 +162,19 @@ Rollback: Припинити використання non-production app або 
     Verification: 1/1 synthetic send-and-read scenario passed. The private key was not printed; its local path was corrected after repository rename and confirmed with mode `0600`.
     Risks: Exchange display-name behavior, exact fork image digest, Trivy scan/exception, Syft CycloneDX SBOM and OCI metadata remain incomplete; Gate B is not passed.
     Rollback: Do not use the fork in production; retain the local key only until a separately approved SOPS + age and versioned Docker Secret cutover.
+
+2026-07-25 — Консолідований стан виконаних Gate B і CI/CD ітерацій
+    Context: Control/build repositories перейменовано на `/opt/smtp2graph-deploy` і `/opt/smtp2graph-build`; потрібно зафіксувати фактичний status і blockers після certificate credential qualification.
+    Change: У build plane додано неактивний CI/CD caller template, Gate B CI/CD scope перенесено до Task 5.3, виконано client-secret delivery/proxy, denied-mailbox і certificate-only Microsoft 365 checks; Task 4.3 доповнено SOPS-encrypted `GRAPH_CERT_PRIVATE_KEY_PEM` → versioned Docker Secret lifecycle.
+    Verification: 10 positive client-secret scenarios, 1 denied-mailbox scenario і 1 certificate-only synthetic send-and-read scenario passed; `git diff --check` і example-only env contract passed.
+    Open items: `make validate` блокується stale pre-commit manifest cache, що посилається на старий `/opt/smtp2graph/.cache/pre-commit`; `tsc --noEmit` у build plane блокується pre-existing missing `jsbn` typings; Gate B лишається blocked до display-name qualification та exact fork digest, Trivy scan/exception, Syft CycloneDX SBOM і OCI metadata.
+    Risks: Не активувати CI/CD, не використовувати fork у production і не видаляти local `private.key` до окремо approved SOPS + age / Docker Secret cutover.
+    Rollback: Відкотити лише documentation/test/template changes reviewed commits; не відкочувати на rejected upstream image.
+
+2026-07-25 — ADR-0002: актуалізовано remediation status відхиленого upstream gateway
+    Context: Після fork remediation та non-production Microsoft 365 checks ADR мав відображати актуальний evidence status, не змінюючи historical Gate B rejection upstream SMTP2Graph v1.1.5.
+    Change: ADR-0002 посилається на fork integration/Task 5.3 і документує build-plane checkout, remediation commits, client-secret/denied-mailbox/certificate-only evidence, а також межу між функціональною qualification та release evidence.
+    Verification: Документаційний запис звірено з активним changelog і фактичним Gate B status; upstream ADR status залишається `Rejected`.
+    Open items: Display-name qualification, exact fork digest, Trivy scan/exception, Syft CycloneDX SBOM, OCI metadata labels; `make validate` має stale pre-commit cache issue, а `tsc --noEmit` у build plane — pre-existing `jsbn` typings issue.
+    Risks: ADR не є новим Gate B decision або production approval; CI/CD template лишається inactive, а `private.key` не можна переносити чи видаляти до окремо approved SOPS + age / Docker Secret cutover.
+    Rollback: Відкотити цей документаційний status update reviewed зміною; не скасовувати upstream rejection без нового digest-scoped Gate B decision.

@@ -185,3 +185,10 @@ Rollback: Припинити використання non-production app або 
     Verification: `test/02send/05displayName.spec.ts` пройшов у non-production tenant. Exchange Online зберіг адресу відправника, але замінив synthetic MIME display name на mailbox display name `noreply`.
     Risks: Одна mailbox не забезпечує окрему видиму ідентичність клієнтів; production має використовувати погоджену per-service mailbox model. Gate B досі blocked до exact fork digest, Trivy scan/exception, Syft CycloneDX SBOM та OCI metadata.
     Rollback: Відкотити test і documentation record окремою reviewed зміною лише якщо non-production evidence визнано неактуальним; не трактувати qualification як Gate B approval або production authorization.
+
+2026-07-27 — Task 5.3 preparation: pinned base image та OCI metadata contract
+    Context: Exact fork digest, Trivy scan і Syft SBOM потребують відтворюваного build input та release metadata, прив'язаних до одного image digest.
+    Change: Fork Dockerfile pin-ить multi-platform `node:20-alpine` base image digest і додає OCI labels для source, revision, version, release tag, base image та upstream base. Local builds з `unknown` або `unreleased` metadata явно не є release evidence.
+    Verification: Registry manifest digest базового образу розв'язано через `docker buildx imagetools inspect`; local metadata build без push пройшов і підтвердив усі required OCI labels.
+    Risks: Підготовчий patch не створює fork image digest, Trivy record, CycloneDX SBOM або immutable artifact retention; CI/CD лишається inactive.
+    Rollback: Повернути Dockerfile і contract окремою reviewed зміною; не підміняти fork release mutable base-image tag або local image ID.

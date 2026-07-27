@@ -120,6 +120,10 @@ Remote deployment зобов'язаний використовувати immutab
 
 Поточний shared workflow надає GHCR build/push, але ще не створює ці три артефакти для exact digest. Digest залишається обов'язковим ідентифікатором image, бо саме він є target Trivy scan, SBOM і OCI metadata record. Provenance attestation, signature verification та окремий reusable-workflow output не входять до Gate B supply-chain scope. Для GHCR використовується scoped `GITHUB_TOKEN`; long-lived registry token не потрібний.
 
+### Container metadata contract
+
+Fork Dockerfile pin-ить multi-platform base image `node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293` і встановлює OCI labels. Qualification/release build зобов'язаний передавати `VERSION`, `VCS_REF`, `RELEASE_TAG` і `UPSTREAM_BASE`; значення `unknown` або `unreleased` позначають локальний build, який не може бути Gate B evidence. Обов'язкові labels: `org.opencontainers.image.source`, `revision`, `version`, `ref.name`, `base.name` і `upstream.base`.
+
 ## Передача у control plane
 
 Після успішного qualification release PR у `mzhk-repo/smtp2graph` оновлює тільки fork release metadata: source tag, upstream base commit, `ghcr.io` immutable digest, Trivy scan/exception record, CycloneDX SBOM, OCI labels і Gate B applicability record. Deployment manifest ніколи не посилається на mutable tag. Поточні `main`/`dev` deploys не можуть просувати новий candidate у production до появи цього evidence та Gate B decision.

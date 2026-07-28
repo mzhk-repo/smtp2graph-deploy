@@ -220,3 +220,10 @@ Rollback: Припинити використання non-production app або 
     Verification: All four assets applied to clean local `v1.1.5-patched`; build, 6 unit tests, 28 receive tests and Microsoft 365 send suite passed.
     Risks: `--ignore-space-change` must not be used to accept semantic patch drift; upstream-integrated or changed code still requires manual applicability review.
     Rollback: Remove the local test branch only after review; restore the prior reviewed asset if new evidence invalidates the fix.
+
+2026-07-28 — Task 2.5: fork Gate B decision record prepared
+    Context: Functional evidence for exact fork revision `0fbb699` needed a reviewable record without changing the historical rejection of upstream v1.1.5.
+    Change: Added a redacted functional Gate B decision record with candidate identity, completed evidence, residual boundaries and required architecture/security/operations approvals.
+    Verification: Record cross-references exact source revision and completed synthetic/non-production evidence; no secrets or message bodies included.
+    Risks: Status remains pending until named owners approve; this record grants no release, staging or production authority.
+    Rollback: Mark the record rejected or superseded in a reviewed change; retain upstream ADR-0002 rejection.

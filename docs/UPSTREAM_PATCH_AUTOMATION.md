@@ -4,7 +4,7 @@
 
 ## Bundle
 
-`patches/smtp2graph/v1.1.5/manifest.env` визначає annotated upstream tag object `3a1ab485…`, його peeled commit `d5280a5…`, owner, Node 20 і SHA-256 чотирьох assets: Retry-After, permanent error → `failed`, durable enqueue before `250`, qualification tests. CI template, Dockerfile та display-name test не входять у bundle.
+`patches/smtp2graph/v1.1.5/manifest.env` визначає upstream remote, base tag, Node 20 і ordered list чотирьох assets: Retry-After, permanent error → `failed`, durable enqueue before `250`, qualification tests. Git version control є єдиним integrity mechanism для manifest і patch files; CI template, Dockerfile та display-name test не входять у bundle.
 
 ## Використання
 

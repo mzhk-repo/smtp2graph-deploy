@@ -206,3 +206,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Shell syntax and read-only `--check` completed; bundle checksums are recorded in the manifest.
     Risks: Upstream drift, empty patches and M365 test input gaps require manual review; a local regression pass is not a Gate B decision or release evidence.
     Rollback: Remove only an explicitly reviewed local upgrade branch and revise the versioned patch bundle; rejected upstream v1.1.5 remains ineligible as a production rollback target.
+
+2026-07-28 — Task 2.5: simplified patch manifest
+    Context: Per-file SHA-256 and Git object IDs duplicated integrity guarantees already supplied by the versioned control-plane repository.
+    Change: Manifest now retains only upstream remote, base tag, Node requirement and ordered safe patch filenames. The script strictly parses the list without sourcing the manifest.
+    Verification: Shell syntax and manifest parser validation executed.
+    Risks: Git repository integrity and reviewed commits remain required; a manually copied bundle outside Git has no separate checksum layer.
+    Rollback: Restore a reviewed manifest version from Git history if an external distribution policy later requires detached checksums.

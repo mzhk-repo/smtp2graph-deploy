@@ -54,13 +54,11 @@ done
   exit 64
 }
 [[ -f "$manifest" && -d "$build_repo/.git" ]] || die 'bundle or build repository is unavailable'
-[[ "$(git -C "$build_repo" remote get-url upstream)" == "https://github.com/SMTP2Graph/SMTP2Graph" ]] || die 'unexpected upstream fetch URL'
+upstream_remote=$(awk -F= '$1=="UPSTREAM_REMOTE" {print $2}' "$manifest")
+[[ "$(git -C "$build_repo" remote get-url upstream)" == "$upstream_remote" ]] || die 'unexpected upstream fetch URL'
 [[ "$(git -C "$build_repo" remote get-url --push upstream)" == "DISABLED" ]] || die 'upstream push URL must be DISABLED'
 base_tag=$(awk -F= '$1=="BASE_TAG" {print $2}' "$manifest")
-base_object=$(awk -F= '$1=="BASE_TAG_OBJECT" {print $2}' "$manifest")
-base_commit=$(awk -F= '$1=="BASE_COMMIT" {print $2}' "$manifest")
-[[ "$(git -C "$build_repo" rev-parse "$base_tag")" == "$base_object" ]] || die 'base annotated tag object differs from manifest'
-[[ "$(git -C "$build_repo" rev-parse "${base_tag}^{commit}")" == "$base_commit" ]] || die 'base peeled commit differs from manifest'
+git -C "$build_repo" rev-parse -q --verify "refs/tags/${base_tag}^{commit}" >/dev/null || die 'manifest base tag is unavailable'
 if [[ "$release" == __latest__ ]]; then
   release=$(git -C "$build_repo" tag --list 'v*' | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ {print}' | sort -V | tail -n1)
   [[ -n "$release" ]] || die 'no stable upstream tag found'
@@ -83,14 +81,13 @@ cleanup() {
 }
 trap cleanup EXIT
 git -C "$build_repo" worktree add -b "$branch" "$worktree" "$release"
-for key in PATCH_001 PATCH_002 PATCH_003 PATCH_004; do
-  line=$(awk -F= -v key="$key" '$1==key {print substr($0, length(key)+2)}' "$manifest")
-  IFS='|' read -r asset expected_hash message <<<"$line"
-  actual_hash=$(sha256sum "${bundle_dir}/${asset}" | awk '{print $1}')
-  [[ "$actual_hash" == "$expected_hash" ]] || die "checksum mismatch: ${asset}"
+mapfile -t patch_assets < <(awk '/^[[:space:]]*"[A-Za-z0-9._-]+\.patch"[[:space:]]*$/ {gsub(/[[:space:]"]/, ""); print}' "$manifest")
+((${#patch_assets[@]} == 4)) || die 'manifest must contain exactly four safe patch asset names'
+for asset in "${patch_assets[@]}"; do
+  [[ -f "${bundle_dir}/${asset}" ]] || die "missing patch asset: ${asset}"
   git -C "$worktree" apply --check "${bundle_dir}/${asset}"
   git -C "$worktree" apply --index "${bundle_dir}/${asset}"
-  git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "$message"
+  git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "Gate B: apply ${asset%.patch}"
 done
 (cd "$worktree" && npm ci && npm run build && npx mocha 'test/00unit/**/*.spec.ts' && npm run test:receive -- --logging error)
 env_file=${env_file:-"${build_repo}/.env"}

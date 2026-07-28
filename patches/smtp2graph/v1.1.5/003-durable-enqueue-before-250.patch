@@ -39,6 +39,34 @@ index 7aaede9..abc6f21 100644
  
          // ensure the stream is ended when the mail compiles (pipe will do this for us,
          // but explictly listening for 'finish' lets us log/debug if needed)
+diff --git a/src/classes/MailQueue.ts b/src/classes/MailQueue.ts
+--- a/src/classes/MailQueue.ts
++++ b/src/classes/MailQueue.ts
+@@ -39,10 +39,20 @@ export class MailQueue
+         this.#startWatcher();
+     }
+ 
+-    get tempPath(): string
+-    {
+-        return this.#tempPath;
+-    }
++    get tempPath(): string
++    {
++        return this.#tempPath;
++    }
++
++    async close(): Promise<void>
++    {
++        if(this.#retryQueueInterval)
++        {
++            clearInterval(this.#retryQueueInterval);
++            this.#retryQueueInterval = undefined;
++        }
++        await this.#watcher?.close();
++    }
+ 
+     #startWatcher()
+     {
 diff --git a/test/00unit/MailQueue.spec.ts b/test/00unit/MailQueue.spec.ts
 new file mode 100644
 index 0000000..cf3de57

@@ -73,7 +73,7 @@ if [[ "$mode" == check ]]; then
 fi
 git -C "$build_repo" fetch upstream --tags --prune
 if git -C "$build_repo" show-ref --verify --quiet "refs/heads/${branch}"; then
-  printf 'INFO: existing branch %s will be retested; patch-id review remains manual.\n' "$branch"
+  die "existing ${branch} requires explicit patch-id review; it was not modified"
 fi
 worktree=$(mktemp -d "${TMPDIR:-/tmp}/smtp2graph-upgrade.XXXXXX")
 cleanup() {
@@ -82,18 +82,16 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
-if git -C "$build_repo" show-ref --verify --quiet "refs/heads/${branch}"; then git -C "$build_repo" worktree add "$worktree" "$branch"; else git -C "$build_repo" worktree add -b "$branch" "$worktree" "$release"; fi
-if ! git -C "$worktree" log -1 --format=%B | grep -q 'Gate B: qualification regressions'; then
-  for key in PATCH_001 PATCH_002 PATCH_003 PATCH_004; do
-    line=$(awk -F= -v key="$key" '$1==key {print substr($0, length(key)+2)}' "$manifest")
-    IFS='|' read -r asset expected_hash message <<<"$line"
-    actual_hash=$(sha256sum "${bundle_dir}/${asset}" | awk '{print $1}')
-    [[ "$actual_hash" == "$expected_hash" ]] || die "checksum mismatch: ${asset}"
-    git -C "$worktree" apply --check "${bundle_dir}/${asset}"
-    git -C "$worktree" apply --index "${bundle_dir}/${asset}"
-    git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "$message"
-  done
-fi
+git -C "$build_repo" worktree add -b "$branch" "$worktree" "$release"
+for key in PATCH_001 PATCH_002 PATCH_003 PATCH_004; do
+  line=$(awk -F= -v key="$key" '$1==key {print substr($0, length(key)+2)}' "$manifest")
+  IFS='|' read -r asset expected_hash message <<<"$line"
+  actual_hash=$(sha256sum "${bundle_dir}/${asset}" | awk '{print $1}')
+  [[ "$actual_hash" == "$expected_hash" ]] || die "checksum mismatch: ${asset}"
+  git -C "$worktree" apply --check "${bundle_dir}/${asset}"
+  git -C "$worktree" apply --index "${bundle_dir}/${asset}"
+  git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "$message"
+done
 (cd "$worktree" && npm ci && npm run build && npx mocha 'test/00unit/**/*.spec.ts' && npm run test:receive -- --logging error)
 env_file=${env_file:-"${build_repo}/.env"}
 if [[ -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then

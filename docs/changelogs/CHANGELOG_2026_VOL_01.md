@@ -213,3 +213,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Shell syntax and manifest parser validation executed.
     Risks: Git repository integrity and reviewed commits remain required; a manually copied bundle outside Git has no separate checksum layer.
     Rollback: Restore a reviewed manifest version from Git history if an external distribution policy later requires detached checksums.
+
+2026-07-28 — Task 2.5: E2E patch-bundle qualification
+    Context: Queue regression initially exposed a missing `MailQueue.close()` helper and CRLF/LF context mismatch in the durable-enqueue asset.
+    Change: Added the helper to the asset, blocked unsafe existing-branch retest, and made patch application explicitly tolerate line-ending-only drift.
+    Verification: All four assets applied to clean local `v1.1.5-patched`; build, 6 unit tests, 28 receive tests and Microsoft 365 send suite passed.
+    Risks: `--ignore-space-change` must not be used to accept semantic patch drift; upstream-integrated or changed code still requires manual applicability review.
+    Rollback: Remove the local test branch only after review; restore the prior reviewed asset if new evidence invalidates the fix.

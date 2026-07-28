@@ -16,6 +16,11 @@
 
 `--apply` використовує isolated temporary worktree. Conflict, rejected hunk, checksum mismatch або regression failure зберігає його шлях для ручного review. Успіх залишає лише local upgrade branch.
 
+SMTP2Graph v1.1.5 містить CRLF source files, тоді як reviewable patch assets
+містять LF additions. Скрипт застосовує Git patches з `--ignore-space-change`;
+це допускає лише line-ending/whitespace drift, але все одно fail-closed для
+відсутнього або зміненого semantic hunk.
+
 Local build, unit і receive tests обов'язкові. Якщо ignored M365 env file неповний, результат `PARTIAL` з exit 0; повний M365 suite запускається лише через `DOTENV_CONFIG_PATH`, без source або друку secret values.
 
 ## Troubleshooting

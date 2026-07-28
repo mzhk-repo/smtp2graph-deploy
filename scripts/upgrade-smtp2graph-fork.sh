@@ -85,8 +85,8 @@ mapfile -t patch_assets < <(awk '/^[[:space:]]*"[A-Za-z0-9._-]+\.patch"[[:space:
 ((${#patch_assets[@]} == 4)) || die 'manifest must contain exactly four safe patch asset names'
 for asset in "${patch_assets[@]}"; do
   [[ -f "${bundle_dir}/${asset}" ]] || die "missing patch asset: ${asset}"
-  git -C "$worktree" apply --check "${bundle_dir}/${asset}"
-  git -C "$worktree" apply --index "${bundle_dir}/${asset}"
+  git -C "$worktree" apply --check --ignore-space-change "${bundle_dir}/${asset}"
+  git -C "$worktree" apply --index --ignore-space-change "${bundle_dir}/${asset}"
   git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "Gate B: apply ${asset%.patch}"
 done
 (cd "$worktree" && npm ci && npm run build && npx mocha 'test/00unit/**/*.spec.ts' && npm run test:receive -- --logging error)

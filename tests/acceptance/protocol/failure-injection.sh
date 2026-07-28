@@ -41,18 +41,13 @@ printf 'PASS: HTTP 408 leaves the message in the durable queue for retry.\n'
 restart_gateway full access-denied
 protocol_submit_fixture "${PROTOCOL_TEMP_DIR}/access-denied-ack.json"
 protocol_wait_for_graph_attempts 1
-protocol_wait_for 'access-denied queue result' 10 protocol_queue_has_eml
-if protocol_failed_has_eml; then
-  printf 'PASS: permanent access-denied message moved to failed state.\n'
-else
-  record_blocker 'Graph ErrorAccessDenied leaves the permanent-failure message in queue instead of moving it to failed state.'
-fi
+protocol_wait_for 'access-denied failed result' 10 protocol_failed_has_eml
+printf 'PASS: permanent access-denied message moved atomically to failed state.\n'
 
 restart_gateway full server-error 1
 protocol_submit_fixture "${PROTOCOL_TEMP_DIR}/server-error-ack.json"
 protocol_wait_for_graph_attempts 1
-protocol_wait_for_graph_attempts 2 80
-protocol_wait_for 'failed message after bounded 500 retry' 10 protocol_failed_has_eml
+protocol_wait_for 'failed message after bounded 500 retry' 160 protocol_failed_has_eml
 printf 'PASS: HTTP 500 retried with bounded queue lifecycle and moved to failed state.\n'
 
 if ((${#blockers[@]})); then

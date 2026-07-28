@@ -32,6 +32,21 @@ protocol_wait_for_graph_attempts 1
 protocol_wait_for 'captured MIME message' 10 test -f "${PROTOCOL_STATE_DIR}/last-message.eml"
 protocol_wait_for 'queue drain after Graph acceptance' 10 protocol_queue_is_empty
 
+restart_gateway() {
+  docker rm -f "${PROTOCOL_GATEWAY}" >/dev/null 2>&1 || true
+  protocol_start_gateway "$@"
+}
+
+restart_gateway receive success
+protocol_submit_fixture "${PROTOCOL_TEMP_DIR}/crash-ack.json"
+protocol_wait_for 'queued EML before crash' 10 protocol_queue_has_eml
+docker kill --signal KILL "${PROTOCOL_GATEWAY}" >/dev/null
+docker rm "${PROTOCOL_GATEWAY}" >/dev/null
+protocol_start_gateway full success
+protocol_wait_for_graph_attempts 1
+[[ "$(protocol_graph_attempts)" == '1' ]] || protocol_fail 'crash recovery caused duplicate Graph delivery.'
+protocol_wait_for 'queue drain after crash recovery' 10 protocol_queue_is_empty
+
 rg -q '^From: .*SMTP2Graph QA.*sender@example\.invalid' "${PROTOCOL_STATE_DIR}/last-message.eml"
 rg -q '^To: primary@example.invalid' "${PROTOCOL_STATE_DIR}/last-message.eml"
 rg -q '^Cc: copy@example.invalid' "${PROTOCOL_STATE_DIR}/last-message.eml"
@@ -40,4 +55,4 @@ rg -q '^Reply-To: replies@example.invalid' "${PROTOCOL_STATE_DIR}/last-message.e
 rg -q 'Тестове HTML-повідомлення' "${PROTOCOL_STATE_DIR}/last-message.eml"
 rg -q 'U1lOVEhFVElDX0FUVEFDSE1FTlQ=' "${PROTOCOL_STATE_DIR}/last-message.eml"
 
-printf 'PASS: MIME fields, BCC injection, UTF-8, attachment, durable queue restart and SMTP acknowledgement boundary verified.\n'
+printf 'PASS: MIME fields, BCC injection, UTF-8, attachment, durable queue restart, crash-after-250 recovery and SMTP acknowledgement boundary verified.\n'

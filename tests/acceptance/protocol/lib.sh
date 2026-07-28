@@ -4,7 +4,7 @@ set -euo pipefail
 
 PROTOCOL_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROTOCOL_PROJECT_ROOT="$(cd "${PROTOCOL_SCRIPT_DIR}/../../.." && pwd)"
-PROTOCOL_IMAGE_REF="docker.io/smtp2graph/smtp2graph@sha256:88ef2015f37ad460d7cc06fa80cf82a0318108ae696dac61a2896d5016d9545d"
+PROTOCOL_IMAGE_REF="${PROTOCOL_IMAGE_REF:-docker.io/smtp2graph/smtp2graph@sha256:88ef2015f37ad460d7cc06fa80cf82a0318108ae696dac61a2896d5016d9545d}"
 PROTOCOL_ENTRYPOINT="${PROTOCOL_PROJECT_ROOT}/scripts/entrypoint.sh"
 PROTOCOL_FIXTURE="${PROTOCOL_PROJECT_ROOT}/tests/fixtures/protocol-message.eml"
 PROTOCOL_TEMP_DIR="$(mktemp -d)"

@@ -468,6 +468,7 @@ Implementation task готова до виконання, лише якщо:
   - Evidence upstream digest не переноситься на fork автоматично; кожен reused artifact має applicability review.
   - Phase 3 залишається заблокованою до `pass` або `conditional pass` нового candidate без Critical gaps.
 - **Validation Commands:** виконати task-specific test harnesses; `make validate`; `git diff --check`; вручну перевірити links, functional-evidence applicability і approval record.
+- **Upgrade automation:** versioned patch assets and `scripts/upgrade-smtp2graph-fork.sh` may prepare a local `upgrade/vX.Y.Z` branch and regression evidence; conflict or upstream-integrated fixes require manual applicability review and never auto-promote a candidate.
 - **Risks:** patch-set drift, GPL obligations, upstream security fixes, помилкова інтерпретація filesystem durability та schedule pressure можуть знизити якість gate.
 - **Rollback Notes:** fork candidate можна відхилити без production migration; повернення до іншого upstream або власного Python component потребує нового/оновленого ADR і повного Gate B для нового digest.
 

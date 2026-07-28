@@ -1,0 +1,118 @@
+diff --git a/src/classes/Mailer.ts b/src/classes/Mailer.ts
+index d106d5f..0e256a4 100644
+--- a/src/classes/Mailer.ts
++++ b/src/classes/Mailer.ts
+@@ -7,13 +7,14 @@ import addressparser from 'nodemailer/lib/addressparser';
+ import { ConfidentialClientApplication } from '@azure/msal-node';
+ import { Config } from './Config';
+ import { UnrecoverableError } from './Constants';
+-import { MsalProxy } from './MsalProxy';
+-
+-export class MailboxAccessDenied extends UnrecoverableError { }
+-export class InvalidMailContent extends UnrecoverableError { }
+-export class MessageSizeExceeded extends UnrecoverableError { }
+-
+-export class Mailer
++import { MsalProxy } from './MsalProxy';
++import { getRetryDelay } from './Retry';
++
++export class MailboxAccessDenied extends UnrecoverableError { }
++export class InvalidMailContent extends UnrecoverableError { }
++export class MessageSizeExceeded extends UnrecoverableError { }
++
++export class Mailer
+ {
+     /** Prevent getting an accesstoken in parallel */
+     static #aquireTokenMutex = new Mutex();
+@@ -93,9 +94,7 @@ export class Mailer
+     {
+         const retryLimit = 3;
+         let retryCount = 0;
+-        let wait = 200;
+-
+-        const retry = async (): Promise<AxiosResponse<RequestData, ReponseData>> =>
++        const retry = async (): Promise<AxiosResponse<RequestData, ReponseData>> =>
+         {
+             const abortController = new AbortController();
+             const connectTimeout = setTimeout(()=>abortController.abort(`Server did not respond within 10 seconds`), 10000);
+@@ -112,15 +111,12 @@ export class Mailer
+             } catch(error) {
+                 if(++retryCount > retryLimit) // We've reached our retry limit?
+                     throw error;
+-                else if(isAxiosError(error) && (error.response?.status === 429 || error.response?.status === 503 || error.response?.status === 504)) // We got a retryable response?
+-                {
+-                    const retryAfter = error.response.headers['Retry-After'];
+-                    if(retryAfter && !isNaN(retryAfter)) // We got throttled
+-                        wait = parseInt(retryAfter) * 1000;
+-                    else
+-                        wait *= 2;
+-
+-                    await this.#sleep(wait);
++                else if(isAxiosError(error) && (error.response?.status === 429 || error.response?.status === 503 || error.response?.status === 504)) // We got a retryable response?
++                {
++                    const retryAfter = error.response.headers['retry-after'] ?? error.response.headers['Retry-After'];
++                    const wait = getRetryDelay(retryAfter, retryCount);
++
++                    await this.#sleep(wait);
+ 
+                     return retry();
+                 }
+diff --git a/src/classes/Retry.ts b/src/classes/Retry.ts
+new file mode 100644
+index 0000000..a25fec0
+--- /dev/null
++++ b/src/classes/Retry.ts
+@@ -0,0 +1,24 @@
++const RETRY_BASE_DELAY_MS = 200;
++const RETRY_MAX_DELAY_MS = 60_000;
++const RETRY_AFTER_MAX_DELAY_MS = 120_000;
++
++/**
++ * Return a bounded delay for a Graph retry response. A valid Retry-After value
++ * takes precedence over the local exponential backoff and is never shortened
++ * by jitter, because that could retry before the server permits it.
++ */
++export function getRetryDelay(retryAfter: unknown, attempt: number, now = Date.now(), random = Math.random): number
++{
++    if(typeof retryAfter === 'string')
++    {
++        const seconds = /^\d+$/.test(retryAfter)?Number.parseInt(retryAfter, 10):NaN;
++        const httpDate = Number.isNaN(seconds)?Date.parse(retryAfter):NaN;
++        const delay = Number.isNaN(seconds)?httpDate-now:seconds*1000;
++
++        if(Number.isFinite(delay) && delay >= 0 && delay <= RETRY_AFTER_MAX_DELAY_MS)
++            return delay;
++    }
++
++    const backoff = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
++    return Math.round(backoff * (0.5 + random()));
++}
+diff --git a/test/00unit/Mailer.spec.ts b/test/00unit/Mailer.spec.ts
+new file mode 100644
+index 0000000..a9093ff
+--- /dev/null
++++ b/test/00unit/Mailer.spec.ts
+@@ -0,0 +1,23 @@
++import { expect } from 'chai';
++import { getRetryDelay } from '../../src/classes/Retry';
++
++describe('Mailer: Retry-After', ()=>{
++    const now = Date.UTC(2026, 6, 25, 12, 0, 0);
++
++    it('prioritizes delta-seconds over local backoff', ()=>{
++        expect(getRetryDelay('2', 3, now, ()=>0)).to.equal(2000);
++    });
++
++    it('supports HTTP-date', ()=>{
++        expect(getRetryDelay(new Date(now + 3000).toUTCString(), 3, now, ()=>0)).to.equal(3000);
++    });
++
++    it('uses bounded jittered exponential backoff for invalid headers', ()=>{
++        expect(getRetryDelay('invalid', 1, now, ()=>0)).to.equal(200);
++        expect(getRetryDelay('invalid', 1, now, ()=>1)).to.equal(600);
++    });
++
++    it('ignores an unbounded Retry-After value', ()=>{
++        expect(getRetryDelay('999999', 1, now, ()=>0)).to.equal(200);
++    });
++});

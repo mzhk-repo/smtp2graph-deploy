@@ -1,0 +1,161 @@
+diff --git a/test/02send/03accessDenied.spec.ts b/test/02send/03accessDenied.spec.ts
+new file mode 100644
+index 0000000..aeb9f0e
+--- /dev/null
++++ b/test/02send/03accessDenied.spec.ts
+@@ -0,0 +1,62 @@
++import { expect } from 'chai';
++import fs from 'fs';
++import { createTransport } from 'nodemailer';
++import path from 'path';
++import { config } from '../_config';
++import { Server } from '../classes/Server';
++import { defaultTransportOptions } from '../01receive/Helpers';
++import { defaultMail } from './Helpers';
++
++describe('Send: denied mailbox', function(){
++    const server = new Server({
++        mode: 'full',
++        send: {
++            appReg: {
++                id: config.clientId,
++                tenant: config.clientTenant,
++                secret: config.clientSecret,
++            },
++            forceMailbox: config.deniedMailbox,
++        },
++    });
++
++    before('Start server', async function(){
++        await expect(server.start(), 'Failed to start SMTP server').to.eventually.be.fulfilled;
++    });
++
++    after('Stop server', async function(){
++        await server.stop();
++    });
++
++    it('moves ErrorAccessDenied payload to failed after durable SMTP acknowledgement', async function(){
++        const transport = createTransport(defaultTransportOptions);
++        const result = await transport.sendMail({
++            ...defaultMail,
++            subject: `TEST: ${this.test?.title}`,
++            to: config.additionalRecipient,
++        });
++        expect(result.messageId, 'SMTP submission should return a message ID').to.be.a('string');
++
++        const failedPath = await waitForFailedMessage(result.messageId);
++        expect(fs.existsSync(failedPath)).to.equal(true);
++    });
++});
++
++async function waitForFailedMessage(messageId: string): Promise<string>
++{
++    for(let attempt = 0; attempt < 20; attempt++)
++    {
++        const failedDir = path.join('mailroot', 'failed');
++        if(fs.existsSync(failedDir))
++        {
++            const match = fs.readdirSync(failedDir).find(file=>{
++                const content = fs.readFileSync(path.join(failedDir, file), 'utf-8');
++                return content.includes(messageId);
++            });
++            if(match) return path.join(failedDir, match);
++        }
++        await new Promise(resolve=>setTimeout(resolve, 250));
++    }
++
++    throw new Error('No failed payload found for denied mailbox');
++}
+diff --git a/test/02send/04certificate.spec.ts b/test/02send/04certificate.spec.ts
+new file mode 100644
+index 0000000..af7ad9e
+--- /dev/null
++++ b/test/02send/04certificate.spec.ts
+@@ -0,0 +1,39 @@
++import { expect } from 'chai';
++import { config, validateCertificateSendConfig } from '../_config';
++import { Server } from '../classes/Server';
++import { submitAndVerifyMail } from './Helpers';
++
++validateCertificateSendConfig();
++
++describe('Send: certificate credential', function(){
++    const server = new Server({
++        mode: 'full',
++        send: {
++            appReg: {
++                id: config.clientId,
++                tenant: config.clientTenant,
++                certificate: {
++                    thumbprint: config.certificateThumbprint,
++                    privateKeyPath: config.certificatePrivateKeyPath,
++                },
++            },
++        },
++    });
++
++    before('Start server', async function(){
++        await expect(server.start(), 'Failed to start SMTP server with certificate credential').to.eventually.be.fulfilled;
++    });
++
++    after('Stop server', async function(){
++        await server.stop();
++    });
++
++    it('sends and verifies a synthetic message without appReg.secret', async function(){
++        await submitAndVerifyMail({
++            mail: {
++                subject: `TEST: ${this.test?.title}`,
++                text: 'Certificate credential qualification message',
++            },
++        });
++    });
++});
+diff --git a/test/_config.ts b/test/_config.ts
+index bdaa532..132ea4f 100644
+--- a/test/_config.ts
++++ b/test/_config.ts
+@@ -13,10 +13,29 @@ export const config = {
+     clientId: process.env.CLIENTID!,
+     clientSecret: process.env.CLIENTSECRET!,
+     clientTenant: process.env.CLIENTTENANT!,
+-    mailbox: process.env.MAILBOX!,
+-    additionalRecipient: process.env.ADDITIONALRECIPIENT!,
++    certificateThumbprint: process.env.AZURE_CERT_THUMBPRINT!,
++    certificatePrivateKeyPath: process.env.AZURE_CERT_PRIVATE_KEY_PATH!,
++    mailbox: process.env.MAILBOX!,
++    additionalRecipient: process.env.ADDITIONALRECIPIENT!,
++    deniedMailbox: process.env.DENIED_MAILBOX!,
+ };
+ 
++export function validateCertificateSendConfig()
++{
++    if(!config.clientId)
++        throw new Error('No clientId defined');
++    else if(!config.clientTenant)
++        throw new Error('No clientTenant defined');
++    else if(!config.certificateThumbprint)
++        throw new Error('No certificate thumbprint defined');
++    else if(!config.certificatePrivateKeyPath)
++        throw new Error('No certificate private key path defined');
++    else if(!fs.existsSync(config.certificatePrivateKeyPath))
++        throw new Error('Certificate private key file does not exist');
++    else if(!config.mailbox)
++        throw new Error('No mailbox defined');
++}
++
+ export function validateSendConfig()
+ {
+     if(!config.clientId)
+@@ -27,6 +46,8 @@ export function validateSendConfig()
+         throw new Error('No clientTenant defined');
+     else if(!config.mailbox)
+         throw new Error('No mailbox defined');
+-    else if(!config.additionalRecipient)
+-        throw new Error('No additionalRecipient defined');
+-}
++    else if(!config.additionalRecipient)
++        throw new Error('No additionalRecipient defined');
++    else if(!config.deniedMailbox)
++        throw new Error('No deniedMailbox defined');
++}

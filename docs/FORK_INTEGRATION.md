@@ -40,6 +40,15 @@ git range-diff "v1.1.5...mzhk/v1.1.5-gate-b" "vX.Y.Z...HEAD"
 
 Конфлікт під час rebase зупиняє upgrade. Його не можна розв'язувати автоматично або обхідним видаленням патчу. Кожен перенесений commit потребує review, тестів і оновленого patch inventory.
 
+## Versioned patch automation
+
+Control plane зберігає reviewed application patch bundle у
+`patches/smtp2graph/v1.1.5/`. `scripts/upgrade-smtp2graph-fork.sh` застосовує
+його до explicit або latest stable upstream tag в isolated local worktree та
+залишає local `upgrade/vX.Y.Z` branch для review. Bundle, а не історія fork
+commits, є source of truth. Скрипт не виконує push, PR, deploy або automatic
+conflict resolution; деталі й recovery описані у `docs/UPSTREAM_PATCH_AUTOMATION.md`.
+
 ## Обов'язковий patch inventory
 
 Build repository веде `docs/PATCH_INVENTORY.md`. Для кожного патчу потрібні: upstream base commit, fork commit SHA, owner, причина, upstream issue/PR (якщо є), affected files, regression tests і статус перенесення на нові upstream release.

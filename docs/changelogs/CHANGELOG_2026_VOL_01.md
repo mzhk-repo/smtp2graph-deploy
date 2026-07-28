@@ -199,3 +199,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Documentation cross-references and phase/task ownership reviewed; `make validate` and `git diff --check` run after the documentation change.
     Risks: A functional Gate B pass is not production approval and cannot authorize a deployment without Task 5.3 release evidence.
     Rollback: Restore the prior gate boundary only through a reviewed SPEC/roadmap/ADR change; do not perform GHCR build/push outside Task 5.3.
+
+2026-07-27 — Task 2.5: versioned upstream patch automation
+    Context: Fork upgrade safety could not depend on replaying historical commit SHA values or mutable branch history.
+    Change: Control plane now owns a checksummed v1.1.5 patch bundle, manifest and manual isolated-worktree upgrade script. It applies reviewed fixes and qualification tests to a local upgrade branch, then runs local and, when configured, Microsoft 365 regressions without push, PR or deploy authority.
+    Verification: Shell syntax and read-only `--check` completed; bundle checksums are recorded in the manifest.
+    Risks: Upstream drift, empty patches and M365 test input gaps require manual review; a local regression pass is not a Gate B decision or release evidence.
+    Rollback: Remove only an explicitly reviewed local upgrade branch and revise the versioned patch bundle; rejected upstream v1.1.5 remains ineligible as a production rollback target.

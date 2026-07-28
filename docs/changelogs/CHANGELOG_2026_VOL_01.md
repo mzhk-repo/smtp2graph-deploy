@@ -227,3 +227,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Record cross-references exact source revision and completed synthetic/non-production evidence; no secrets or message bodies included.
     Risks: Status remains pending until named owners approve; this record grants no release, staging or production authority.
     Rollback: Mark the record rejected or superseded in a reviewed change; retain upstream ADR-0002 rejection.
+
+2026-07-28 — Task 2.5: functional evidence completion status
+    Context: Fork revision `0fbb699` had completed the runtime, protocol, queue, credential, delivery, authorization-negative and display-name qualification scenarios, but the compact project context still described functional evidence as incomplete.
+    Change: `docs/AI_CONTEXT.md` now marks all functional evidence as complete and distinguishes it from formal Gate B owner approval and Task 5.3 release/supply-chain evidence.
+    Verification: Confirmed the recorded runtime, protocol/MIME, queue durability/restart, Graph retry/permanent-error, client-secret, certificate, positive delivery, `DENIED_MAILBOX` and display-name results; no secrets or message bodies were added.
+    Risks: Functional evidence completion does not authorize release, staging or production deployment; the missing `docs/GATE_B_FORK_0FBB699.md` reference remains a documentation consistency issue for a separate reviewed change.
+    Rollback: Revert this documentation-only status update if the evidence bundle is invalidated; preserve the historical upstream Gate B rejection.

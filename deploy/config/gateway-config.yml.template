@@ -1,0 +1,19 @@
+# This template contains no credential values. scripts/entrypoint.sh replaces
+# only the explicit placeholders using Docker Secret files and allowlisted inputs.
+mode: __SMTP2GRAPH_MODE__
+send:
+  appReg:
+    tenant: __GRAPH_TENANT_ID__
+    id: __GRAPH_CLIENT_ID__
+__GRAPH_CREDENTIAL_BLOCK__
+  retryLimit: __SEND_RETRY_LIMIT__
+  retryInterval: __SEND_RETRY_INTERVAL_MINUTES__
+  forceMailbox: __GRAPH_SENDER_MAILBOX__
+receive:
+  port: __SMTP_LISTEN_PORT__
+  listenAddress: __SMTP_BIND_ADDRESS__
+  secure: true
+  tlsKeyPath: __SMTP_TLS_KEY_PATH__
+  tlsCertPath: __SMTP_TLS_CERT_PATH__
+  maxSize: __SMTP_MAX_SIZE_KIB__
+  requireAuth: false

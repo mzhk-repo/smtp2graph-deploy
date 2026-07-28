@@ -234,3 +234,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Confirmed the recorded runtime, protocol/MIME, queue durability/restart, Graph retry/permanent-error, client-secret, certificate, positive delivery, `DENIED_MAILBOX` and display-name results; no secrets or message bodies were added.
     Risks: Functional evidence completion does not authorize release, staging or production deployment; the missing `docs/GATE_B_FORK_0FBB699.md` reference remains a documentation consistency issue for a separate reviewed change.
     Rollback: Revert this documentation-only status update if the evidence bundle is invalidated; preserve the historical upstream Gate B rejection.
+
+2026-07-28 — Task 3.1: declarative gateway config and safe runtime wrapper
+    Context: The Task 2.3 prototype proved basic tmpfs rendering and credential compatibility, but did not provide a versioned non-secret template, strict input parser, secret permission checks or dedicated negative tests.
+    Change: Added the reviewed `gateway-config.yml.template`, a fail-closed Bash wrapper and shell tests. The wrapper renders `config.yml` atomically with mode `0600` only in an existing tmpfs mount, reads Docker Secret files, accepts only allowlisted non-secret input keys without `source`, and rejects missing, non-regular, group/other-writable or unsuitable-owner secret files.
+    Verification: `bash -n` for the wrapper and tests, `shellcheck`, `./tests/shell/test-entrypoint.sh`, `make validate` and `git diff --check` passed. Tests cover certificate and client-secret rendering, missing secret, weak permissions and non-executed malformed input.
+    Risks: This is a local runtime component only; SMTP authentication/policy, bounded queue lifecycle and deployment integration remain later tasks. Formal functional Gate B owner approval and Task 5.3 release evidence remain pending.
+    Rollback: Restore the prior reviewed wrapper/template pair; rendered config disappears with its tmpfs mount and no deployment state is changed.

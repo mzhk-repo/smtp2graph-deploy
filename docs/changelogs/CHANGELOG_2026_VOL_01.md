@@ -241,3 +241,10 @@ Rollback: Припинити використання non-production app або 
     Verification: `bash -n` for the wrapper and tests, `shellcheck`, `./tests/shell/test-entrypoint.sh`, `make validate` and `git diff --check` passed. Tests cover certificate and client-secret rendering, missing secret, weak permissions and non-executed malformed input.
     Risks: This is a local runtime component only; SMTP authentication/policy, bounded queue lifecycle and deployment integration remain later tasks. Formal functional Gate B owner approval and Task 5.3 release evidence remain pending.
     Rollback: Restore the prior reviewed wrapper/template pair; rendered config disappears with its tmpfs mount and no deployment state is changed.
+
+2026-07-29 — Task 3.1: POSIX runtime compatibility and Docker acceptance verification
+    Context: The first Task 3.1 wrapper used Bash syntax while the gateway image and existing launcher invoke `/bin/sh`; the isolated probe also needed to mount the versioned template explicitly.
+    Change: Rewrote the wrapper for POSIX `/bin/sh`, preserved strict parsing and fail-closed checks, added explicit Docker Secret owner allowlisting (root and runtime UID by default), and updated the isolated probe with its template mount, synthetic sender mailbox and bind-mount owner simulation.
+    Verification: `sh -n`, ShellCheck, shell renderer tests, `make validate`, `git diff --check` and `./tests/acceptance/runtime/run.sh` passed. The Docker probe confirms client-secret/certificate rendering, non-root read-only startup, listener, graceful stop/restart and secret-surface checks.
+    Risks: The synthetic owner override is test-only; production deployment must keep the default owner allowlist or explicitly configure only reviewed Docker Secret UID mappings. Task 3.2 policy, queue limits and purge lifecycle remain unimplemented.
+    Rollback: Restore the prior reviewed POSIX wrapper, template-mount contract and probe together; no persistent runtime state is created by the test.

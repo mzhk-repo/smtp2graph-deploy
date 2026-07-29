@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 IMAGE_REF="docker.io/smtp2graph/smtp2graph@sha256:88ef2015f37ad460d7cc06fa80cf82a0318108ae696dac61a2896d5016d9545d"
 ENTRYPOINT_SCRIPT="${PROJECT_ROOT}/scripts/entrypoint.sh"
+RUNTIME_TEMPLATE_FILE="${PROJECT_ROOT}/deploy/config/gateway-config.yml.template"
 TEMP_DIR="$(mktemp -d)"
 SECRETS_DIR="${TEMP_DIR}/secrets"
 CERTIFICATE_CONTAINER="smtp2graph-runtime-cert-${$}"
@@ -40,7 +41,11 @@ run_gateway() {
     --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
     --mount "type=bind,src=${SECRETS_DIR},dst=/run/secrets,readonly" \
     --mount "type=bind,src=${ENTRYPOINT_SCRIPT},dst=/opt/smtp2graph/entrypoint.sh,readonly" \
+    --mount "type=bind,src=${RUNTIME_TEMPLATE_FILE},dst=/opt/smtp2graph/gateway-config.yml.template,readonly" \
     -e "GRAPH_AUTH_MODE=${auth_mode}" \
+    -e 'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
+    -e "DOCKER_SECRET_ALLOWED_UIDS=0:65532:$(id -u)" \
+    -e 'RUNTIME_TEMPLATE_FILE=/opt/smtp2graph/gateway-config.yml.template' \
     "$@" \
     --entrypoint /bin/sh \
     "${IMAGE_REF}" \
@@ -50,11 +55,11 @@ run_gateway() {
 assert_running_listener() {
   local name="$1"
   local running
-  local attempt
+  local _attempt
 
   running="$(docker inspect --format '{{.State.Running}}' "${name}")"
   [[ "${running}" == 'true' ]] || fail "${name} did not remain running."
-  for attempt in $(seq 1 15); do
+  for _attempt in $(seq 1 15); do
     if docker exec "${name}" node -e 'require("net").connect(587, "127.0.0.1").once("connect", function () { process.exit(0); }).once("error", function () { process.exit(1); });'; then
       return 0
     fi
@@ -92,6 +97,7 @@ assert_hardening() {
 trap cleanup EXIT
 
 [[ -x "${ENTRYPOINT_SCRIPT}" ]] || fail 'runtime entrypoint is missing or not executable.'
+[[ -r "${RUNTIME_TEMPLATE_FILE}" ]] || fail 'runtime configuration template is missing or unreadable.'
 docker info >/dev/null 2>&1 || fail 'Docker daemon is unavailable.'
 
 mkdir -p "${SECRETS_DIR}"

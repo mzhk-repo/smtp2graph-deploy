@@ -248,3 +248,17 @@ Rollback: Припинити використання non-production app або 
     Verification: `sh -n`, ShellCheck, shell renderer tests, `make validate`, `git diff --check` and `./tests/acceptance/runtime/run.sh` passed. The Docker probe confirms client-secret/certificate rendering, non-root read-only startup, listener, graceful stop/restart and secret-surface checks.
     Risks: The synthetic owner override is test-only; production deployment must keep the default owner allowlist or explicitly configure only reviewed Docker Secret UID mappings. Task 3.2 policy, queue limits and purge lifecycle remain unimplemented.
     Rollback: Restore the prior reviewed POSIX wrapper, template-mount contract and probe together; no persistent runtime state is created by the test.
+
+2026-07-29 — Task 3.2: minimal fork policy and storage patch prepared
+    Context: The qualified fork lacked per-IP concurrent-session tracking, a per-client message limiter at the SMTP submission boundary, queue-capacity rejection and a configurable persistent storage root.
+    Change: Local build-plane patch adds `receive.maxSessionsPerIp`, `storage.rootPath`, `storage.maxBytes` and `storage.rejectThresholdPercent`; it returns SMTP `421` for excess concurrent sessions and `451` at `MAIL FROM` when persistent storage reaches its threshold. Queue initialization now applies `0700` to `failed`. New receive regressions cover slot release, rate limit and pre-`DATA` capacity rejection without a new queue file.
+    Verification: `/opt/smtp2graph-build` completed `npm run build`, 31 receive tests and 6 unit tests. No secrets, image build/push, release, deploy, commit or external Microsoft 365 call occurred.
+    Risks: The patch is local and uncommitted; capacity calculation is process-local and counts persistent storage recursively. SMTP user credentials, production deny-by-default wiring, purge lifecycle and Swarm integration remain subsequent Task 3.2 work.
+    Rollback: Discard only this explicit local build-plane worktree diff after review; do not alter the approved `0fbb699` baseline or production state.
+
+2026-07-29 — Phase 3: control-plane managed gateway patch rule
+    Context: Direct local edits in the build checkout could bypass the versioned patch bundle and make fork changes non-reproducible from this repository.
+    Change: `docs/AI_CONTEXT.md` now makes control-plane patch assets the sole valid delivery path for every build-plane source change. Phase 3 adds Iteration 3.F: versioned assets, strict manifest, isolated apply, regression evidence and fail-closed drift/conflict handling before any build-plane commit. Existing uncommitted Task 3.2 work is explicitly temporary until converted into assets.
+    Verification: Reviewed alignment with `scripts/upgrade-smtp2graph-fork.sh`, the existing patch automation contract and Phase 3 task dependencies; no build-plane source, release, image or deployment state changed.
+    Risks: The new rule requires disciplined conversion of exploratory work into reviewable assets; stale or semantic-drift patches must fail closed and be rewritten in control plane.
+    Rollback: Supersede this governance rule only through a reviewed roadmap and integration-contract decision; do not accept direct build-plane edits as a substitute.

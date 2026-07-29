@@ -507,6 +507,28 @@ Implementation task готова до виконання, лише якщо:
 - **Risks:** YAML injection; secret exposure через error output.
 - **Rollback Notes:** попередній approved wrapper/config template зберігається разом із image digest.
 
+### Iteration 3.F — Control-plane managed fork patch workflow
+
+- **Priority:** Must
+- **Goal:** зробити цей control plane єдиним source of truth для кожної зміни gateway source у build plane.
+- **Depends on:** Task 2.5 versioned patch automation; Task 3.1.
+- **Definition of Ready:** exact upstream base tag, affected fork files, regression scope і patch owner визначені; жоден untracked build-plane diff не вважається delivery artifact.
+- **Implementation Steps:**
+  1. Створити або оновити versioned assets у `patches/smtp2graph/<upstream-version>/` та їх strict manifest у цьому repository.
+  2. Застосувати assets лише через reviewed `scripts/upgrade-smtp2graph-fork.sh` до isolated worktree від exact base tag; не переносити прямі edits із `/opt/smtp2graph-build` як final state.
+  3. Виконати required build/unit/receive regressions на застосованому worktree; drift, conflict, empty patch або test failure зупиняють iteration fail-closed.
+  4. Лише після reviewable applied diff і green evidence дозволені build-plane commit/PR; push, image build/push, deploy і Gate B decision не є side effect цієї iteration.
+- **Files / Directories:** `patches/smtp2graph/`, `scripts/upgrade-smtp2graph-fork.sh`, `docs/UPSTREAM_PATCH_AUTOMATION.md`, build-plane `docs/PATCH_INVENTORY.md`.
+- **Artifacts:** ordered patch assets, manifest, redacted local regression evidence, patch inventory update.
+- **Acceptance Criteria:** будь-яка gateway source change відтворюється з clean exact base лише assets із control plane; uncommitted/direct build-plane edits не використовуються як review, release, deployment або Gate B input; patch applicability і regressions мають recorded evidence.
+- **Validation Commands:**
+  ```bash
+  ./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --check
+  ./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply
+  ```
+- **Risks:** patch bundle може відстати від upstream або помилково зафіксувати local-only diff.
+- **Rollback Notes:** не reset-ити build-plane history; відкинути лише explicit isolated worktree/local branch і виправити assets reviewed зміною в control plane.
+
 ### Task 3.2 — SMTP policy, rate limits і storage lifecycle
 
 - **Priority:** Must

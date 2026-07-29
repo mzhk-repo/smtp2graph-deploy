@@ -276,3 +276,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Standalone renderer tests and entrypoint rendering tests pass for positive render, special password characters, lowercase normalization, malformed/empty records, duplicate users, outside-policy senders and redacted diagnostics.
     Risks: The TSV password field cannot contain a tab or newline. This config-level boundary does not replace deployment network policy, Docker Secret lifecycle or production per-service onboarding.
     Rollback: Restore the prior reviewed template, wrapper and renderer helper together; no rendered configuration persists outside tmpfs.
+
+2026-07-29 — Task 3.2: runtime env contract completion
+    Context: The safe `.env.example` omitted four public runtime settings already consumed by the reviewed wrapper.
+    Change: Added SMTP2Graph mode, Graph credential mode, retry limit and retry interval to the machine-checkable contract and `.env.example` with safe development values.
+    Verification: The example-only contract validator confirms the exact allowlisted key set without sourcing any environment file.
+    Risks: Secret file paths, Docker Secret ownership and mount paths remain runtime/deployment internals and are intentionally not exported as `.env.example` configuration.
+    Rollback: Remove the four contract/example keys together only through a reviewed wrapper-contract change.

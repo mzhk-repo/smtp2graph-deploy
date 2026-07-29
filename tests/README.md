@@ -7,3 +7,11 @@
 ```bash
 make validate
 ```
+
+Локальний Task 3.3 MVP harness виконує patched gateway проти isolated mock Graph без Microsoft 365:
+
+```bash
+make test-local
+```
+
+Він створює лише temporary Docker resources і synthetic test material; production credentials, fixtures з PII та deployment state не використовуються.

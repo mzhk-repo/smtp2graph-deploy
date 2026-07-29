@@ -4,7 +4,7 @@ PRE_COMMIT ?= $(VENV_DIR)/bin/pre-commit
 
 export PRE_COMMIT_HOME := $(CURDIR)/.cache/pre-commit
 
-.PHONY: bootstrap validate verify-env
+.PHONY: bootstrap validate verify-env test-local
 
 bootstrap:
 	$(PYTHON) -m venv "$(VENV_DIR)"
@@ -17,3 +17,6 @@ validate:
 
 verify-env:
 	./scripts/verify-env.sh --example-only
+
+test-local:
+	./tests/smoke/run.sh

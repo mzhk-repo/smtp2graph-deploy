@@ -12,10 +12,19 @@
 ## `upgrade-smtp2graph-fork.sh`
 
 - Category: 2 (manual maintenance with Git ref/worktree side effects).
-- Inputs: explicit build repo, upstream tag or `--latest`, reviewed patch bundle, optional ignored M365 env file. Без explicit `--env-file` script не читає build-plane `.env` і не запускає M365 suite.
-- Side effects: fetches upstream tags, creates a temporary local `upgrade/vX.Y.Z` branch and worktree. On success it removes both; on failure it preserves them for review. It never pushes, deploys, deletes an existing branch or resolves conflicts.
+- Inputs: explicit build repo, upstream tag or `--latest`, reviewed patch bundle, optional ignored M365 env file, optional safe local `--test-image NAME:TAG`. Без explicit `--env-file` script не читає build-plane `.env` і не запускає M365 suite.
+- Side effects: fetches upstream tags, creates a temporary local `upgrade/vX.Y.Z` branch and worktree. With `--test-image`, after successful local regressions it builds a local Docker image from this worktree; the caller removes that image. On success automation removes the worktree and branch; on failure it preserves them for review. It never pushes, deploys, deletes an existing branch or resolves conflicts.
 - Check: `--check` validates release selection without creating a branch.
 - Rollback: on a failed run, remove only the explicitly reviewed local `upgrade/vX.Y.Z` branch after confirming it is not checked out; upstream v1.1.5 is not a production rollback target.
+
+## `tests/smoke/run.sh`
+
+- Category: 1a (isolated local functional verification).
+- Inputs: reviewed `compose.test.yaml`, versioned patch bundle, local build-plane Git checkout, protocol MIME fixture and synthetic runtime files generated only in `/dev/shm`.
+- Side effects: runs patch replay/regressions, builds a temporary local image, starts an internal Compose network with a mock Graph, publishes SMTP only on loopback and creates synthetic queue state. It validates positive, unauthenticated, denied-sender, oversize and queue-restart flows.
+- Safety: does not read `.env` or M365 credentials; no production network, deployment, persistent queue or GHCR push. A trap removes Compose resources, local image and all temporary material after success or failure.
+- Check: `make test-local`.
+- Rollback: the harness is disposable; inspect failure logs, then rerun after fixing the reviewed test/configuration change.
 
 ## `purge-failed.sh`
 

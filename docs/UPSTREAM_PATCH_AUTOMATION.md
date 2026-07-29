@@ -11,6 +11,7 @@
 ```bash
 ./scripts/upgrade-smtp2graph-fork.sh --release vX.Y.Z --check
 ./scripts/upgrade-smtp2graph-fork.sh --release vX.Y.Z --apply
+./scripts/upgrade-smtp2graph-fork.sh --release vX.Y.Z --apply --test-image smtp2graph-local-test:vX-Y-Z
 ./scripts/upgrade-smtp2graph-fork.sh --latest --apply --env-file /safe/path/.env
 ```
 
@@ -22,6 +23,8 @@ SMTP2Graph v1.1.5 містить CRLF source files, тоді як reviewable pat
 відсутнього або зміненого semantic hunk.
 
 Local build, unit і receive tests обов'язкові. Без явного `--env-file` результат `PARTIAL` з exit 0; повний M365 suite запускається лише за explicit `--env-file` через `DOTENV_CONFIG_PATH`, без `source` або друку secret values.
+
+`--test-image NAME:TAG` допустимий лише разом із `--apply`. Після успішного patch replay і local regressions automation збирає Docker image з temporary worktree та виводить його local reference. Це не GHCR push, release image або supply-chain evidence. Caller відповідає за видалення image після isolated test; worktree і local `upgrade/vX.Y.Z` branch очищуються automation як звичайно.
 
 ## Troubleshooting
 

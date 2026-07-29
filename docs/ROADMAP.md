@@ -156,7 +156,7 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 - SMTP ingress на internal interface; TLS для routed traffic.
 - Encrypted Swarm overlay як умова plaintext SMTP усередині Swarm.
 - SMTP AUTH, окремі client credentials, IP/subnet та exact sender allowlists.
-- Ліміти: 25 MiB, до 5 concurrent sessions/IP, до 30 messages/min/client; окреме throttle рішення для Moodle.
+- Ліміти: 25 MiB, до 5 concurrent sessions/IP і до 30 messages/min/client для всіх клієнтів, включно з Moodle.
 - Application-only Graph auth і доведене mailbox-level restriction.
 - Safe runtime config із secrets у `/run/secrets/`, SOPS + age та versioned Docker Secrets.
 - Persistent bounded queue, коректні 4xx/5xx, restart/retry/dead-letter semantics.
@@ -535,7 +535,7 @@ Implementation task готова до виконання, лише якщо:
 - **Goal:** реалізувати policy до Graph submission і bounded state.
 - **Depends on:** Task 3.1; behavior matrix Task 2.4.
 - **Definition of Ready:** upstream config keys підтверджені.
-- **Implementation Steps:** internal bind; auth/IP/sender/size rules; 5 sessions/IP і 30 messages/min/client; Moodle throttle; queue 1 GiB thresholds; при 80% queue usage припиняти durable acceptance нових SMTP-сесій або їх `MAIL FROM` submissions і повертати тимчасовий SMTP error `421 Try again later` або `451`; failed mode `0700`; purge after 7 days.
+- **Implementation Steps:** internal bind; auth/IP/sender/size rules; 5 sessions/IP і 30 messages/min/client для всіх клієнтів, включно з Moodle; queue 1 GiB thresholds; при 80% queue usage припиняти durable acceptance нових SMTP-сесій або їх `MAIL FROM` submissions і повертати тимчасовий SMTP error `421 Try again later` або `451`; failed mode `0700`; purge after 7 days.
 - **Files / Directories:** `deploy/config/`, `deploy/swarm/`, `scripts/purge-failed.sh`, `tests/security/`.
 - **Artifacts:** policy matrix у `docs/TEST_PLAN.md`.
 - **Acceptance Criteria:** deny-by-default; oversize/unauthorized input не queue-иться; при queue usage ≥80% нові SMTP-сесії або `MAIL FROM` submissions відхиляються тимчасовим `421` або `451` і не записуються до локальної queue; purge не торкається queue чи файлів молодших 7 днів; logs без body.
@@ -548,8 +548,8 @@ Implementation task готова до виконання, лише якщо:
 | 5 sessions/IP, 30 msg/min/client | Виконано локально | Template і fail-closed wrapper рендерять validated `receive.maxSessionsPerIp` та `receive.rateLimit` із фіксованим 60-секундним вікном. Fork replay test у `005` підтверджує звільнення session slot і `451` на перевищенні client rate limit. |
 | Purge не торкається queue/молодших 7 днів | Виконано локально | [purge script](/opt/smtp2graph-deploy/scripts/purge-failed.sh) та shell/security tests підтверджують fixed `failed` root, dry-run, retention і queue isolation. |
 | Logs без body | Виконано локально | Asset `007` запускає receive server в isolated base directory, подає runtime-generated body/attachment markers і перевіряє їх відсутність у stdout/stderr та Winston file logs. Swarm/host/external log aggregation належать наступним tasks. |
-| Policy matrix у `docs/TEST_PLAN.md` | Не виконано | Артефакт прямо вказаний у roadmap, але policy matrix відсутня. |
-| Moodle throttle | Не виконано | Вказано в implementation steps, але окремого policy/config/test немає. |
+| Policy matrix у `docs/TEST_PLAN.md` | Виконано | Матриця пов'язує кожен Task 3.2 control з existing test або patch-bundle evidence та фіксує межі локального coverage. |
+| Moodle policy | Виконано | Moodle застосовує загальні обмеження: 5 sessions/IP і 30 messages/min/client; окремий throttle не планується. |
 
 - **Validation Commands:**
   ```bash
@@ -810,7 +810,7 @@ Implementation task готова до виконання, лише якщо:
 - **Goal:** довести retry, bounded resources і recovery behavior.
 - **Depends on:** Task 6.1.
 - **Definition of Ready:** safe failure injection й test volume isolation.
-- **Implementation Steps:** Graph outage/429/5xx/401/403; перевірити застосування `Retry-After` для `429`; restart; queue thresholds 60/80%, включно з temporary SMTP rejection `421/451` для нових SMTP-сесій або `MAIL FROM` submissions на ≥80%; disk exhaustion guard; burst понад baseline; Moodle throttle; failed purge; duplicate/replay observation.
+- **Implementation Steps:** Graph outage/429/5xx/401/403; перевірити застосування `Retry-After` для `429`; restart; queue thresholds 60/80%, включно з temporary SMTP rejection `421/451` для нових SMTP-сесій або `MAIL FROM` submissions на ≥80%; disk exhaustion guard; burst понад baseline, включно з Moodle за загальною policy; failed purge; duplicate/replay observation.
 - **Files / Directories:** `tests/acceptance/failure/`, `tests/load/`, `docs/TEST_PLAN.md`.
 - **Artifacts:** capacity assumptions і measured results.
 - **Acceptance Criteria:** no silent loss; correct 4xx/5xx; `429` retry follows `Retry-After`, якщо його підтримку підтверджено на Gate B; safe `421/451` rejection before exhaustion; transient delivery resumes; permanent retry bounded; purge policy correct.

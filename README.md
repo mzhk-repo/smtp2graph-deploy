@@ -67,6 +67,18 @@ Synthetic MIME, queue-restart та Graph failure-injection evidence описан
 
 Другий command зараз завершується non-zero навмисно: він фіксує підтверджені Gate B blocker-и SMTP2Graph v1.1.5.
 
+## Local end-to-end MVP harness
+
+Task 3.3 надає відтворювану локальну перевірку patched gateway без Microsoft 365, production credentials або deployment:
+
+```bash
+make test-local
+```
+
+Команда потребує Docker Engine, Docker Compose v2, Node.js, OpenSSL і доступу до локального upstream checkout `/opt/smtp2graph-build` лише як до Git source для exact tag. Спочатку `scripts/upgrade-smtp2graph-fork.sh` застосовує versioned assets `001–007` до clean temporary worktree, виконує build/unit/receive regressions і збирає local ephemeral image. Потім Compose створює internal network із mock Graph, synthetic secrets у `/dev/shm`, перевіряє positive SMTP flow, відмови без AUTH/для denied sender/oversize message та queue restart. Worktree, local image, containers, network і synthetic state очищуються автоматично.
+
+Це local functional evidence, а не Gate B approval, release image, supply-chain evidence або production deployment.
+
 ## Deployment safety
 
 Активного deployment workflow або SMTP2Graph orchestrator у repository ще немає. Koha-derived assets ізольовані в quarantine й не повинні виконуватися. Production deployment дозволений лише після відповідних roadmap gates і reviewed IaC.

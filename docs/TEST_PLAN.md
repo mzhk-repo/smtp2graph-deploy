@@ -1,5 +1,30 @@
 # План тестування
 
+## Task 3.2 — SMTP policy, rate limits і storage lifecycle
+
+### Policy matrix
+
+| ID | Контроль / очікувана поведінка | Локальний доказ і команда | Статус / межі |
+|---|---|---|---|
+| TB-POLICY-001 | SMTP вимагає автентифікації; source CIDR, global sender allowlist і per-user sender scope працюють за принципом deny-by-default. | `./tests/security/test-smtp-policy.sh`; `./tests/shell/test-render-config.sh` | Перевірено для control-plane render boundary. Deployment network policy та Docker Secret lifecycle поза межами тесту. |
+| TB-POLICY-002 | Oversize input, відсутній SMTP AUTH і автентифікований sender поза allowlist відхиляються без `.eml` payload у `queue/`. | `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply`; asset `006-rejected-submission-queue-isolation.patch` | Перевірено в isolated patched fork worktree. Це ще не Docker MVP harness Task 3.3. |
+| TB-POLICY-003 | За configured capacity threshold новий `MAIL FROM` відхиляється SMTP `451` до `DATA`; queue payload не створюється. | `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply`; asset `005-smtp-policy-and-storage-guards.patch` | Перевірено локально для порога 80%. Capacity accounting process-local і припускає single-replica topology. |
+| TB-POLICY-004 | Не більше 5 concurrent sessions на source IP та 30 messages/min/client; вивільнений session slot придатний для повторного використання. | `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply`; asset `005-smtp-policy-and-storage-guards.patch`; `./tests/shell/test-entrypoint.sh` | Перевірено локально. Wrapper рендерить погоджені defaults, а fork tests покривають session-slot release і SMTP `451` при перевищенні rate limit. |
+| TB-POLICY-005 | Failed-payload retention торкається лише `${SMTP2GRAPH_STORAGE_ROOT}/failed`; default — dry-run; queue і файли молодші за сім днів не змінюються. | `./tests/shell/test-purge-failed.sh`; `./tests/security/test-purge-failed.sh` | Перевірено для local maintenance helper. Scheduling і deployment lifecycle належать до наступних задач. |
+| TB-POLICY-006 | Gateway console і локальні Winston file logs не містять SMTP body або attachment markers. | `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply`; asset `007-receive-log-privacy.patch` | Перевірено в isolated patched fork worktree. Swarm, host log driver, retention і external aggregation не покриті. |
+| TB-POLICY-007 | Moodle використовує загальні gateway limits: 5 concurrent sessions на source IP і 30 messages/min/client. | `./tests/shell/test-entrypoint.sh`; `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply`; asset `005-smtp-policy-and-storage-guards.patch` | Погоджений policy baseline. Task 6.2 додатково перевіряє Moodle burst behavior у межах цих загальних лімітів до production onboarding. |
+
+## Task 3.3 — Local end-to-end MVP harness
+
+### TB-MVP-001 — Patched local SMTP-to-Graph flow
+
+- **Мета:** відтворювано перевірити patched gateway через SMTP і isolated mock Graph без external delivery.
+- **Середовище:** clean `v1.1.5` temporary worktree з assets `001–007`, local ephemeral image, internal Compose network, loopback SMTP port і synthetic secrets у `/dev/shm`.
+- **Перевірка:** позитивна SMTP submission проходить до mock Graph і queue спорожнюється; відсутній AUTH, sender поза allowlist і oversize message відхиляються без queue payload; submission під час mock timeout переживає restart gateway і доставляється після повернення mock Graph до success.
+- **Команда:** `make test-local`.
+- **Результат 2026-07-29:** пройшов після replay усіх семи assets, `npm run build`, 6 unit tests і receive suite. Temporary image, Compose resources, worktree й upgrade branch очищено.
+- **Межі:** test не звертається до Microsoft 365 і не є Gate B approval, GHCR release evidence, deployment або production capacity test.
+
 ## Task 3.2 — Privacy-safe SMTP logs
 
 ### TB-POLICY-LOG-001 — SMTP body та attachment markers не потрапляють у gateway logs

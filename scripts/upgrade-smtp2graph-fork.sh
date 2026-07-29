@@ -10,8 +10,9 @@ build_repo="$(cd "${project_root}/.." && pwd)/smtp2graph-build"
 mode=""
 release=""
 env_file=""
+test_image=""
 
-usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH]\n' "$0" >&2; }
+usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH] [--test-image NAME:TAG]\n' "$0" >&2; }
 die() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -39,6 +40,11 @@ while (($#)); do
       env_file=${2:?}
       shift 2
       ;;
+    --test-image)
+      [[ -z "$test_image" ]] || die 'test image may be specified only once'
+      test_image=${2:?}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -53,6 +59,10 @@ done
   usage
   exit 64
 }
+if [[ -n "$test_image" ]]; then
+  [[ "$mode" == apply ]] || die '--test-image requires --apply'
+  printf '%s\n' "$test_image" | grep -Eq '^[a-z0-9][a-z0-9._/-]*:[a-z0-9][a-z0-9._-]*$' || die 'test image must use a safe local NAME:TAG reference'
+fi
 [[ -f "$manifest" && -d "$build_repo/.git" ]] || die 'bundle or build repository is unavailable'
 upstream_remote=$(awk -F= '$1=="UPSTREAM_REMOTE" {print $2}' "$manifest")
 [[ "$(git -C "$build_repo" remote get-url upstream)" == "$upstream_remote" ]] || die 'unexpected upstream fetch URL'
@@ -101,4 +111,13 @@ if [[ -n "$env_file" && -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIE
   printf 'PASS: %s passed local and Microsoft 365 regressions.\n' "$branch"
 else
   printf 'PARTIAL: %s passed local regressions; Microsoft 365 suite was not explicitly requested with a complete --env-file.\n' "$branch"
+fi
+if [[ -n "$test_image" ]]; then
+  command -v docker >/dev/null 2>&1 || die 'docker is required to build a local test image'
+  docker info >/dev/null 2>&1 || die 'Docker daemon is unavailable'
+  (
+    cd "$worktree"
+    docker build --pull=false --build-arg "VERSION=${release}" --tag "$test_image" .
+  )
+  printf 'TEST_IMAGE: %s\n' "$test_image"
 fi

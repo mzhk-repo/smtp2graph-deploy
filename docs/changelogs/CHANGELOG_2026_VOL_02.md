@@ -29,3 +29,24 @@
     Verification: All seven assets replayed from clean `v1.1.5`; `npm run build`, 6 unit tests and 35 receive tests passed. Markers were absent from stdout/stderr and temporary `logs/` files, and were not emitted by test output.
     Risks: This local evidence does not cover Swarm/host log drivers, retention or external aggregation; those require deployment and observability evidence.
     Rollback: Remove asset `007` and its manifest entry only through a reviewed control-plane change; no sensitive fixture, runtime state or release artifact is retained.
+
+2026-07-29 — Task 3.2: SMTP policy test matrix
+    Context: The roadmap required a policy matrix in `docs/TEST_PLAN.md`, but the test plan contained only the receive-log privacy and display-name cases.
+    Change: Added a traceable matrix for deny-by-default rendering, rejected-submission queue isolation, capacity/session/rate guards, failed-payload retention, log privacy and the separate Moodle throttle decision.
+    Verification: Each completed matrix row points to an existing control-plane shell test or versioned patch-bundle command; the Moodle throttle row remains explicitly open.
+    Risks: Local fork evidence does not replace the pending Task 3.3 Docker MVP harness, deployment network policy or production observability coverage.
+    Rollback: Revert this documentation-only mapping with a reviewed change; it creates no runtime, queue, secret or deployment state.
+
+2026-07-29 — Task 3.2: Moodle adopts the common SMTP policy
+    Context: The roadmap and policy matrix previously treated Moodle as requiring a separate throttle decision.
+    Change: Moodle now uses the common gateway baseline of 5 concurrent sessions per source IP and 30 messages per minute per client; no Moodle-specific throttle is planned.
+    Verification: The common limits are rendered by the wrapper and covered by the existing asset `005` and entrypoint tests. Task 6.2 remains responsible for burst validation before production onboarding.
+    Risks: Moodle traffic above the common baseline will receive the same temporary SMTP rate-limit response as any other client; revisit the policy only through a reviewed requirements/security change.
+    Rollback: Restore a separately approved Moodle policy and matching tests through a reviewed documentation/configuration change; no runtime or deployment state was changed here.
+
+2026-07-29 — Task 3.3: isolated local SMTP-to-Graph MVP harness
+    Context: Local policy and fork regressions existed, but the repository lacked one repeatable command that exercised the patched gateway with an isolated mock Graph and queue restart flow.
+    Change: Added `make test-local`, controlled `--test-image` support in patch automation, `compose.test.yaml` and smoke scenarios for successful SMTP delivery, unauthenticated/denied-sender/oversize rejection and restart recovery.
+    Verification: All seven assets replayed from clean `v1.1.5`; local build, 6 unit tests, receive suite and `make test-local` passed. The harness left no local test image, Compose resource, temporary worktree or upgrade branch.
+    Risks: The harness uses synthetic credentials and a mock Graph; it is not M365, Gate B approval, release supply-chain or production deployment evidence. Docker access and local upstream Git objects remain prerequisites.
+    Rollback: Remove the Task 3.3 files and `--test-image` option through a reviewed change; no persistent queue, secret, image or deployment state is retained after a successful run.

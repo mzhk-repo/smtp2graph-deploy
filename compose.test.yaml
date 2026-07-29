@@ -1,0 +1,80 @@
+services:
+  mock-graph:
+    image: ${SMTP2GRAPH_TEST_IMAGE:?SMTP2GRAPH_TEST_IMAGE is required}
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+    volumes:
+      - ${SMTP2GRAPH_TEST_ROOT:?SMTP2GRAPH_TEST_ROOT is required}/secrets:/tls:ro
+      - ${SMTP2GRAPH_TEST_ROOT:?SMTP2GRAPH_TEST_ROOT is required}/state:/state
+      - ./tests/acceptance/protocol/mock-graph.js:/opt/smoke/mock-graph.js:ro
+    environment:
+      MOCK_GRAPH_TLS_KEY_PATH: /tls/graph-private-key
+      MOCK_GRAPH_TLS_CERT_PATH: /tls/mock-ca.pem
+    entrypoint: ["node", "/opt/smoke/mock-graph.js"]
+    networks:
+      mvp:
+        ipv4_address: ${SMTP2GRAPH_MOCK_IP:?SMTP2GRAPH_MOCK_IP is required}
+
+  gateway:
+    image: ${SMTP2GRAPH_TEST_IMAGE:?SMTP2GRAPH_TEST_IMAGE is required}
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+    volumes:
+      - ${SMTP2GRAPH_TEST_ROOT:?SMTP2GRAPH_TEST_ROOT is required}/storage:/data
+      - ${SMTP2GRAPH_TEST_ROOT:?SMTP2GRAPH_TEST_ROOT is required}/secrets:/run/secrets:ro
+      - ./scripts/entrypoint.sh:/opt/smtp2graph/entrypoint.sh:ro
+      - ./scripts/lib/render-config.sh:/opt/smtp2graph/render-config.sh:ro
+      - ./deploy/config/gateway-config.yml.template:/opt/smtp2graph/gateway-config.yml.template:ro
+    environment:
+      GRAPH_AUTH_MODE: certificate
+      GRAPH_SENDER_MAILBOX: noreply@example.invalid
+      SMTP_BIND_ADDRESS: 0.0.0.0
+      SMTP_ALLOWED_SOURCE_CIDRS: ${SMTP2GRAPH_TEST_SUBNET:?SMTP2GRAPH_TEST_SUBNET is required}
+      SMTP_ALLOWED_SENDER_ADDRESSES: noreply@example.invalid
+      SMTP2GRAPH_STORAGE_ROOT: /data
+      SMTP_MAX_SESSIONS_PER_IP: 5
+      SMTP_MESSAGES_PER_MINUTE: 30
+      QUEUE_MAX_BYTES: 1073741824
+      QUEUE_REJECT_THRESHOLD_PERCENT: 80
+      SEND_RETRY_LIMIT: 1
+      SEND_RETRY_INTERVAL_MINUTES: 1
+      NODE_EXTRA_CA_CERTS: /run/secrets/mock-ca.pem
+      DOCKER_SECRET_ALLOWED_UIDS: "0:65532:${SMTP2GRAPH_TEST_UID:?SMTP2GRAPH_TEST_UID is required}"
+      RUNTIME_TEMPLATE_FILE: /opt/smtp2graph/gateway-config.yml.template
+      RUNTIME_RENDER_HELPER_FILE: /opt/smtp2graph/render-config.sh
+    extra_hosts:
+      - login.microsoftonline.com:${SMTP2GRAPH_MOCK_IP:?SMTP2GRAPH_MOCK_IP is required}
+      - graph.microsoft.com:${SMTP2GRAPH_MOCK_IP:?SMTP2GRAPH_MOCK_IP is required}
+    entrypoint: ["/bin/sh", "/opt/smtp2graph/entrypoint.sh"]
+    ports:
+      - 127.0.0.1::587
+    depends_on:
+      - mock-graph
+    networks:
+      - mvp
+
+networks:
+  mvp:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${SMTP2GRAPH_TEST_SUBNET:?SMTP2GRAPH_TEST_SUBNET is required}

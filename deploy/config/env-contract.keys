@@ -16,6 +16,7 @@ SEND_RETRY_INTERVAL_MINUTES|required|public|1
 NONPRODUCTION_RECIPIENT_ALLOWLIST|required|public|recipient@example.invalid
 QUEUE_MAX_BYTES|required|public|1073741824
 QUEUE_REJECT_THRESHOLD_PERCENT|required|public|80
+SMTP2GRAPH_STORAGE_ROOT|required|public|/data
 FAILED_PAYLOAD_RETENTION_DAYS|required|public|7
 LOG_RETENTION_DAYS|required|public|30
 SWARM_STACK_NAME|required|public|smtp2graph

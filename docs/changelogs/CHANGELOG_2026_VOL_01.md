@@ -283,3 +283,10 @@ Rollback: Припинити використання non-production app або 
     Verification: The example-only contract validator confirms the exact allowlisted key set without sourcing any environment file.
     Risks: Secret file paths, Docker Secret ownership and mount paths remain runtime/deployment internals and are intentionally not exported as `.env.example` configuration.
     Rollback: Remove the four contract/example keys together only through a reviewed wrapper-contract change.
+
+2026-07-29 — Task 3.2: safe failed-payload retention helper
+    Context: Failed payloads require a bounded seven-day lifecycle without risking queue data or arbitrary filesystem paths.
+    Change: Added Category 2 `purge-failed.sh` with default dry-run and explicit `--apply`. It validates a non-symlink storage root and targets only its fixed `failed` child; it purges only regular files at least seven full days old, without file-name logging, directory removal or queue traversal.
+    Verification: Shell tests cover dry-run, apply, retention threshold and queue preservation. Security tests reject `/`, missing storage roots and a symlinked `failed` directory.
+    Risks: `--apply` permanently deletes expired failed payloads; recovery requires an approved external recovery source. The helper does not implement a scheduler or deployment lifecycle.
+    Rollback: Disable the caller/schedule and return to dry-run; do not broaden the target path or restore deleted payloads into the live queue.

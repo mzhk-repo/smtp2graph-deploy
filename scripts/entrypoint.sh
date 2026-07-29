@@ -6,6 +6,13 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$0")" && pwd)
 PROJECT_ROOT=$(CDPATH='' cd "${SCRIPT_DIR}/.." && pwd)
+RUNTIME_RENDER_HELPER_FILE=${RUNTIME_RENDER_HELPER_FILE:-"${SCRIPT_DIR}/lib/render-config.sh"}
+if [ ! -r "${RUNTIME_RENDER_HELPER_FILE}" ] || [ ! -f "${RUNTIME_RENDER_HELPER_FILE}" ] || [ -L "${RUNTIME_RENDER_HELPER_FILE}" ]; then
+  printf 'ERROR: runtime renderer helper is unavailable.\n' >&2
+  exit 66
+fi
+# shellcheck source=scripts/lib/render-config.sh
+. "${RUNTIME_RENDER_HELPER_FILE}"
 RUNTIME_TEMPLATE_FILE=${RUNTIME_TEMPLATE_FILE:-"${PROJECT_ROOT}/deploy/config/gateway-config.yml.template"}
 RUNTIME_CONFIG_DIR=${RUNTIME_CONFIG_DIR:-/runtime}
 DOCKER_SECRETS_DIR=${DOCKER_SECRETS_DIR:-/run/secrets}
@@ -17,6 +24,8 @@ GRAPH_AUTH_MODE=${GRAPH_AUTH_MODE:-certificate}
 SMTP_BIND_ADDRESS=${SMTP_BIND_ADDRESS:-127.0.0.1}
 SMTP_LISTEN_PORT=${SMTP_LISTEN_PORT:-587}
 SMTP_MAX_MESSAGE_BYTES=${SMTP_MAX_MESSAGE_BYTES:-26214400}
+SMTP_ALLOWED_SOURCE_CIDRS=${SMTP_ALLOWED_SOURCE_CIDRS:-}
+SMTP_ALLOWED_SENDER_ADDRESSES=${SMTP_ALLOWED_SENDER_ADDRESSES:-}
 GRAPH_SENDER_MAILBOX=${GRAPH_SENDER_MAILBOX:-}
 SEND_RETRY_LIMIT=${SEND_RETRY_LIMIT:-1}
 SEND_RETRY_INTERVAL_MINUTES=${SEND_RETRY_INTERVAL_MINUTES:-1}
@@ -32,12 +41,6 @@ cleanup() {
   [ -z "${temp_config}" ] || rm -f "${temp_config}"
 }
 trap cleanup 0 1 2 15
-
-yaml_quote() {
-  printf "'"
-  printf '%s' "$1" | sed "s/'/''/g"
-  printf "'"
-}
 
 require_value() {
   [ -n "$1" ] || die 'required non-secret runtime value is empty.'
@@ -71,6 +74,8 @@ parse_runtime_input_file() {
       SMTP_BIND_ADDRESS) SMTP_BIND_ADDRESS=${value} ;;
       SMTP_LISTEN_PORT) SMTP_LISTEN_PORT=${value} ;;
       SMTP_MAX_MESSAGE_BYTES) SMTP_MAX_MESSAGE_BYTES=${value} ;;
+      SMTP_ALLOWED_SOURCE_CIDRS) SMTP_ALLOWED_SOURCE_CIDRS=${value} ;;
+      SMTP_ALLOWED_SENDER_ADDRESSES) SMTP_ALLOWED_SENDER_ADDRESSES=${value} ;;
       GRAPH_SENDER_MAILBOX) GRAPH_SENDER_MAILBOX=${value} ;;
       SEND_RETRY_LIMIT) SEND_RETRY_LIMIT=${value} ;;
       SEND_RETRY_INTERVAL_MINUTES) SEND_RETRY_INTERVAL_MINUTES=${value} ;;
@@ -123,6 +128,8 @@ validate_inputs() {
     *) die 'GRAPH_AUTH_MODE must be certificate or client-secret.' ;;
   esac
   require_value "${SMTP_BIND_ADDRESS}"
+  require_value "${SMTP_ALLOWED_SOURCE_CIDRS}"
+  require_value "${SMTP_ALLOWED_SENDER_ADDRESSES}"
   require_value "${GRAPH_SENDER_MAILBOX}"
   require_integer SMTP_LISTEN_PORT "${SMTP_LISTEN_PORT}"
   if [ "${SMTP_LISTEN_PORT}" -lt 1 ] || [ "${SMTP_LISTEN_PORT}" -gt 65535 ]; then
@@ -162,6 +169,10 @@ render_template() {
   smtp_tls_cert_path=${SMTP_TLS_CERT_PATH:-"${DOCKER_SECRETS_DIR}/smtp-tls-cert"}
   require_secret_file "${smtp_tls_key_path}"
   require_secret_file "${smtp_tls_cert_path}"
+  smtp_users_path=${SMTP_USERS_SECRET_PATH:-"${DOCKER_SECRETS_DIR}/smtp-users"}
+  require_secret_file "${smtp_users_path}"
+  global_senders=$(normalize_email_csv "${SMTP_ALLOWED_SENDER_ADDRESSES}") || die 'SMTP_ALLOWED_SENDER_ADDRESSES must be a non-empty unique CSV email list.'
+  source_cidrs=$(normalize_cidr_csv "${SMTP_ALLOWED_SOURCE_CIDRS}") || die 'SMTP_ALLOWED_SOURCE_CIDRS must be a non-empty unique CSV IP/CIDR list.'
   max_size_kib=$((SMTP_MAX_MESSAGE_BYTES / 1024))
 
   while IFS= read -r line || [ -n "${line}" ]; do
@@ -178,6 +189,9 @@ render_template() {
       '  tlsKeyPath: __SMTP_TLS_KEY_PATH__') printf '  tlsKeyPath: %s\n' "$(yaml_quote "${smtp_tls_key_path}")" ;;
       '  tlsCertPath: __SMTP_TLS_CERT_PATH__') printf '  tlsCertPath: %s\n' "$(yaml_quote "${smtp_tls_cert_path}")" ;;
       '  maxSize: __SMTP_MAX_SIZE_KIB__') printf "  maxSize: '%sk'\n" "${max_size_kib}" ;;
+      '__SMTP_ALLOWED_SOURCE_CIDRS__') render_yaml_list '    ' "${source_cidrs}" ;;
+      '__SMTP_ALLOWED_SENDER_ADDRESSES__') render_yaml_list '    ' "${global_senders}" ;;
+      '__SMTP_USERS__') render_smtp_users "${smtp_users_path}" "${global_senders}" ;;
       *'__'*) die 'runtime template contains an unsupported placeholder.' 65 ;;
       *) printf '%s\n' "${line}" ;;
     esac

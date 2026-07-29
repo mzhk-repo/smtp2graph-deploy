@@ -269,3 +269,10 @@ Rollback: Припинити використання non-production app або 
     Verification: All five assets applied from clean `v1.1.5` in an isolated worktree. `npm run build`, 6 unit tests and 31 receive tests passed; M365 was intentionally not invoked and the result is documented as `PARTIAL`. The isolated `upgrade/v1.1.5` branch and worktree were removed after success.
     Risks: Storage capacity accounting remains process-local and recursively counts regular files; it does not provide multi-replica coordination. `npm ci` reported pre-existing dependency audit findings (2 Critical, 14 High); no automatic dependency update was performed.
     Rollback: Remove asset `005` and its manifest entry only through a reviewed control-plane change; the local build-plane diff remains disposable, and upstream v1.1.5 is not a production rollback target.
+
+2026-07-29 — Task 3.2: deny-by-default SMTP policy runtime rendering
+    Context: The runtime template rendered TLS settings but still disabled SMTP AUTH and did not materialize source-IP, sender or per-user credential policy.
+    Change: Template and POSIX wrapper now require SMTP AUTH, non-empty source CIDR and sender allowlists, and a mounted `smtp-users` Docker Secret. A testable helper parses strict `username<TAB>password<TAB>sender1,sender2` records without `source` or eval, lowercases email addresses and rejects malformed/empty/duplicate users or senders outside the global allowlist.
+    Verification: Standalone renderer tests and entrypoint rendering tests pass for positive render, special password characters, lowercase normalization, malformed/empty records, duplicate users, outside-policy senders and redacted diagnostics.
+    Risks: The TSV password field cannot contain a tab or newline. This config-level boundary does not replace deployment network policy, Docker Secret lifecycle or production per-service onboarding.
+    Rollback: Restore the prior reviewed template, wrapper and renderer helper together; no rendered configuration persists outside tmpfs.

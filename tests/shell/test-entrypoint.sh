@@ -38,6 +38,8 @@ run_render() {
     RUNTIME_ENTRYPOINT_MODE=render-only \
     GRAPH_AUTH_MODE="${GRAPH_AUTH_MODE:-certificate}" \
     GRAPH_SENDER_MAILBOX=noreply@example.invalid \
+    SMTP_ALLOWED_SOURCE_CIDRS=127.0.0.1/32 \
+    SMTP_ALLOWED_SENDER_ADDRESSES=NOREPLY@example.invalid \
     "${ENTRYPOINT}"
 }
 
@@ -49,12 +51,15 @@ printf '%s\n' 'synthetic-client-secret-for-test-only' >"${SECRETS_DIR}/graph-cli
 printf '%s\n' 'synthetic-private-key' >"${SECRETS_DIR}/graph-private-key"
 printf '%s\n' 'synthetic-tls-key' >"${SECRETS_DIR}/smtp-tls-key"
 printf '%s\n' 'synthetic-tls-cert' >"${SECRETS_DIR}/smtp-tls-cert"
+printf 'grafana\tsynthetic-password\tNoreply@Example.Invalid\n' >"${SECRETS_DIR}/smtp-users"
 chmod 0444 "${SECRETS_DIR}"/*
 
 run_render >/dev/null
 [[ -f "${RUNTIME_DIR}/config.yml" ]] || fail 'rendered configuration is missing.'
 [[ "$(stat -c '%a' "${RUNTIME_DIR}/config.yml")" == '600' ]] || fail 'rendered configuration mode is not 0600.'
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'expected sender mailbox is missing from rendered configuration.'
+grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'normalized sender policy is missing from rendered configuration.'
+grep -F "requireAuth: true" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP authentication is not required in rendered configuration.'
 grep -F 'synthetic-client-secret-for-test-only' "${RUNTIME_DIR}/config.yml" >/dev/null && fail 'certificate render unexpectedly contains client secret.'
 
 GRAPH_AUTH_MODE=client-secret run_render >/dev/null

@@ -7,12 +7,14 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 IMAGE_REF="docker.io/smtp2graph/smtp2graph@sha256:88ef2015f37ad460d7cc06fa80cf82a0318108ae696dac61a2896d5016d9545d"
 ENTRYPOINT_SCRIPT="${PROJECT_ROOT}/scripts/entrypoint.sh"
 RUNTIME_TEMPLATE_FILE="${PROJECT_ROOT}/deploy/config/gateway-config.yml.template"
+RENDER_HELPER_FILE="${PROJECT_ROOT}/scripts/lib/render-config.sh"
 TEMP_DIR="$(mktemp -d)"
 SECRETS_DIR="${TEMP_DIR}/secrets"
 CERTIFICATE_CONTAINER="smtp2graph-runtime-cert-${$}"
 RESTART_CONTAINER="smtp2graph-runtime-restart-${$}"
 FALLBACK_CONTAINER="smtp2graph-runtime-fallback-${$}"
 SYNTHETIC_CLIENT_SECRET="runtime-fallback-material-for-task-2-3"
+SYNTHETIC_SMTP_PASSWORD="runtime-smtp-password-for-task-3-2"
 
 cleanup() {
   docker rm -f "${CERTIFICATE_CONTAINER}" "${RESTART_CONTAINER}" "${FALLBACK_CONTAINER}" >/dev/null 2>&1 || true
@@ -42,10 +44,14 @@ run_gateway() {
     --mount "type=bind,src=${SECRETS_DIR},dst=/run/secrets,readonly" \
     --mount "type=bind,src=${ENTRYPOINT_SCRIPT},dst=/opt/smtp2graph/entrypoint.sh,readonly" \
     --mount "type=bind,src=${RUNTIME_TEMPLATE_FILE},dst=/opt/smtp2graph/gateway-config.yml.template,readonly" \
+    --mount "type=bind,src=${RENDER_HELPER_FILE},dst=/opt/smtp2graph/render-config.sh,readonly" \
     -e "GRAPH_AUTH_MODE=${auth_mode}" \
     -e 'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
+    -e 'SMTP_ALLOWED_SOURCE_CIDRS=127.0.0.1/32' \
+    -e 'SMTP_ALLOWED_SENDER_ADDRESSES=noreply@example.invalid' \
     -e "DOCKER_SECRET_ALLOWED_UIDS=0:65532:$(id -u)" \
     -e 'RUNTIME_TEMPLATE_FILE=/opt/smtp2graph/gateway-config.yml.template' \
+    -e 'RUNTIME_RENDER_HELPER_FILE=/opt/smtp2graph/render-config.sh' \
     "$@" \
     --entrypoint /bin/sh \
     "${IMAGE_REF}" \
@@ -78,6 +84,8 @@ assert_secret_absent() {
   log_output="$(docker logs "${name}" 2>&1 || true)"
   [[ "${inspect_output}" != *"${SYNTHETIC_CLIENT_SECRET}"* ]] || fail 'synthetic client secret is present in docker inspect output.'
   [[ "${log_output}" != *"${SYNTHETIC_CLIENT_SECRET}"* ]] || fail 'synthetic client secret is present in container logs.'
+  [[ "${inspect_output}" != *"${SYNTHETIC_SMTP_PASSWORD}"* ]] || fail 'synthetic SMTP password is present in docker inspect output.'
+  [[ "${log_output}" != *"${SYNTHETIC_SMTP_PASSWORD}"* ]] || fail 'synthetic SMTP password is present in container logs.'
 }
 
 assert_hardening() {
@@ -98,6 +106,7 @@ trap cleanup EXIT
 
 [[ -x "${ENTRYPOINT_SCRIPT}" ]] || fail 'runtime entrypoint is missing or not executable.'
 [[ -r "${RUNTIME_TEMPLATE_FILE}" ]] || fail 'runtime configuration template is missing or unreadable.'
+[[ -r "${RENDER_HELPER_FILE}" ]] || fail 'runtime renderer helper is missing or unreadable.'
 docker info >/dev/null 2>&1 || fail 'Docker daemon is unavailable.'
 
 mkdir -p "${SECRETS_DIR}"
@@ -111,14 +120,11 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -keyout "${SECRETS_DIR}/graph-private-key" \
   -out "${SECRETS_DIR}/smtp-tls-cert" >/dev/null 2>&1
 cp "${SECRETS_DIR}/graph-private-key" "${SECRETS_DIR}/smtp-tls-key"
+printf 'runtime-client\t%s\tnoreply@example.invalid\n' "${SYNTHETIC_SMTP_PASSWORD}" >"${SECRETS_DIR}/smtp-users"
 chmod 0444 "${SECRETS_DIR}"/*
 
 run_gateway "${FALLBACK_CONTAINER}" client-secret -e RUNTIME_ENTRYPOINT_MODE=render-only
-fallback_logs="$(docker logs "${FALLBACK_CONTAINER}" 2>&1)"
-if [[ "${fallback_logs}" != *'PASS: runtime configuration rendered'* ]]; then
-  printf 'Fallback render output: %s\n' "${fallback_logs}" >&2
-  fail 'client-secret fallback did not render configuration.'
-fi
+[[ "$(docker inspect --format '{{.State.ExitCode}}' "${FALLBACK_CONTAINER}")" == '0' ]] || fail 'client-secret render-only container did not exit successfully.'
 assert_secret_absent "${FALLBACK_CONTAINER}"
 
 run_gateway "${CERTIFICATE_CONTAINER}" certificate

@@ -16,4 +16,10 @@ receive:
   tlsKeyPath: __SMTP_TLS_KEY_PATH__
   tlsCertPath: __SMTP_TLS_CERT_PATH__
   maxSize: __SMTP_MAX_SIZE_KIB__
-  requireAuth: false
+  ipWhitelist:
+__SMTP_ALLOWED_SOURCE_CIDRS__
+  allowedFrom:
+__SMTP_ALLOWED_SENDER_ADDRESSES__
+  requireAuth: true
+  users:
+__SMTP_USERS__

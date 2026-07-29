@@ -547,7 +547,7 @@ Implementation task готова до виконання, лише якщо:
 | ≥80% queue → `421`/`451`, без queue write | Виконано локально | Template і fail-closed wrapper рендерять `storage.rootPath`, `storage.maxBytes` та `storage.rejectThresholdPercent` з validated public contract inputs. Fork replay test у `005` підтверджує `451` перед `DATA` і відсутність нового queue file при threshold. |
 | 5 sessions/IP, 30 msg/min/client | Виконано локально | Template і fail-closed wrapper рендерять validated `receive.maxSessionsPerIp` та `receive.rateLimit` із фіксованим 60-секундним вікном. Fork replay test у `005` підтверджує звільнення session slot і `451` на перевищенні client rate limit. |
 | Purge не торкається queue/молодших 7 днів | Виконано локально | [purge script](/opt/smtp2graph-deploy/scripts/purge-failed.sh) та shell/security tests підтверджують fixed `failed` root, dry-run, retention і queue isolation. |
-| Logs без body | Не доведено | Немає dedicated test/evidence, що SMTP body або attachment не з’являються в gateway logs. |
+| Logs без body | Виконано локально | Asset `007` запускає receive server в isolated base directory, подає runtime-generated body/attachment markers і перевіряє їх відсутність у stdout/stderr та Winston file logs. Swarm/host/external log aggregation належать наступним tasks. |
 | Policy matrix у `docs/TEST_PLAN.md` | Не виконано | Артефакт прямо вказаний у roadmap, але policy matrix відсутня. |
 | Moodle throttle | Не виконано | Вказано в implementation steps, але окремого policy/config/test немає. |
 

@@ -22,3 +22,10 @@
     Verification: Entrypoint tests confirm default and strict-input rendering, plus fail-closed refusal of zero limits. Existing asset `005` replay evidence covers session-slot release and SMTP `451` after the configured client limit.
     Risks: Session/rate counters are process-local and depend on the single-replica production-minimum topology; Moodle requires a separate throttle decision.
     Rollback: Restore the reviewed template and wrapper pair; do not weaken the fork source guards without a separate security review.
+
+2026-07-29 — Task 3.2: receive-log privacy evidence
+    Context: The project had no dedicated evidence that SMTP body or attachment content was absent from gateway logs.
+    Change: Added versioned asset `007-receive-log-privacy.patch`, which submits runtime-generated synthetic body and attachment markers to an isolated receive server and scans console plus Winston file log surfaces.
+    Verification: All seven assets replayed from clean `v1.1.5`; `npm run build`, 6 unit tests and 35 receive tests passed. Markers were absent from stdout/stderr and temporary `logs/` files, and were not emitted by test output.
+    Risks: This local evidence does not cover Swarm/host log drivers, retention or external aggregation; those require deployment and observability evidence.
+    Rollback: Remove asset `007` and its manifest entry only through a reviewed control-plane change; no sensitive fixture, runtime state or release artifact is retained.

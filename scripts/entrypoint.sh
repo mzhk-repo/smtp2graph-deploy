@@ -24,6 +24,8 @@ GRAPH_AUTH_MODE=${GRAPH_AUTH_MODE:-certificate}
 SMTP_BIND_ADDRESS=${SMTP_BIND_ADDRESS:-127.0.0.1}
 SMTP_LISTEN_PORT=${SMTP_LISTEN_PORT:-587}
 SMTP_MAX_MESSAGE_BYTES=${SMTP_MAX_MESSAGE_BYTES:-26214400}
+SMTP_MAX_SESSIONS_PER_IP=${SMTP_MAX_SESSIONS_PER_IP:-5}
+SMTP_MESSAGES_PER_MINUTE=${SMTP_MESSAGES_PER_MINUTE:-30}
 SMTP2GRAPH_STORAGE_ROOT=${SMTP2GRAPH_STORAGE_ROOT:-/data}
 QUEUE_MAX_BYTES=${QUEUE_MAX_BYTES:-1073741824}
 QUEUE_REJECT_THRESHOLD_PERCENT=${QUEUE_REJECT_THRESHOLD_PERCENT:-80}
@@ -77,6 +79,8 @@ parse_runtime_input_file() {
       SMTP_BIND_ADDRESS) SMTP_BIND_ADDRESS=${value} ;;
       SMTP_LISTEN_PORT) SMTP_LISTEN_PORT=${value} ;;
       SMTP_MAX_MESSAGE_BYTES) SMTP_MAX_MESSAGE_BYTES=${value} ;;
+      SMTP_MAX_SESSIONS_PER_IP) SMTP_MAX_SESSIONS_PER_IP=${value} ;;
+      SMTP_MESSAGES_PER_MINUTE) SMTP_MESSAGES_PER_MINUTE=${value} ;;
       SMTP2GRAPH_STORAGE_ROOT) SMTP2GRAPH_STORAGE_ROOT=${value} ;;
       QUEUE_MAX_BYTES) QUEUE_MAX_BYTES=${value} ;;
       QUEUE_REJECT_THRESHOLD_PERCENT) QUEUE_REJECT_THRESHOLD_PERCENT=${value} ;;
@@ -150,6 +154,10 @@ validate_inputs() {
   if [ "${SMTP_MAX_MESSAGE_BYTES}" -le 0 ] || [ $((SMTP_MAX_MESSAGE_BYTES % 1024)) -ne 0 ]; then
     die 'SMTP_MAX_MESSAGE_BYTES must be a positive multiple of 1024.'
   fi
+  require_integer SMTP_MAX_SESSIONS_PER_IP "${SMTP_MAX_SESSIONS_PER_IP}"
+  [ "${SMTP_MAX_SESSIONS_PER_IP}" -ge 1 ] || die 'SMTP_MAX_SESSIONS_PER_IP must be at least 1.'
+  require_integer SMTP_MESSAGES_PER_MINUTE "${SMTP_MESSAGES_PER_MINUTE}"
+  [ "${SMTP_MESSAGES_PER_MINUTE}" -ge 1 ] || die 'SMTP_MESSAGES_PER_MINUTE must be at least 1.'
   require_integer QUEUE_MAX_BYTES "${QUEUE_MAX_BYTES}"
   [ "${QUEUE_MAX_BYTES}" -ge 1 ] || die 'QUEUE_MAX_BYTES must be at least 1.'
   require_integer QUEUE_REJECT_THRESHOLD_PERCENT "${QUEUE_REJECT_THRESHOLD_PERCENT}"
@@ -211,6 +219,8 @@ render_template() {
       '  maxSize: __SMTP_MAX_SIZE_KIB__') printf "  maxSize: '%sk'\n" "${max_size_kib}" ;;
       '__SMTP_ALLOWED_SOURCE_CIDRS__') render_yaml_list '    ' "${source_cidrs}" ;;
       '__SMTP_ALLOWED_SENDER_ADDRESSES__') render_yaml_list '    ' "${global_senders}" ;;
+      '  maxSessionsPerIp: __SMTP_MAX_SESSIONS_PER_IP__') printf '  maxSessionsPerIp: %s\n' "${SMTP_MAX_SESSIONS_PER_IP}" ;;
+      '    limit: __SMTP_MESSAGES_PER_MINUTE__') printf '    limit: %s\n' "${SMTP_MESSAGES_PER_MINUTE}" ;;
       '__SMTP_USERS__') render_smtp_users "${smtp_users_path}" "${global_senders}" ;;
       *'__'*) die 'runtime template contains an unsupported placeholder.' 65 ;;
       *) printf '%s\n' "${line}" ;;

@@ -25,5 +25,9 @@ __SMTP_ALLOWED_SOURCE_CIDRS__
   allowedFrom:
 __SMTP_ALLOWED_SENDER_ADDRESSES__
   requireAuth: true
+  maxSessionsPerIp: __SMTP_MAX_SESSIONS_PER_IP__
+  rateLimit:
+    duration: 60
+    limit: __SMTP_MESSAGES_PER_MINUTE__
   users:
 __SMTP_USERS__

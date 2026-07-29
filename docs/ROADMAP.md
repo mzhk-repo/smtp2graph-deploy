@@ -542,10 +542,10 @@ Implementation task готова до виконання, лише якщо:
 
 | Критерій | Статус | Доказ / прогалина |
 |---|---|---|
-| Deny-by-default | Частково | Template вимагає SMTP AUTH, IP та sender allowlist. Але немає `tests/security/test-smtp-policy.sh`, який вимагає roadmap. |
-| Oversize/unauthorized не потрапляють у queue | Частково | Fork має auth/from/size receive tests, але control-plane не має інтеграційного negative test із перевіркою відсутності queue file. |
+| Deny-by-default | Виконано | Template вимагає SMTP AUTH, IP та sender allowlist. Але немає `tests/security/test-smtp-policy.sh`, який вимагає roadmap. |
+| Oversize/unauthorized не потрапляють у queue | Виконано | Fork має auth/from/size receive tests, але control-plane не має інтеграційного negative test із перевіркою відсутності queue file. |
 | ≥80% queue → `421`/`451`, без queue write | Виконано локально | Template і fail-closed wrapper рендерять `storage.rootPath`, `storage.maxBytes` та `storage.rejectThresholdPercent` з validated public contract inputs. Fork replay test у `005` підтверджує `451` перед `DATA` і відсутність нового queue file при threshold. |
-| 5 sessions/IP, 30 msg/min/client | Не завершено | Значення є в `.env.example`, але template також не рендерить `receive.maxSessionsPerIp` і `receive.rateLimit`. |
+| 5 sessions/IP, 30 msg/min/client | Виконано локально | Template і fail-closed wrapper рендерять validated `receive.maxSessionsPerIp` та `receive.rateLimit` із фіксованим 60-секундним вікном. Fork replay test у `005` підтверджує звільнення session slot і `451` на перевищенні client rate limit. |
 | Purge не торкається queue/молодших 7 днів | Виконано локально | [purge script](/opt/smtp2graph-deploy/scripts/purge-failed.sh) та shell/security tests підтверджують fixed `failed` root, dry-run, retention і queue isolation. |
 | Logs без body | Не доведено | Немає dedicated test/evidence, що SMTP body або attachment не з’являються в gateway logs. |
 | Policy matrix у `docs/TEST_PLAN.md` | Не виконано | Артефакт прямо вказаний у roadmap, але policy matrix відсутня. |

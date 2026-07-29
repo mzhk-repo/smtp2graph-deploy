@@ -38,6 +38,8 @@ run_render() {
     RUNTIME_ENTRYPOINT_MODE=render-only \
     GRAPH_AUTH_MODE="${GRAPH_AUTH_MODE:-certificate}" \
     GRAPH_SENDER_MAILBOX=noreply@example.invalid \
+    SMTP_MAX_SESSIONS_PER_IP="${SMTP_MAX_SESSIONS_PER_IP-5}" \
+    SMTP_MESSAGES_PER_MINUTE="${SMTP_MESSAGES_PER_MINUTE-30}" \
     SMTP2GRAPH_STORAGE_ROOT="${SMTP2GRAPH_STORAGE_ROOT-/data}" \
     QUEUE_MAX_BYTES="${QUEUE_MAX_BYTES-1073741824}" \
     QUEUE_REJECT_THRESHOLD_PERCENT="${QUEUE_REJECT_THRESHOLD_PERCENT-80}" \
@@ -63,6 +65,9 @@ run_render >/dev/null
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'expected sender mailbox is missing from rendered configuration.'
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'normalized sender policy is missing from rendered configuration.'
 grep -F "requireAuth: true" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP authentication is not required in rendered configuration.'
+grep -F 'maxSessionsPerIp: 5' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'per-IP session limit is missing from rendered configuration.'
+grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'duration: 60' >/dev/null || fail 'rate-limit duration is missing from rendered configuration.'
+grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'limit: 30' >/dev/null || fail 'per-client message limit is missing from rendered configuration.'
 grep -F "rootPath: '/data'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'persistent storage root is missing from rendered configuration.'
 grep -F 'maxBytes: 1073741824' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue capacity is missing from rendered configuration.'
 grep -F 'rejectThresholdPercent: 80' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue rejection threshold is missing from rendered configuration.'
@@ -81,6 +86,8 @@ chmod 0444 "${SECRETS_DIR}/smtp-tls-key"
 QUEUE_MAX_BYTES=0 expect_failure 'QUEUE_MAX_BYTES must be at least 1.' run_render
 QUEUE_REJECT_THRESHOLD_PERCENT=101 expect_failure 'QUEUE_REJECT_THRESHOLD_PERCENT must be between 1 and 100.' run_render
 SMTP2GRAPH_STORAGE_ROOT=relative-path expect_failure 'SMTP2GRAPH_STORAGE_ROOT must be an absolute path other than /.' run_render
+SMTP_MAX_SESSIONS_PER_IP=0 expect_failure 'SMTP_MAX_SESSIONS_PER_IP must be at least 1.' run_render
+SMTP_MESSAGES_PER_MINUTE=0 expect_failure 'SMTP_MESSAGES_PER_MINUTE must be at least 1.' run_render
 
 STORAGE_INPUT="${TEMP_DIR}/storage.env"
 printf '%s\n' 'SMTP2GRAPH_STORAGE_ROOT=/runtime-data' 'QUEUE_MAX_BYTES=2048' 'QUEUE_REJECT_THRESHOLD_PERCENT=75' >"${STORAGE_INPUT}"
@@ -88,6 +95,12 @@ RUNTIME_CONFIG_FILE="${STORAGE_INPUT}" run_render >/dev/null
 grep -F "rootPath: '/runtime-data'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'storage root from the strict runtime input was not rendered.'
 grep -F 'maxBytes: 2048' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue capacity from the strict runtime input was not rendered.'
 grep -F 'rejectThresholdPercent: 75' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue threshold from the strict runtime input was not rendered.'
+
+POLICY_LIMITS_INPUT="${TEMP_DIR}/policy-limits.env"
+printf '%s\n' 'SMTP_MAX_SESSIONS_PER_IP=3' 'SMTP_MESSAGES_PER_MINUTE=12' >"${POLICY_LIMITS_INPUT}"
+RUNTIME_CONFIG_FILE="${POLICY_LIMITS_INPUT}" run_render >/dev/null
+grep -F 'maxSessionsPerIp: 3' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'per-IP session limit from the strict runtime input was not rendered.'
+grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'limit: 12' >/dev/null || fail 'per-client message limit from the strict runtime input was not rendered.'
 
 MALICIOUS_INPUT="${TEMP_DIR}/malicious.env"
 MARKER="${TEMP_DIR}/must-not-exist"

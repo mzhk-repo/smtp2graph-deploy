@@ -15,3 +15,10 @@
     Verification: Entrypoint tests verify default and strict-input rendering plus invalid-value rejection. The already replayed fork regression confirms `451` before `DATA` and no queue write when usage reaches the configured threshold.
     Risks: Capacity accounting remains fork process-local; deployment-level persistent volume and single-replica policy remain separate tasks.
     Rollback: Restore the reviewed template and wrapper pair; do not remove `005` source guard or change persistent storage paths without a separate migration review.
+
+2026-07-29 — Task 3.2: activate session and message-rate runtime guards
+    Context: Fork asset `005` already implemented per-IP session and per-client `MAIL FROM` rate guards, but the control-plane template did not render their configuration.
+    Change: Runtime config now renders validated `receive.maxSessionsPerIp` and `receive.rateLimit` with a fixed 60-second duration. Defaults match the approved baseline: 5 sessions per IP and 30 messages per minute per client.
+    Verification: Entrypoint tests confirm default and strict-input rendering, plus fail-closed refusal of zero limits. Existing asset `005` replay evidence covers session-slot release and SMTP `451` after the configured client limit.
+    Risks: Session/rate counters are process-local and depend on the single-replica production-minimum topology; Moodle requires a separate throttle decision.
+    Rollback: Restore the reviewed template and wrapper pair; do not weaken the fork source guards without a separate security review.

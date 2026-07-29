@@ -4,7 +4,8 @@
 
 ## Поточний активний том
 
-1. [CHANGELOG_2026_VOL_01.md](docs/changelogs/CHANGELOG_2026_VOL_01.md) — активний том
+1. [CHANGELOG_2026_VOL_01.md](docs/changelogs/CHANGELOG_2026_VOL_01.md) — archived
+2. [CHANGELOG_2026_VOL_02.md](docs/changelogs/CHANGELOG_2026_VOL_02.md) — активний том
 
 ## Політика ротації
 

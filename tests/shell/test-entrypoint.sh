@@ -38,6 +38,9 @@ run_render() {
     RUNTIME_ENTRYPOINT_MODE=render-only \
     GRAPH_AUTH_MODE="${GRAPH_AUTH_MODE:-certificate}" \
     GRAPH_SENDER_MAILBOX=noreply@example.invalid \
+    SMTP2GRAPH_STORAGE_ROOT="${SMTP2GRAPH_STORAGE_ROOT-/data}" \
+    QUEUE_MAX_BYTES="${QUEUE_MAX_BYTES-1073741824}" \
+    QUEUE_REJECT_THRESHOLD_PERCENT="${QUEUE_REJECT_THRESHOLD_PERCENT-80}" \
     SMTP_ALLOWED_SOURCE_CIDRS=127.0.0.1/32 \
     SMTP_ALLOWED_SENDER_ADDRESSES=NOREPLY@example.invalid \
     "${ENTRYPOINT}"
@@ -60,6 +63,9 @@ run_render >/dev/null
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'expected sender mailbox is missing from rendered configuration.'
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'normalized sender policy is missing from rendered configuration.'
 grep -F "requireAuth: true" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP authentication is not required in rendered configuration.'
+grep -F "rootPath: '/data'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'persistent storage root is missing from rendered configuration.'
+grep -F 'maxBytes: 1073741824' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue capacity is missing from rendered configuration.'
+grep -F 'rejectThresholdPercent: 80' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue rejection threshold is missing from rendered configuration.'
 grep -F 'synthetic-client-secret-for-test-only' "${RUNTIME_DIR}/config.yml" >/dev/null && fail 'certificate render unexpectedly contains client secret.'
 
 GRAPH_AUTH_MODE=client-secret run_render >/dev/null
@@ -71,6 +77,17 @@ printf '%s\n' 'synthetic-tls-key' >"${SECRETS_DIR}/smtp-tls-key"
 chmod 0666 "${SECRETS_DIR}/smtp-tls-key"
 expect_failure 'must not be writable by group or other users.' run_render
 chmod 0444 "${SECRETS_DIR}/smtp-tls-key"
+
+QUEUE_MAX_BYTES=0 expect_failure 'QUEUE_MAX_BYTES must be at least 1.' run_render
+QUEUE_REJECT_THRESHOLD_PERCENT=101 expect_failure 'QUEUE_REJECT_THRESHOLD_PERCENT must be between 1 and 100.' run_render
+SMTP2GRAPH_STORAGE_ROOT=relative-path expect_failure 'SMTP2GRAPH_STORAGE_ROOT must be an absolute path other than /.' run_render
+
+STORAGE_INPUT="${TEMP_DIR}/storage.env"
+printf '%s\n' 'SMTP2GRAPH_STORAGE_ROOT=/runtime-data' 'QUEUE_MAX_BYTES=2048' 'QUEUE_REJECT_THRESHOLD_PERCENT=75' >"${STORAGE_INPUT}"
+RUNTIME_CONFIG_FILE="${STORAGE_INPUT}" run_render >/dev/null
+grep -F "rootPath: '/runtime-data'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'storage root from the strict runtime input was not rendered.'
+grep -F 'maxBytes: 2048' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue capacity from the strict runtime input was not rendered.'
+grep -F 'rejectThresholdPercent: 75' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue threshold from the strict runtime input was not rendered.'
 
 MALICIOUS_INPUT="${TEMP_DIR}/malicious.env"
 MARKER="${TEMP_DIR}/must-not-exist"

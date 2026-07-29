@@ -544,7 +544,7 @@ Implementation task готова до виконання, лише якщо:
 |---|---|---|
 | Deny-by-default | Частково | Template вимагає SMTP AUTH, IP та sender allowlist. Але немає `tests/security/test-smtp-policy.sh`, який вимагає roadmap. |
 | Oversize/unauthorized не потрапляють у queue | Частково | Fork має auth/from/size receive tests, але control-plane не має інтеграційного negative test із перевіркою відсутності queue file. |
-| ≥80% queue → `421`/`451`, без queue write | Не завершено | `005` містить source guard і regression test, але [gateway template](/opt/smtp2graph-deploy/deploy/config/gateway-config.yml.template) не рендерить `storage.maxBytes` / `storage.rejectThresholdPercent`; guard у runtime config не активується. |
+| ≥80% queue → `421`/`451`, без queue write | Виконано локально | Template і fail-closed wrapper рендерять `storage.rootPath`, `storage.maxBytes` та `storage.rejectThresholdPercent` з validated public contract inputs. Fork replay test у `005` підтверджує `451` перед `DATA` і відсутність нового queue file при threshold. |
 | 5 sessions/IP, 30 msg/min/client | Не завершено | Значення є в `.env.example`, але template також не рендерить `receive.maxSessionsPerIp` і `receive.rateLimit`. |
 | Purge не торкається queue/молодших 7 днів | Виконано локально | [purge script](/opt/smtp2graph-deploy/scripts/purge-failed.sh) та shell/security tests підтверджують fixed `failed` root, dry-run, retention і queue isolation. |
 | Logs без body | Не доведено | Немає dedicated test/evidence, що SMTP body або attachment не з’являються в gateway logs. |

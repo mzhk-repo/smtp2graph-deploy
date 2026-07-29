@@ -24,6 +24,9 @@ GRAPH_AUTH_MODE=${GRAPH_AUTH_MODE:-certificate}
 SMTP_BIND_ADDRESS=${SMTP_BIND_ADDRESS:-127.0.0.1}
 SMTP_LISTEN_PORT=${SMTP_LISTEN_PORT:-587}
 SMTP_MAX_MESSAGE_BYTES=${SMTP_MAX_MESSAGE_BYTES:-26214400}
+SMTP2GRAPH_STORAGE_ROOT=${SMTP2GRAPH_STORAGE_ROOT:-/data}
+QUEUE_MAX_BYTES=${QUEUE_MAX_BYTES:-1073741824}
+QUEUE_REJECT_THRESHOLD_PERCENT=${QUEUE_REJECT_THRESHOLD_PERCENT:-80}
 SMTP_ALLOWED_SOURCE_CIDRS=${SMTP_ALLOWED_SOURCE_CIDRS:-}
 SMTP_ALLOWED_SENDER_ADDRESSES=${SMTP_ALLOWED_SENDER_ADDRESSES:-}
 GRAPH_SENDER_MAILBOX=${GRAPH_SENDER_MAILBOX:-}
@@ -74,6 +77,9 @@ parse_runtime_input_file() {
       SMTP_BIND_ADDRESS) SMTP_BIND_ADDRESS=${value} ;;
       SMTP_LISTEN_PORT) SMTP_LISTEN_PORT=${value} ;;
       SMTP_MAX_MESSAGE_BYTES) SMTP_MAX_MESSAGE_BYTES=${value} ;;
+      SMTP2GRAPH_STORAGE_ROOT) SMTP2GRAPH_STORAGE_ROOT=${value} ;;
+      QUEUE_MAX_BYTES) QUEUE_MAX_BYTES=${value} ;;
+      QUEUE_REJECT_THRESHOLD_PERCENT) QUEUE_REJECT_THRESHOLD_PERCENT=${value} ;;
       SMTP_ALLOWED_SOURCE_CIDRS) SMTP_ALLOWED_SOURCE_CIDRS=${value} ;;
       SMTP_ALLOWED_SENDER_ADDRESSES) SMTP_ALLOWED_SENDER_ADDRESSES=${value} ;;
       GRAPH_SENDER_MAILBOX) GRAPH_SENDER_MAILBOX=${value} ;;
@@ -131,6 +137,11 @@ validate_inputs() {
   require_value "${SMTP_ALLOWED_SOURCE_CIDRS}"
   require_value "${SMTP_ALLOWED_SENDER_ADDRESSES}"
   require_value "${GRAPH_SENDER_MAILBOX}"
+  case "${SMTP2GRAPH_STORAGE_ROOT}" in
+    /*) ;;
+    *) die 'SMTP2GRAPH_STORAGE_ROOT must be an absolute path other than /.' ;;
+  esac
+  [ "${SMTP2GRAPH_STORAGE_ROOT}" != / ] || die 'SMTP2GRAPH_STORAGE_ROOT must be an absolute path other than /.'
   require_integer SMTP_LISTEN_PORT "${SMTP_LISTEN_PORT}"
   if [ "${SMTP_LISTEN_PORT}" -lt 1 ] || [ "${SMTP_LISTEN_PORT}" -gt 65535 ]; then
     die 'SMTP_LISTEN_PORT must be between 1 and 65535.'
@@ -138,6 +149,12 @@ validate_inputs() {
   require_integer SMTP_MAX_MESSAGE_BYTES "${SMTP_MAX_MESSAGE_BYTES}"
   if [ "${SMTP_MAX_MESSAGE_BYTES}" -le 0 ] || [ $((SMTP_MAX_MESSAGE_BYTES % 1024)) -ne 0 ]; then
     die 'SMTP_MAX_MESSAGE_BYTES must be a positive multiple of 1024.'
+  fi
+  require_integer QUEUE_MAX_BYTES "${QUEUE_MAX_BYTES}"
+  [ "${QUEUE_MAX_BYTES}" -ge 1 ] || die 'QUEUE_MAX_BYTES must be at least 1.'
+  require_integer QUEUE_REJECT_THRESHOLD_PERCENT "${QUEUE_REJECT_THRESHOLD_PERCENT}"
+  if [ "${QUEUE_REJECT_THRESHOLD_PERCENT}" -lt 1 ] || [ "${QUEUE_REJECT_THRESHOLD_PERCENT}" -gt 100 ]; then
+    die 'QUEUE_REJECT_THRESHOLD_PERCENT must be between 1 and 100.'
   fi
   require_integer SEND_RETRY_LIMIT "${SEND_RETRY_LIMIT}"
   require_integer SEND_RETRY_INTERVAL_MINUTES "${SEND_RETRY_INTERVAL_MINUTES}"
@@ -184,6 +201,9 @@ render_template() {
       '  retryLimit: __SEND_RETRY_LIMIT__') printf '  retryLimit: %s\n' "${SEND_RETRY_LIMIT}" ;;
       '  retryInterval: __SEND_RETRY_INTERVAL_MINUTES__') printf '  retryInterval: %s\n' "${SEND_RETRY_INTERVAL_MINUTES}" ;;
       '  forceMailbox: __GRAPH_SENDER_MAILBOX__') printf '  forceMailbox: %s\n' "$(yaml_quote "${GRAPH_SENDER_MAILBOX}")" ;;
+      '  rootPath: __SMTP2GRAPH_STORAGE_ROOT__') printf '  rootPath: %s\n' "$(yaml_quote "${SMTP2GRAPH_STORAGE_ROOT}")" ;;
+      '  maxBytes: __QUEUE_MAX_BYTES__') printf '  maxBytes: %s\n' "${QUEUE_MAX_BYTES}" ;;
+      '  rejectThresholdPercent: __QUEUE_REJECT_THRESHOLD_PERCENT__') printf '  rejectThresholdPercent: %s\n' "${QUEUE_REJECT_THRESHOLD_PERCENT}" ;;
       '  port: __SMTP_LISTEN_PORT__') printf '  port: %s\n' "${SMTP_LISTEN_PORT}" ;;
       '  listenAddress: __SMTP_BIND_ADDRESS__') printf '  listenAddress: %s\n' "$(yaml_quote "${SMTP_BIND_ADDRESS}")" ;;
       '  tlsKeyPath: __SMTP_TLS_KEY_PATH__') printf '  tlsKeyPath: %s\n' "$(yaml_quote "${smtp_tls_key_path}")" ;;

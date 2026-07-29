@@ -9,6 +9,10 @@ __GRAPH_CREDENTIAL_BLOCK__
   retryLimit: __SEND_RETRY_LIMIT__
   retryInterval: __SEND_RETRY_INTERVAL_MINUTES__
   forceMailbox: __GRAPH_SENDER_MAILBOX__
+storage:
+  rootPath: __SMTP2GRAPH_STORAGE_ROOT__
+  maxBytes: __QUEUE_MAX_BYTES__
+  rejectThresholdPercent: __QUEUE_REJECT_THRESHOLD_PERCENT__
 receive:
   port: __SMTP_LISTEN_PORT__
   listenAddress: __SMTP_BIND_ADDRESS__

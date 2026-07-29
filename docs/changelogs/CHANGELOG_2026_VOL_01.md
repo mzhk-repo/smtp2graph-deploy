@@ -290,3 +290,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Shell tests cover dry-run, apply, retention threshold and queue preservation. Security tests reject `/`, missing storage roots and a symlinked `failed` directory.
     Risks: `--apply` permanently deletes expired failed payloads; recovery requires an approved external recovery source. The helper does not implement a scheduler or deployment lifecycle.
     Rollback: Disable the caller/schedule and return to dry-run; do not broaden the target path or restore deleted payloads into the live queue.
+
+2026-07-29 — Task 3.2: deny-by-default SMTP policy security test
+    Context: SMTP policy rendering was fail-closed, but the roadmap-required dedicated security test was absent.
+    Change: Added an isolated entrypoint test for required source CIDR/sender allowlists, required `smtp-users` Docker Secret, SMTP AUTH and per-user sender scope.
+    Verification: Positive rendering plus empty allowlist, missing secret and outside-global-sender negative cases execute without exposing the synthetic SMTP password in diagnostics.
+    Risks: This verifies the local runtime rendering boundary; it does not replace deployment network policy or a live SMTP integration test.
+    Rollback: Remove the standalone test only with the related policy-contract change; no runtime or deployment state is created.

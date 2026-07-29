@@ -539,6 +539,18 @@ Implementation task готова до виконання, лише якщо:
 - **Files / Directories:** `deploy/config/`, `deploy/swarm/`, `scripts/purge-failed.sh`, `tests/security/`.
 - **Artifacts:** policy matrix у `docs/TEST_PLAN.md`.
 - **Acceptance Criteria:** deny-by-default; oversize/unauthorized input не queue-иться; при queue usage ≥80% нові SMTP-сесії або `MAIL FROM` submissions відхиляються тимчасовим `421` або `451` і не записуються до локальної queue; purge не торкається queue чи файлів молодших 7 днів; logs без body.
+
+| Критерій | Статус | Доказ / прогалина |
+|---|---|---|
+| Deny-by-default | Частково | Template вимагає SMTP AUTH, IP та sender allowlist. Але немає `tests/security/test-smtp-policy.sh`, який вимагає roadmap. |
+| Oversize/unauthorized не потрапляють у queue | Частково | Fork має auth/from/size receive tests, але control-plane не має інтеграційного negative test із перевіркою відсутності queue file. |
+| ≥80% queue → `421`/`451`, без queue write | Не завершено | `005` містить source guard і regression test, але [gateway template](/opt/smtp2graph-deploy/deploy/config/gateway-config.yml.template) не рендерить `storage.maxBytes` / `storage.rejectThresholdPercent`; guard у runtime config не активується. |
+| 5 sessions/IP, 30 msg/min/client | Не завершено | Значення є в `.env.example`, але template також не рендерить `receive.maxSessionsPerIp` і `receive.rateLimit`. |
+| Purge не торкається queue/молодших 7 днів | Виконано локально | [purge script](/opt/smtp2graph-deploy/scripts/purge-failed.sh) та shell/security tests підтверджують fixed `failed` root, dry-run, retention і queue isolation. |
+| Logs без body | Не доведено | Немає dedicated test/evidence, що SMTP body або attachment не з’являються в gateway logs. |
+| Policy matrix у `docs/TEST_PLAN.md` | Не виконано | Артефакт прямо вказаний у roadmap, але policy matrix відсутня. |
+| Moodle throttle | Не виконано | Вказано в implementation steps, але окремого policy/config/test немає. |
+
 - **Validation Commands:**
   ```bash
   ./tests/security/test-smtp-policy.sh

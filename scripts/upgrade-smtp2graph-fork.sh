@@ -76,13 +76,19 @@ fi
 worktree=$(mktemp -d "${TMPDIR:-/tmp}/smtp2graph-upgrade.XXXXXX")
 cleanup() {
   status=$?
-  if ((status == 0)); then git -C "$build_repo" worktree remove --force "$worktree"; else printf 'FAIL: preserved worktree for review: %s\n' "$worktree" >&2; fi
+  if ((status == 0)); then
+    git -C "$build_repo" worktree remove --force "$worktree"
+    git -C "$build_repo" branch -D "$branch"
+  else
+    printf 'FAIL: preserved worktree for review: %s\n' "$worktree" >&2
+  fi
   exit "$status"
 }
 trap cleanup EXIT
 git -C "$build_repo" worktree add -b "$branch" "$worktree" "$release"
 mapfile -t patch_assets < <(awk '/^[[:space:]]*"[A-Za-z0-9._-]+\.patch"[[:space:]]*$/ {gsub(/[[:space:]"]/, ""); print}' "$manifest")
-((${#patch_assets[@]} == 4)) || die 'manifest must contain exactly four safe patch asset names'
+((${#patch_assets[@]} > 0)) || die 'manifest must contain at least one safe patch asset name'
+[[ "$(printf '%s\n' "${patch_assets[@]}" | sort -u | wc -l)" -eq "${#patch_assets[@]}" ]] || die 'manifest contains duplicate patch asset names'
 for asset in "${patch_assets[@]}"; do
   [[ -f "${bundle_dir}/${asset}" ]] || die "missing patch asset: ${asset}"
   git -C "$worktree" apply --check --ignore-space-change "${bundle_dir}/${asset}"
@@ -90,10 +96,9 @@ for asset in "${patch_assets[@]}"; do
   git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "Gate B: apply ${asset%.patch}"
 done
 (cd "$worktree" && npm ci && npm run build && npx mocha 'test/00unit/**/*.spec.ts' && npm run test:receive -- --logging error)
-env_file=${env_file:-"${build_repo}/.env"}
-if [[ -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then
+if [[ -n "$env_file" && -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then
   (cd "$worktree" && DOTENV_CONFIG_PATH="$env_file" npm run test:send)
   printf 'PASS: %s passed local and Microsoft 365 regressions.\n' "$branch"
 else
-  printf 'PARTIAL: %s passed local regressions; Microsoft 365 inputs are incomplete.\n' "$branch"
+  printf 'PARTIAL: %s passed local regressions; Microsoft 365 suite was not explicitly requested with a complete --env-file.\n' "$branch"
 fi

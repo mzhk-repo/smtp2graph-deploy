@@ -1,0 +1,361 @@
+diff --git a/src/classes/Config.ts b/src/classes/Config.ts
+index 9da36b4..6e0fe75 100644
+--- a/src/classes/Config.ts
++++ b/src/classes/Config.ts
+@@ -52,9 +52,11 @@ export interface IConfig
+         allowedFrom?: string[];
+         /** Allows authentication even if connection is not secured first, when tlsKeyPath and tlsCertPath are set */
+         allowInsecureAuth?: boolean;
+-        /** Require login */
+-        requireAuth?: boolean;
+-        users?: {username: string, password: string, allowedFrom?: string[]}[];
++        /** Require login */
++        requireAuth?: boolean;
++        /** Maximum simultaneously connected clients from one source IP */
++        maxSessionsPerIp?: number;
++        users?: {username: string, password: string, allowedFrom?: string[]}[];
+         rateLimit?: {
+             duration?: number,
+             limit?: number;
+@@ -62,9 +64,17 @@ export interface IConfig
+         authLimit?: {
+             duration?: number,
+             limit?: number;
+-        };
+-    },
+-    httpProxy?: {
++        };
++    },
++    storage?: {
++        /** Persistent root that contains temp, queue and failed folders */
++        rootPath?: string;
++        /** Maximum bytes allowed across the persistent storage root */
++        maxBytes?: number;
++        /** Reject new MAIL FROM submissions when usage reaches this percentage */
++        rejectThresholdPercent?: number;
++    },
++    httpProxy?: {
+         host: string,
+         port: number,
+         protocol?: 'http'|'https',
+@@ -123,8 +133,16 @@ export class Config
+             throw new InvalidConfig(`Property "receive.rateLimit.limit" should be a number`);
+         else if(this.smtpAuthLimitDuration && typeof this.smtpAuthLimitDuration !== 'number')
+             throw new InvalidConfig(`Property "receive.authLimit.duration" should be a number`);
+-        else if(this.smtpAuthLimitDuration && typeof this.smtpAuthLimitDuration !== 'number')
+-            throw new InvalidConfig(`Property "receive.authLimit.limit" should be a number`);
++        else if(this.smtpAuthLimitLimit && typeof this.smtpAuthLimitLimit !== 'number')
++            throw new InvalidConfig(`Property "receive.authLimit.limit" should be a number`);
++        else if(this.smtpMaxSessionsPerIp !== undefined && (!Number.isInteger(this.smtpMaxSessionsPerIp) || this.smtpMaxSessionsPerIp < 1))
++            throw new InvalidConfig(`Property "receive.maxSessionsPerIp" should be a positive integer`);
++        else if(this.#config.storage?.rootPath !== undefined && (typeof this.queueRootPath !== 'string' || !this.queueRootPath))
++            throw new InvalidConfig(`Property "storage.rootPath" should be a non-empty string`);
++        else if(this.queueMaxBytes !== undefined && (!Number.isSafeInteger(this.queueMaxBytes) || this.queueMaxBytes < 1))
++            throw new InvalidConfig(`Property "storage.maxBytes" should be a positive safe integer`);
++        else if(this.#config.storage?.rejectThresholdPercent !== undefined && (typeof this.queueRejectThresholdPercent !== 'number' || this.queueRejectThresholdPercent <= 0 || this.queueRejectThresholdPercent > 100))
++            throw new InvalidConfig(`Property "storage.rejectThresholdPercent" should be between 0 and 100`);
+         else if(this.#config.httpProxy && typeof this.#config.httpProxy.host !== 'string')
+             throw new InvalidConfig(`Property "httpProxy.host" should be a string`);
+         else if(this.#config.httpProxy && typeof this.#config.httpProxy.port !== 'number')
+@@ -282,9 +282,29 @@ export class Config
+         return this.#config.receive?.rateLimit?.duration ?? 600;
+     }
+ 
+-    static get smtpRateLimitLimit()
++    static get smtpRateLimitLimit()
+     {
+         return this.#config.receive?.rateLimit?.limit ?? 10000;
+     }
+ 
++    static get smtpMaxSessionsPerIp()
++    {
++        return this.#config.receive?.maxSessionsPerIp;
++    }
++
++    static get queueRootPath()
++    {
++        return this.#config.storage?.rootPath ?? 'mailroot';
++    }
++
++    static get queueMaxBytes()
++    {
++        return this.#config.storage?.maxBytes;
++    }
++
++    static get queueRejectThresholdPercent()
++    {
++        return this.#config.storage?.rejectThresholdPercent ?? 80;
++    }
++
+     static get smtpAuthLimitDuration()
+     {
+         return this.#config.receive?.authLimit?.duration ?? 60;
+diff --git a/src/classes/MailQueue.ts b/src/classes/MailQueue.ts
+index 2032d77..9b516d1 100644
+--- a/src/classes/MailQueue.ts
++++ b/src/classes/MailQueue.ts
+@@ -28,7 +28,7 @@ export class MailQueue
+      * Create a mail queue
+      * @param rootPath Path where the queue, temp and failed folders are located/created
+      */
+-    constructor(rootPath: string = 'mailroot')
++    constructor(rootPath: string = Config.queueRootPath)
+     {
+         this.#paused = Config.mode === 'receive';
+         this.#rootPath = rootPath;
+@@ -44,6 +44,13 @@ export class MailQueue
+         return this.#tempPath;
+     }
+ 
++    /** Return true when the configured persistent storage threshold is reached. */
++    isAtOrAboveRejectThreshold(): boolean
++    {
++        if(!Config.queueMaxBytes) return false;
++        return this.#storageUsageBytes(this.#rootPath) >= (Config.queueMaxBytes * Config.queueRejectThresholdPercent / 100);
++    }
++
+     async close(): Promise<void>
+     {
+         if(this.#retryQueueInterval)
+@@ -224,8 +224,9 @@ export class MailQueue
+         if(!this.#pathExists(this.#queuePath)?.isDirectory())
+             fs.mkdirSync(this.#queuePath);
+ 
+-        if(!this.#pathExists(this.#failedPath)?.isDirectory())
+-            fs.mkdirSync(this.#failedPath);
++        if(!this.#pathExists(this.#failedPath)?.isDirectory())
++            fs.mkdirSync(this.#failedPath, {mode: 0o700});
++        fs.chmodSync(this.#failedPath, 0o700);
+     }
+ 
+     #pathExists(path: string)
+@@ -236,5 +244,19 @@ export class MailQueue
+             if(!('code' in error) || error.code !== 'ENOENT')
+                 throw error;
+         }
+     }
++
++    #storageUsageBytes(rootPath: string): number
++    {
++        let total = 0;
++        for(const entry of fs.readdirSync(rootPath, {withFileTypes: true}))
++        {
++            const entryPath = path.join(rootPath, entry.name);
++            if(entry.isDirectory())
++                total += this.#storageUsageBytes(entryPath);
++            else if(entry.isFile())
++                total += fs.statSync(entryPath).size;
++        }
++        return total;
++    }
+ }
+diff --git a/src/classes/SMTPServer.ts b/src/classes/SMTPServer.ts
+index abc6f21..47fc61d 100644
+--- a/src/classes/SMTPServer.ts
++++ b/src/classes/SMTPServer.ts
+@@ -17,20 +17,23 @@ export class SMTPServer
+ {
+     #server: NodeSMTP;
+     #queue: MailQueue;
+-    #rateLimiter = new RateLimiterMemory({
++    #messageRateLimiter = new RateLimiterMemory({
+         duration: Config.smtpRateLimitDuration,
+         points: Config.smtpRateLimitLimit,
+     });
+     #authLimiter = new RateLimiterMemory({
+         duration: Config.smtpAuthLimitDuration,
+         points: Config.smtpAuthLimitLimit,
+     });
++    #sessionIpById = new Map<string, string>();
++    #sessionCountByIp = new Map<string, number>();
+ 
+     constructor(queue: MailQueue)
+     {
+         this.#queue = queue;
+         this.#server = new NodeSMTP({
+-            onConnect: this.#onConnect,
++            onConnect: this.#onConnect,
++            onClose: this.#onClose,
+             onAuth: this.#onAuth,
+             onMailFrom: this.#onMailFrom,
+             onData: this.#onData,
+@@ -61,19 +64,42 @@ export class SMTPServer
+         });
+     }
+ 
+-    #onConnect: SMTPServerOptions['onConnect'] = (session, callback)=>
+-    {
+-        if(Config.isIpAllowed(session.remoteAddress))
+-        {
+-            this.#rateLimiter.consume('all').then((rateLimit)=>{
+-                callback();
+-            }).catch((rateLimit: RateLimiterRes)=>{
+-                callback(new Error(`Rate limit exceeded. Try again in ${Math.ceil(rateLimit.msBeforeNext/1000)} seconds`));
+-            });
+-        }
+-        else
+-            callback(new Error(`IP ${session.remoteAddress} is not allowed to connect`));
+-    };
++    #onConnect: SMTPServerOptions['onConnect'] = (session, callback)=>
++    {
++        if(!Config.isIpAllowed(session.remoteAddress))
++        {
++            callback(new Error(`IP ${session.remoteAddress} is not allowed to connect`));
++            return;
++        }
++
++        const activeSessions = this.#sessionCountByIp.get(session.remoteAddress) ?? 0;
++        if(Config.smtpMaxSessionsPerIp !== undefined && activeSessions >= Config.smtpMaxSessionsPerIp)
++        {
++            const error = new Error('Too many concurrent sessions from this IP address');
++            (<any>error).responseCode = 421;
++            callback(error);
++            return;
++        }
++
++        this.#sessionIpById.set(session.id, session.remoteAddress);
++        this.#sessionCountByIp.set(session.remoteAddress, activeSessions + 1);
++        callback();
++    };
++
++    #onClose: SMTPServerOptions['onClose'] = (session, callback)=>
++    {
++        const clientIp = this.#sessionIpById.get(session.id);
++        if(clientIp)
++        {
++            this.#sessionIpById.delete(session.id);
++            const activeSessions = this.#sessionCountByIp.get(clientIp) ?? 0;
++            if(activeSessions <= 1)
++                this.#sessionCountByIp.delete(clientIp);
++            else
++                this.#sessionCountByIp.set(clientIp, activeSessions - 1);
++        }
++        callback?.();
++    };
+ 
+     #onAuth: SMTPServerOptions['onAuth'] = (auth, session, callback)=>
+     {
+@@ -89,13 +115,30 @@ export class SMTPServer
+         });
+     };
+ 
+-    #onMailFrom: SMTPServerOptions['onMailFrom'] = (address, session, callback)=>
+-    {
+-        if(Config.isFromAllowed(address.address, session.user))
+-            callback();
+-        else
+-            callback(new Error(`FROM "${address.address}" not allowed`));
+-    };
++    #onMailFrom: SMTPServerOptions['onMailFrom'] = (address, session, callback)=>
++    {
++        if(!Config.isFromAllowed(address.address, session.user))
++        {
++            callback(new Error(`FROM "${address.address}" not allowed`));
++            return;
++        }
++        if(this.#queue.isAtOrAboveRejectThreshold())
++        {
++            const error = new Error('Queue capacity threshold reached. Try again later');
++            (<any>error).responseCode = 451;
++            callback(error);
++            return;
++        }
++
++        const clientKey = session.user || session.remoteAddress;
++        this.#messageRateLimiter.consume(clientKey).then(()=>{
++            callback();
++        }).catch((rateLimit: RateLimiterRes)=>{
++            const error = new Error(`Rate limit exceeded. Try again in ${Math.ceil(rateLimit.msBeforeNext/1000)} seconds`);
++            (<any>error).responseCode = 451;
++            callback(error);
++        });
++    };
+ 
+     #onData: SMTPServerOptions['onData'] = (stream, session, callback)=>
+     {
+diff --git a/test/01receive/09policyGuards.spec.ts b/test/01receive/09policyGuards.spec.ts
+new file mode 100644
+index 0000000..5ef7f49
+--- /dev/null
++++ b/test/01receive/09policyGuards.spec.ts
+@@ -0,0 +1,80 @@
++import fs from 'fs';
++import os from 'os';
++import path from 'path';
++import { createConnection, Socket } from 'net';
++import { expect } from 'chai';
++import '../_config';
++import { Server } from '../classes/Server';
++import { LowLevelSMTPClient } from '../classes/LowLevelSMTPClient';
++
++function connectAndReadGreeting(): Promise<Socket>
++{
++    return new Promise((resolve, reject)=>{
++        const socket = createConnection(1337, '127.0.0.1');
++        socket.once('error', reject);
++        socket.once('data', data=>{
++            socket.off('error', reject);
++            if(/^220 /.test(data.toString())) resolve(socket);
++            else reject(new Error(data.toString()));
++        });
++    });
++}
++
++describe('Receive: policy guards', function(){
++    it('limits concurrent sessions per source IP and releases the slot on close', async function(){
++        const server = new Server({mode: 'receive', receive: {maxSessionsPerIp: 1}});
++        await server.start();
++        const first = await connectAndReadGreeting();
++
++        try {
++            await expect(connectAndReadGreeting()).to.be.rejectedWith(/421 Too many concurrent sessions/i);
++            first.destroy();
++            await new Promise(resolve=>setTimeout(resolve, 100));
++            const replacement = await connectAndReadGreeting();
++            replacement.destroy();
++        } finally {
++            first.destroy();
++            await server.stop();
++        }
++    });
++
++    it('limits messages per client at MAIL FROM', async function(){
++        const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'smtp2graph-rate-'));
++        const server = new Server({
++            mode: 'receive',
++            receive: {rateLimit: {duration: 60, limit: 1}},
++            storage: {rootPath: storageRoot},
++        });
++        const client = new LowLevelSMTPClient('127.0.0.1', 1337);
++        await server.start();
++
++        try {
++            await client.sendMail('noreply@example.com', 'receiver@example.com', {}, 'first');
++            await expect(client.sendMail('noreply@example.com', 'receiver@example.com', {}, 'second')).to.be.rejectedWith(/451 Rate limit exceeded/i);
++        } finally {
++            await server.stop();
++            fs.rmSync(storageRoot, {recursive: true, force: true});
++        }
++    });
++
++    it('returns 451 before DATA when persistent storage reaches its threshold', async function(){
++        const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'smtp2graph-capacity-'));
++        const queuePath = path.join(storageRoot, 'queue');
++        fs.mkdirSync(queuePath, {recursive: true});
++        fs.writeFileSync(path.join(queuePath, 'existing.eml'), Buffer.alloc(820));
++        const server = new Server({
++            mode: 'receive',
++            storage: {rootPath: storageRoot, maxBytes: 1024, rejectThresholdPercent: 80},
++        });
++        const client = new LowLevelSMTPClient('127.0.0.1', 1337);
++        await server.start();
++
++        try {
++            await expect(client.sendMail('noreply@example.com', 'receiver@example.com', {}, 'must not queue')).to.be.rejectedWith(/451 Queue capacity threshold reached/i);
++            expect(fs.readdirSync(queuePath)).to.deep.equal(['existing.eml']);
++        } finally {
++            await server.stop();
++            fs.rmSync(storageRoot, {recursive: true, force: true});
++        }
++    });
++});

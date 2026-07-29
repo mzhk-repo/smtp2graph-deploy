@@ -262,3 +262,10 @@ Rollback: Припинити використання non-production app або 
     Verification: Reviewed alignment with `scripts/upgrade-smtp2graph-fork.sh`, the existing patch automation contract and Phase 3 task dependencies; no build-plane source, release, image or deployment state changed.
     Risks: The new rule requires disciplined conversion of exploratory work into reviewable assets; stale or semantic-drift patches must fail closed and be rewritten in control plane.
     Rollback: Supersede this governance rule only through a reviewed roadmap and integration-contract decision; do not accept direct build-plane edits as a substitute.
+
+2026-07-29 — Iteration 3.F: Task 3.2 policy/storage patch bundle replay
+    Context: Local Task 3.2 source work in the build plane was not a reproducible control-plane delivery artifact.
+    Change: Added `005-smtp-policy-and-storage-guards.patch` to the v1.1.5 bundle for per-IP session limits, per-client `MAIL FROM` rate limiting, storage threshold rejection, configurable storage root and failed-directory mode. Manifest parsing now accepts a non-empty unique ordered asset list. M365 regressions require explicit `--env-file`; successful automation removes its temporary worktree and upgrade branch.
+    Verification: All five assets applied from clean `v1.1.5` in an isolated worktree. `npm run build`, 6 unit tests and 31 receive tests passed; M365 was intentionally not invoked and the result is documented as `PARTIAL`. The isolated `upgrade/v1.1.5` branch and worktree were removed after success.
+    Risks: Storage capacity accounting remains process-local and recursively counts regular files; it does not provide multi-replica coordination. `npm ci` reported pre-existing dependency audit findings (2 Critical, 14 High); no automatic dependency update was performed.
+    Rollback: Remove asset `005` and its manifest entry only through a reviewed control-plane change; the local build-plane diff remains disposable, and upstream v1.1.5 is not a production rollback target.

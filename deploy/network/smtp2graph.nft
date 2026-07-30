@@ -1,0 +1,13 @@
+table inet smtp2graph {
+  chain input {
+    type filter hook input priority filter; policy accept;
+    tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept
+    tcp dport 2525 drop
+  }
+
+  set smtp2graph_smtp_clients {
+    type ipv4_addr
+    flags interval
+    elements = { __SMTP_ALLOWED_SOURCE_CIDRS__ }
+  }
+}

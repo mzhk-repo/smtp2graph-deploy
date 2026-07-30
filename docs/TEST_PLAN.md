@@ -1,5 +1,13 @@
 # План тестування
 
+## Task 4.2 — TLS, network і client credential boundary
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-TLS-001 | PEM cert covers `smtp-int.ldubgd.edu.ua`, is unexpired and matches a private key with mode 0400/0600. | `./tests/security/test-reconcile-tls-secret.sh` | Local synthetic certificate only; Cloudflare issuance is external non-production evidence. |
+| TB-NET-001 | Stack uses host publish, no routing mesh, TLS key 0400 and deny-by-default nftables policy. | `./tests/security/test-network-policy.sh` | Static IaC evidence. |
+| TB-NET-002 | Live overlay is encrypted and nftables policy loaded. | `SWARM_OVERLAY_NETWORK=<name> ./scripts/check-network-policy.sh` | Requires authorised Docker API on non-production deployment host. |
+
 ## Task 3.2 — SMTP policy, rate limits і storage lifecycle
 
 ### Policy matrix

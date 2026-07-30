@@ -1,5 +1,25 @@
 # Script runbook
 
+## `reconcile-tls-secret.sh`
+
+- Category: 1b (non-production deploy-adjacent TLS secret reconciliation).
+- Inputs: explicit `--environment non-production`, PEM certificate/key files, and an existing mapping file. The certificate must cover `smtp-int.ldubgd.edu.ua`; the key must be owner-only `0400` or `0600`.
+- Side effects: default mode is validation only. `--apply` stages files only in `/dev/shm`, creates deterministic immutable Docker Secrets when absent, and atomically updates the explicit mapping file. It never deploys a stack, changes DNS or firewall state.
+- Safety: refuses production, symlinks, invalid/expired/mismatched PEM material and inaccessible Docker API; private material is never logged.
+- Check: `./tests/security/test-reconcile-tls-secret.sh`.
+
+## `check-network-policy.sh`
+
+- Category: 1a (read-only non-production SMTP network-policy validation).
+- Inputs: `SWARM_OVERLAY_NETWORK` and reviewed Swarm/nftables policy files.
+- Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. `0.0.0.0` listener output is not treated as public exposure by itself.
+
+## `render-network-policy.sh`
+
+- Category: 1b (non-production firewall policy rendering).
+- Inputs: `SMTP_ALLOWED_SOURCE_CIDRS` as a comma-separated private IPv4 CIDR list and an explicit absolute output path.
+- Safety: refuses public/IPv6 CIDR, renders from the reviewed template atomically and never applies nftables rules.
+
 ## `entrypoint.sh`
 
 - Category: 1b (deploy-adjacent runtime configuration rendering).

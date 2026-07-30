@@ -242,7 +242,7 @@ Implementation task готова до виконання, лише якщо:
 - [ ] Усі production-minimum acceptance criteria зі SPEC перевірені.
 - [ ] Backup/restore, rollback, credential revocation і cold recovery виконані практично.
 - [ ] RTO 60 хвилин підтверджено; RPO assumptions задокументовані.
-- [ ] Production owner, M365 owner, security reviewer і client owners надали sign-off.
+
 
 ---
 
@@ -592,7 +592,7 @@ Implementation task готова до виконання, лише якщо:
 **Phase risks:** tenant-wide `Mail.Send`, credential exposure, lockout під час rotation.
 **Phase rollback:** revoke test credential/certificate, remove role assignment, restore prior versioned secret.
 
-### Task 4.1 — Entra application і Exchange RBAC automation
+### 📌 Task 4.1 — Entra application і Exchange RBAC automation (Відкладено імплементацію)
 
 - **Priority:** Must
 - **Goal:** відтворювано створити app identity та scope лише для approved mailbox.
@@ -605,6 +605,30 @@ Implementation task готова до виконання, лише якщо:
 - **Validation Commands:** PowerShell/Graph commands із `-WhatIf` або read-only verification; `./tests/security/test-mailbox-scope.sh` у test tenant.
 - **Risks:** надмірні directory roles; propagation delay.
 - **Rollback Notes:** окремий idempotent revoke path; production cleanup тільки з явним confirmation.
+
+📌
+Список адрес дозволених відправників повинен задаватись через зміну в env
+Попередньо я вже створив вручну політики і користувачів. Назва політики: "SMTP2Graph-Allowed-Senders" Сторювава відповідно до ранбуку: docs/EXCHANGE_ONLINE_GUIDE.md
+___
+Щоб виконувати Task 4.1 максимально ефективно й без ускладнення коду, рекомендуємо наступні спрощення:
+
+💡 Спрощення 1: Групова політика замість окремих правил для кожної скриньки
+Як робити НЕ треба: Створювати окрему ApplicationAccessPolicy для кожної email-адреси.
+Рекомендація: Скрипт створює одну Mail-Enabled Security Group (наприклад, SMTP2Graph-Allowed-Senders) та прив'язує ApplicationAccessPolicy до цієї групи.
+Чому це простіше: Додавання нової скриньки (Moodle, Koha, Grafana) у майбутньому не вимагатиме перезапуску створення політик — достатньо лише додати скриньку як члена цієї групи через Add-DistributionGroupMember.
+
+💡 Спрощення 2: Використання PowerShell Core (pwsh)
+Оскільки на Ubuntu вже встановлено pwsh та модуль ExchangeOnlineManagement, використання готових PowerShell cmdlets (Get-ApplicationAccessPolicy, New-ApplicationAccessPolicy) значно простіше та надійніше, ніж написання власних складних HTTP REST API запитів через curl.
+💡 Спрощення 3: Швидка перевірка обмежень через Test-ApplicationAccessPolicy
+Повне розповсюдження (propagation) політики в M365 під час реальної відправки пошти може займати від $15$ до $30$ хвилин.
+Рекомендація: У скрипті автоматичного тестування test-mailbox-scope.sh для швидкого підтвердження використовувати PowerShell-команду Test-ApplicationAccessPolicy. Вона повертає результат Granted / Denied миттєво, дозволяючи CI/CD пайплайну не чекати пів години.
+
+💡 Спрощення 4: Маскування секретів при виводі
+Скрипт згортає або повністю приховує ключі:
+Write-Host "App ID: $appId"
+Write-Host "Certificate Thumbprint: $thumbprint"
+(Приватний закритий ключ та Client Secrets взагалі не виводяться у консоль).
+📌
 
 ### Task 4.2 — TLS, network і client credential boundary
 

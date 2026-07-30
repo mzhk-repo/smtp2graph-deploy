@@ -50,3 +50,10 @@
     Verification: All seven assets replayed from clean `v1.1.5`; local build, 6 unit tests, receive suite and `make test-local` passed. The harness left no local test image, Compose resource, temporary worktree or upgrade branch.
     Risks: The harness uses synthetic credentials and a mock Graph; it is not M365, Gate B approval, release supply-chain or production deployment evidence. Docker access and local upstream Git objects remain prerequisites.
     Rollback: Remove the Task 3.3 files and `--test-image` option through a reviewed change; no persistent queue, secret, image or deployment state is retained after a successful run.
+
+2026-07-30 — Task 4.2: non-production TLS and network-policy IaC baseline
+    Context: The project required a Moodle-compatible trusted TLS path and layered private SMTP ingress without relying on Traefik's unrelated HTTP/Tunnel stack.
+    Change: Added a Cloudflare DNS-01 Certbot issuer in the Traefik infrastructure, explicit non-production host-mode Swarm ingress, encrypted-overlay and nftables policy assets, TLS Docker Secret reconciliation with default validation-only behavior, and a read-only network policy checker.
+    Verification: Shell syntax checks plus local TLS PEM/key-mode and static Swarm/nftables tests passed. No Cloudflare request, Docker Secret creation, stack deployment, firewall apply or production action was performed.
+    Risks: Formal Gate B approval, approved non-production CIDR ranges, Cloudflare token/zone, deployment host and authorised Docker API are still required before live validation or apply.
+    Rollback: Remove the reviewed Task 4.2 assets; no external certificate, DNS, Docker Secret, firewall or deployment state was created by this change.

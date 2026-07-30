@@ -31,7 +31,7 @@ while IFS='|' read -r key requirement classification expected_value extra || [[ 
 
   if [[ -n "${extra:-}" || ! "${key}" =~ ^[A-Z][A-Z0-9_]*$ ]] ||
     [[ "${requirement}" != "required" ]] ||
-    [[ "${classification}" != "public" && "${classification}" != "secret-reference" ]] ||
+    [[ "${classification}" != "public" && "${classification}" != "secret-reference" && "${classification}" != "secret-value" ]] ||
     [[ -z "${expected_value}" ]]; then
     printf 'ERROR: invalid contract entry for key %s.\n' "${key}" >&2
     exit 65

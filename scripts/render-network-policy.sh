@@ -4,7 +4,12 @@ set -euo pipefail
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/lib/read-deploy-env.sh
+. "${root}/scripts/lib/read-deploy-env.sh"
 template=${SMTP_NFT_TEMPLATE:-"${root}/deploy/network/smtp2graph.nft"}
+env_file=''
+if [[ "${1:-}" == --env-file ]]; then env_file=${2:-}; shift 2; fi
+load_deploy_env_file "$root" "$env_file" DEPLOY_ENVIRONMENT SMTP_ALLOWED_SOURCE_CIDRS
 output=${1:-}
 cidrs=${SMTP_ALLOWED_SOURCE_CIDRS:-}
 [[ -n "$output" && "$output" = /* && -n "$cidrs" ]] || die 'absolute output path and SMTP_ALLOWED_SOURCE_CIDRS are required.'

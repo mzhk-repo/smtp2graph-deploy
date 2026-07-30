@@ -21,6 +21,15 @@ FAILED_PAYLOAD_RETENTION_DAYS|required|public|7
 LOG_RETENTION_DAYS|required|public|30
 SWARM_STACK_NAME|required|public|smtp2graph
 SWARM_OVERLAY_NETWORK|required|public|smtp2graph_internal
+SMTP_TLS_FQDN|required|public|smtp-int.ldubgd.edu.ua
+TLS_ACME_EMAIL|required|public|operator@example.invalid
+TLS_ACME_STATE_DIR|required|public|/srv/smtp2graph/non-production/acme
+TLS_OUTPUT_DIR|required|public|/srv/smtp2graph/non-production/tls
+TLS_CERTIFICATE_FILE|required|public|/srv/smtp2graph/non-production/tls/fullchain.pem
+TLS_PRIVATE_KEY_FILE|required|public|/srv/smtp2graph/non-production/tls/privkey.pem
+TLS_SECRET_MAPPING_FILE|required|public|/srv/smtp2graph/non-production/smtp2graph.env
+CLOUDFLARE_ZONE_ID|required|public|REPLACE_WITH_CLOUDFLARE_ZONE_ID
+CLOUDFLARE_DNS_API_TOKEN|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
 GRAPH_TENANT_ID_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME
 GRAPH_CLIENT_ID_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME
 GRAPH_CREDENTIAL_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME

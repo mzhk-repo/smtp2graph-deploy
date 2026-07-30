@@ -4,6 +4,8 @@
 
 - Category: 1b (non-production deploy-adjacent TLS secret reconciliation).
 - Inputs: explicit `--environment non-production`, PEM certificate/key files, and an existing mapping file. The certificate must cover `smtp-int.ldubgd.edu.ua`; the key must be owner-only `0400` or `0600`.
+- Environment: `--env-file FILE` (or `ORCHESTRATOR_ENV_FILE`, then local `.env` only with warning) is strictly parsed without `source`; only the task's allowlisted keys are consumed.
+- Local non-production `.env` uses `DEPLOY_ENVIRONMENT=non-production`, `SMTP_ALLOWED_SOURCE_CIDRS=<MOODLE_IPV4>/32,<OVERLAY_CIDR>`, the TLS paths, `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_DNS_API_TOKEN`. The token is a `secret-value`: it belongs only in ignored local `.env` now and `env.*.enc` after Task 4.3.
 - Side effects: default mode is validation only. `--apply` stages files only in `/dev/shm`, creates deterministic immutable Docker Secrets when absent, and atomically updates the explicit mapping file. It never deploys a stack, changes DNS or firewall state.
 - Safety: refuses production, symlinks, invalid/expired/mismatched PEM material and inaccessible Docker API; private material is never logged.
 - Check: `./tests/security/test-reconcile-tls-secret.sh`.

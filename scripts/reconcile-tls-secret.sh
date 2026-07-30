@@ -5,17 +5,21 @@ set -euo pipefail
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
 log() { printf '[tls-secret] %s\n' "$*" >&2; }
 usage() { cat <<'USAGE'
-Usage: scripts/reconcile-tls-secret.sh --environment non-production --certificate-file FILE --key-file FILE --mapping-file FILE [--apply]
+Usage: scripts/reconcile-tls-secret.sh [--env-file FILE] [--environment non-production] [--certificate-file FILE --key-file FILE --mapping-file FILE] [--apply]
 
 Checks a PEM certificate/key pair for smtp-int.ldubgd.edu.ua. Without --apply it
 only validates and prints deterministic versioned Docker Secret names.
 USAGE
 }
 
-environment='' certificate_file='' key_file='' mapping_file='' apply=false
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/lib/read-deploy-env.sh
+. "${root}/scripts/lib/read-deploy-env.sh"
+env_file='' environment='' certificate_file='' key_file='' mapping_file='' apply=false
 while (($#)); do
   case "$1" in
     --environment) environment=${2:-}; shift 2 ;;
+    --env-file) env_file=${2:-}; shift 2 ;;
     --certificate-file) certificate_file=${2:-}; shift 2 ;;
     --key-file) key_file=${2:-}; shift 2 ;;
     --mapping-file) mapping_file=${2:-}; shift 2 ;;
@@ -24,6 +28,13 @@ while (($#)); do
     *) die "unsupported argument: $1" ;;
   esac
 done
+
+load_deploy_env_file "$root" "$env_file" DEPLOY_ENVIRONMENT TLS_CERTIFICATE_FILE TLS_PRIVATE_KEY_FILE TLS_SECRET_MAPPING_FILE SMTP_TLS_FQDN
+environment=${environment:-${DEPLOY_ENVIRONMENT:-}}
+certificate_file=${certificate_file:-${TLS_CERTIFICATE_FILE:-}}
+key_file=${key_file:-${TLS_PRIVATE_KEY_FILE:-}}
+mapping_file=${mapping_file:-${TLS_SECRET_MAPPING_FILE:-}}
+tls_fqdn=${SMTP_TLS_FQDN:-smtp-int.ldubgd.edu.ua}
 
 [[ "$environment" == non-production ]] || die 'only --environment non-production is permitted.'
 for required in certificate_file key_file mapping_file; do [[ -n "${!required}" ]] || die "--${required//_/-} is required."; done
@@ -43,7 +54,7 @@ key_mode=$(stat -c '%a' "$key_file")
 openssl x509 -in "$certificate_file" -noout >/dev/null 2>&1 || die 'TLS certificate is not valid PEM.'
 openssl pkey -in "$key_file" -noout >/dev/null 2>&1 || die 'TLS private key is not valid PEM.'
 openssl x509 -in "$certificate_file" -checkend 1 -noout >/dev/null 2>&1 || die 'TLS certificate is expired or expires within one second.'
-openssl x509 -in "$certificate_file" -noout -checkhost smtp-int.ldubgd.edu.ua >/dev/null 2>&1 || die 'TLS certificate does not match smtp-int.ldubgd.edu.ua.'
+openssl x509 -in "$certificate_file" -noout -checkhost "$tls_fqdn" >/dev/null 2>&1 || die 'TLS certificate does not match configured SMTP_TLS_FQDN.'
 cert_pub=$(openssl x509 -in "$certificate_file" -pubkey -noout | openssl pkey -pubin -pubout -outform DER | sha256sum | awk '{print $1}')
 key_pub=$(openssl pkey -in "$key_file" -pubout -outform DER | sha256sum | awk '{print $1}')
 [[ "$cert_pub" == "$key_pub" ]] || die 'TLS certificate and private key do not match.'

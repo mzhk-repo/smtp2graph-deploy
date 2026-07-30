@@ -57,3 +57,10 @@
     Verification: Shell syntax checks plus local TLS PEM/key-mode and static Swarm/nftables tests passed. No Cloudflare request, Docker Secret creation, stack deployment, firewall apply or production action was performed.
     Risks: Formal Gate B approval, approved non-production CIDR ranges, Cloudflare token/zone, deployment host and authorised Docker API are still required before live validation or apply.
     Rollback: Remove the reviewed Task 4.2 assets; no external certificate, DNS, Docker Secret, firewall or deployment state was created by this change.
+
+2026-07-30 — Task 4.2: unified non-production environment contract
+    Context: TLS and network helpers required separate CLI inputs, while the planned SOPS + age boundary requires a single encrypted environment source.
+    Change: Added non-secret TLS/network paths, Cloudflare zone metadata and a safe Cloudflare token placeholder to `.env.example` and its machine-checkable contract. Deploy-adjacent helpers now strictly parse an explicit env file, `ORCHESTRATOR_ENV_FILE`, or a warning-only local `.env` fallback without `source` or evaluation; the Certbot token is staged only as a mode-0600 `/dev/shm` credentials file.
+    Verification: Environment-contract validation, ShellCheck, shell syntax, existing entrypoint regression, TLS reconciler and network-policy tests passed. No `.env`, token, DNS, Docker or firewall state was read or modified.
+    Risks: Local `.env` must remain ignored and mode 0600; production or SOPS materialization remains Task 4.3.
+    Rollback: Revert the contract and parser changes; no secret, certificate or deployment state was created.

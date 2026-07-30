@@ -64,3 +64,24 @@
     Verification: Environment-contract validation, ShellCheck, shell syntax, existing entrypoint regression, TLS reconciler and network-policy tests passed. No `.env`, token, DNS, Docker or firewall state was read or modified.
     Risks: Local `.env` must remain ignored and mode 0600; production or SOPS materialization remains Task 4.3.
     Rollback: Revert the contract and parser changes; no secret, certificate or deployment state was created.
+
+2026-07-30 — Task 4.2: permit approved non-production CGNAT client range
+    Context: The separately hosted Moodle client uses an internal `100.64.0.0/10` address, which is non-public but not RFC1918.
+    Change: The nftables policy renderer now accepts explicitly supplied CGNAT CIDRs in addition to RFC1918 IPv4 ranges; public and IPv6 CIDRs remain rejected.
+    Verification: Static network-policy tests cover an accepted CGNAT `/32` and a rejected public IPv4 CIDR.
+    Risks: CGNAT must remain an isolated, explicitly approved internal routing domain; do not broaden the policy to public ranges.
+    Rollback: Restore RFC1918-only validation if the CGNAT routing boundary changes.
+
+2026-07-30 — Task 4.2: non-production TLS certificate and Docker Secret evidence
+    Context: The approved non-production SMTP FQDN and Cloudflare DNS boundary became available for the TLS issuance path.
+    Change: Issued a public-trust TLS certificate through DNS-01 and reconciled its certificate/key into two deterministic immutable non-production Docker Secrets. The root-only mapping file now references the resulting versioned names.
+    Verification: Certificate hostname and expiry validation passed; certificate, private-key and mapping file modes were checked as 0644, 0600 and 0600 respectively; Docker Secret metadata was read without exposing payloads.
+    Risks: The Swarm stack, encrypted overlay, nftables policy and live SMTP/TLS tests are not applied yet. Certbot installed its standard renewal schedule; its renewed material still requires reviewed Secret reconciliation before a gateway redeploy.
+    Rollback: Retain the current Secret versions until a verified replacement exists; no gateway service, firewall or production state was changed.
+
+2026-07-30 — Task 4.2: configure Moodle SMTP transport as STARTTLS
+    Context: The gateway fork supports both implicit TLS and STARTTLS, while Moodle's intended client contract requires STARTTLS on port 2525.
+    Change: Changed runtime TLS mode from implicit TLS to STARTTLS and made the insecure-authentication prohibition explicit in the rendered gateway configuration.
+    Verification: The upstream receive authentication suite proves AUTH before STARTTLS is rejected and AUTH after TLS succeeds; control-plane rendering regression asserts both settings.
+    Risks: A client configured for implicit TLS will fail until changed to STARTTLS; live proof still requires the non-production gateway deployment.
+    Rollback: Restore `secure: true` only with a reviewed client-contract decision and matching TLS tests.

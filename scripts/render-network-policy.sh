@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: render a non-production nftables policy from explicit private IPv4 CIDRs.
+# Category 1b: render a non-production nftables policy from explicit non-public IPv4 CIDRs.
 set -euo pipefail
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
@@ -17,7 +17,7 @@ cidrs=${SMTP_ALLOWED_SOURCE_CIDRS:-}
 IFS=',' read -r -a values <<< "$cidrs"
 rendered=()
 for cidr in "${values[@]}"; do
-  [[ "$cidr" =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)[0-9.]+/[0-9]{1,2}$ ]] || die 'only private IPv4 CIDRs are permitted.'
+  [[ "$cidr" =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)[0-9.]+/[0-9]{1,2}$ ]] || die 'only RFC1918 or CGNAT IPv4 CIDRs are permitted.'
   rendered+=("$cidr")
 done
 replacement=$(IFS=,; printf '%s' "${rendered[*]}")

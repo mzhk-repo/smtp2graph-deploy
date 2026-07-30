@@ -19,7 +19,7 @@
 ## `render-network-policy.sh`
 
 - Category: 1b (non-production firewall policy rendering).
-- Inputs: `SMTP_ALLOWED_SOURCE_CIDRS` as a comma-separated private IPv4 CIDR list and an explicit absolute output path.
+- Inputs: `SMTP_ALLOWED_SOURCE_CIDRS` as a comma-separated RFC1918 or explicitly approved CGNAT (`100.64.0.0/10`) IPv4 CIDR list and an explicit absolute output path.
 - Safety: refuses public/IPv6 CIDR, renders from the reviewed template atomically and never applies nftables rules.
 
 ## `entrypoint.sh`

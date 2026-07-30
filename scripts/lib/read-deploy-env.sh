@@ -14,6 +14,7 @@ resolve_deploy_env_file() {
 
 load_deploy_env_file() {
   local root=$1 requested=$2 file line key value allowed item
+  declare -A seen=()
   shift 2
   file=$(resolve_deploy_env_file "$root" "$requested") || return 0
   [[ "$file" = /* && -f "$file" && ! -L "$file" ]] || { printf 'ERROR: env file must be an absolute regular non-symlink file.\n' >&2; return 64; }
@@ -24,7 +25,8 @@ load_deploy_env_file() {
     key=${BASH_REMATCH[1]}; value=${BASH_REMATCH[2]}; allowed=false
     for item in "$@"; do [[ "$key" == "$item" ]] && { allowed=true; break; }; done
     "$allowed" || continue
-    [[ -v "$key" ]] && { printf 'ERROR: duplicate env key: %s.\n' "$key" >&2; return 64; }
+    [[ -v "seen[$key]" ]] && { printf 'ERROR: duplicate env key: %s.\n' "$key" >&2; return 64; }
+    seen["$key"]=1
     printf -v "$key" '%s' "$value"
   done < "$file"
 }

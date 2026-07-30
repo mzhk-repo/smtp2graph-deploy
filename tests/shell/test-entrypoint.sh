@@ -65,6 +65,8 @@ run_render >/dev/null
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'expected sender mailbox is missing from rendered configuration.'
 grep -F "'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'normalized sender policy is missing from rendered configuration.'
 grep -F "requireAuth: true" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP authentication is not required in rendered configuration.'
+grep -F 'secure: false' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'STARTTLS mode is not enabled in rendered configuration.'
+grep -F 'allowInsecureAuth: false' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP AUTH is permitted before STARTTLS.'
 grep -F 'maxSessionsPerIp: 5' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'per-IP session limit is missing from rendered configuration.'
 grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'duration: 60' >/dev/null || fail 'rate-limit duration is missing from rendered configuration.'
 grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'limit: 30' >/dev/null || fail 'per-client message limit is missing from rendered configuration.'

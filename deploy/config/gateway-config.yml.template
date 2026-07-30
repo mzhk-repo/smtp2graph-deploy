@@ -16,9 +16,11 @@ storage:
 receive:
   port: __SMTP_LISTEN_PORT__
   listenAddress: __SMTP_BIND_ADDRESS__
-  secure: true
+  # STARTTLS: SMTP AUTH is permitted only after the TLS upgrade.
+  secure: false
   tlsKeyPath: __SMTP_TLS_KEY_PATH__
   tlsCertPath: __SMTP_TLS_CERT_PATH__
+  allowInsecureAuth: false
   maxSize: __SMTP_MAX_SIZE_KIB__
   ipWhitelist:
 __SMTP_ALLOWED_SOURCE_CIDRS__

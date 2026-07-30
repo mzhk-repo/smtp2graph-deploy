@@ -474,11 +474,11 @@ Implementation task готова до виконання, лише якщо:
 
 **Phase 2 Quality Gate**
 
-- [ ] Upstream `v1.1.5` rejection і remediation decision approved.
-- [ ] Повторний Gate B для fork candidate approved без Critical gaps.
-- [ ] Fork source revision pinned; functional evidence complete. GHCR digest, Trivy scan/exception record, CycloneDX SBOM та OCI metadata record є scope Task 5.3.
-- [ ] Secret, non-root/read-only, MIME, queue і acknowledgement behavior доведені.
-- [ ] ADR та AI_CONTEXT актуальні.
+- [x] Upstream `v1.1.5` rejection і remediation decision approved.
+- [x] Повторний Gate B для fork candidate approved без Critical gaps.
+- [x] Fork source revision pinned; functional evidence complete. GHCR digest, Trivy scan/exception record, CycloneDX SBOM та OCI metadata record є scope Task 5.3.
+- [x] Secret, non-root/read-only, MIME, queue і acknowledgement behavior доведені.
+- [x] ADR та AI_CONTEXT актуальні.
 
 ## Phase 3 — Core Functional Implementation
 
@@ -649,6 +649,19 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Risks:** false assumption про overlay encryption; TLS client incompatibility.
 - **Rollback Notes:** rollback не вимикає TLS для routed client; client cutover використовує credential overlap.
 
+**Completion boundary:** Task 4.2 завершує non-production TLS/client-policy contract: public-trust certificate issuance path, STARTTLS із забороною AUTH до upgrade, explicit source-CIDR policy та static policy checks. Він не створює повний gateway deployment candidate.
+
+**Передані залежності та наступні власники:**
+
+| Умова, що не блокує завершення Task 4.2 | Власник | Причина |
+|---|---|---|
+| Formal functional Gate B approval для fork revision | Task 2.5 — Gate B review | Це component decision gate, передумова фаз 3–4, а не TLS/network implementation detail. |
+| SOPS-encrypted `env.*.enc`, Graph/SMTP credential materialization і TLS renewal → Secret reconciliation | Task 4.3 — SOPS + age і versioned Docker Secrets lifecycle | Єдиний секретний lifecycle має бути спільним для всіх runtime credentials, а не окремим TLS workaround. |
+| Encrypted overlay creation, node label/constraint, storage/tmpfs/entrypoint mounts, nftables apply і live `check-network-policy.sh` | Task 5.1 — Single-node Swarm stack і storage/network IaC | Потребує повного pinned runtime stack і staging deployment boundary. |
+| Idempotent render/apply/status/rollback orchestration | Task 5.2 — Idempotent orchestration scripts | Side effects мають проходити лише через reviewed deploy automation. |
+| Immutable GHCR image digest, Trivy/Syft/OCI evidence | Task 5.3 — Secure CI/CD pipeline | Release artifact і supply-chain evidence не створюються в Task 4.2. |
+| Deployed Moodle STARTTLS/auth/hostname compatibility smoke | Task 6.1 — Integration та client compatibility suite | Потребує staging gateway, реального Moodle profile і контрольованого recipient. |
+
 ### Task 4.3 — SOPS + age і versioned Docker Secrets lifecycle
 
 - **Priority:** Must
@@ -661,9 +674,10 @@ Write-Host "Certificate Thumbprint: $thumbprint"
   3. Decrypt виконувати лише у `/dev/shm` через `mktemp` з mode `0600`; перед роботою встановлювати cleanup trap і передавати material напряму до Docker Secret creation channel.
   4. Створювати versioned Docker Secret `smtp2graph_graph_client_private_key_v<N>` та передавати gateway лише file path у `/run/secrets/`; після verified cutover оновлювати mapping на нову версію.
   5. Redact logs; описати rotation, revocation і контрольоване видалення попереднього Docker Secret.
+  6. Перенести non-production local `.env` contract до encrypted `env.*.enc`; обробляти Graph tenant/client/credential, SMTP users і TLS ACME inputs як один strict-parsed secret source. Renewed TLS material передавати до versioned Docker Secrets лише через цей reconciler.
 - **Files / Directories:** `.sops.yaml`, `env.dev.enc`, `env.prod.enc`, `deploy/config/`, `scripts/lib/`, `.github/workflows/`, `docs/scripts_runbook.md`.
-- **Artifacts:** secret inventory metadata без values, включно з `GRAPH_CERT_PRIVATE_KEY_PEM` → versioned Docker Secret mapping.
-- **Acceptance Criteria:** age private identity поза repo/untrusted CI; private key exists in source control only as SOPS-encrypted content in `env.*.enc`; plaintext не лишається на persistent disk/artifact; runtime отримує key тільки з versioned Docker Secret mount; old secret видаляється лише після verified cutover.
+- **Artifacts:** secret inventory metadata без values, включно з Graph, SMTP users та TLS certificate/key → versioned Docker Secret mappings.
+- **Acceptance Criteria:** age private identity поза repo/untrusted CI; Graph, SMTP і TLS secret values exist in source control only as SOPS-encrypted content in `env.*.enc`; plaintext не лишається на persistent disk/artifact; runtime отримує key тільки з versioned Docker Secret mount; old secret видаляється лише після verified cutover.
 - **Validation Commands:**
   ```bash
   sops filestatus env.dev.enc
@@ -728,10 +742,10 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** відтворювано розгорнути hardened stateful service.
 - **Depends on:** Phase 4.
 - **Definition of Ready:** host paths/volumes, UID/GID, port, overlay й resource limits визначені.
-- **Implementation Steps:** declarative stack; encrypted overlay; node constraint; queue/log/config mounts; healthcheck; restart/update policy; versioned configs/secrets; 1 GiB queue guardrails.
+- **Implementation Steps:** declarative stack; encrypted overlay; node constraint/label; queue/log/config tmpfs mounts; host-mode SMTP publish; rendered nftables apply; healthcheck; restart/update policy; versioned configs/secrets; 1 GiB queue guardrails; execute live `check-network-policy.sh` only after service is deployed.
 - **Files / Directories:** `deploy/swarm/stack.yml`, `deploy/swarm/`, `scripts/init-volumes.sh`.
 - **Artifacts:** deployment topology у AI_CONTEXT.
-- **Acceptance Criteria:** repeated deploy converges; service pinned to state node; no public port/host network; failed path `0700`; overlay encrypted.
+- **Acceptance Criteria:** repeated deploy converges; service pinned to state node; no public port/host network; failed path `0700`; overlay encrypted; live policy check verifies service Secret target modes, listener and firewall boundary.
 - **Validation Commands:**
   ```bash
   docker stack config -c deploy/swarm/stack.yml
@@ -817,7 +831,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** перевірити Grafana, Moodle, DSpace, Koha й Matomo profiles.
 - **Depends on:** Phase 5.
 - **Definition of Ready:** version matrix, owners, safe recipients і test accounts визначені.
-- **Implementation Steps:** per-client config fixtures; internal/external delivery; HTML/Unicode/CC/BCC/Reply-To/attachment/display name; SMTP response capture.
+- **Implementation Steps:** per-client config fixtures; internal/external delivery; Moodle STARTTLS hostname/chain validation and AUTH-before-TLS denial; HTML/Unicode/CC/BCC/Reply-To/attachment/display name; SMTP response capture.
 - **Files / Directories:** `tests/integration/`, `tests/fixtures/`, `docs/CLIENT_ONBOARDING.md`.
 - **Artifacts:** client compatibility matrix.
 - **Acceptance Criteria:** усі п’ять profiles проходять controlled test; secret config не потрапляє у fixtures; display-name limitation документована.

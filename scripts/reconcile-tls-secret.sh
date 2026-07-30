@@ -2,9 +2,13 @@
 # Category 1b: reconcile non-production TLS Docker Secrets from protected PEM files.
 set -euo pipefail
 
-die() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
+die() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
 log() { printf '[tls-secret] %s\n' "$*" >&2; }
-usage() { cat <<'USAGE'
+usage() {
+  cat <<'USAGE'
 Usage: scripts/reconcile-tls-secret.sh [--env-file FILE] [--environment non-production] [--certificate-file FILE --key-file FILE --mapping-file FILE] [--apply]
 
 Checks a PEM certificate/key pair for smtp-int.ldubgd.edu.ua. Without --apply it
@@ -18,13 +22,34 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 env_file='' environment='' certificate_file='' key_file='' mapping_file='' apply=false
 while (($#)); do
   case "$1" in
-    --environment) environment=${2:-}; shift 2 ;;
-    --env-file) env_file=${2:-}; shift 2 ;;
-    --certificate-file) certificate_file=${2:-}; shift 2 ;;
-    --key-file) key_file=${2:-}; shift 2 ;;
-    --mapping-file) mapping_file=${2:-}; shift 2 ;;
-    --apply) apply=true; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --environment)
+      environment=${2:-}
+      shift 2
+      ;;
+    --env-file)
+      env_file=${2:-}
+      shift 2
+      ;;
+    --certificate-file)
+      certificate_file=${2:-}
+      shift 2
+      ;;
+    --key-file)
+      key_file=${2:-}
+      shift 2
+      ;;
+    --mapping-file)
+      mapping_file=${2:-}
+      shift 2
+      ;;
+    --apply)
+      apply=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) die "unsupported argument: $1" ;;
   esac
 done
@@ -48,7 +73,8 @@ require_protected_file() {
   [[ "$mode" =~ ^[0-7]{3,4}$ ]] || die 'TLS input mode is invalid.'
   [[ "$mode" != *[2367] && "$owner" == "$(id -u)" ]] || die 'TLS input must be owned by the invoking operator and not writable by group or other users.'
 }
-require_protected_file "$certificate_file"; require_protected_file "$key_file"
+require_protected_file "$certificate_file"
+require_protected_file "$key_file"
 key_mode=$(stat -c '%a' "$key_file")
 [[ "$key_mode" == 400 || "$key_mode" == 600 ]] || die 'TLS private key mode must be 0400 or 0600.'
 openssl x509 -in "$certificate_file" -noout >/dev/null 2>&1 || die 'TLS certificate is not valid PEM.'
@@ -67,22 +93,26 @@ key_secret="smtp2graph_tls_private_key_v${key_hash}"
 printf 'TLS_CERTIFICATE_SECRET_NAME=%s\nTLS_PRIVATE_KEY_SECRET_NAME=%s\n' "$cert_secret" "$key_secret"
 [[ "$apply" == true ]] || exit 0
 command -v docker >/dev/null || die 'docker is required with --apply.'
-stage_dir=$(mktemp -d /dev/shm/smtp2graph-tls.XXXXXX); chmod 700 "$stage_dir"
+stage_dir=$(mktemp -d /dev/shm/smtp2graph-tls.XXXXXX)
+chmod 700 "$stage_dir"
 cleanup() { rm -rf -- "$stage_dir"; }
 trap cleanup EXIT
 install -m 0400 "$certificate_file" "$stage_dir/certificate.pem"
 install -m 0400 "$key_file" "$stage_dir/private-key.pem"
 for item in "$cert_secret:$stage_dir/certificate.pem" "$key_secret:$stage_dir/private-key.pem"; do
-  name=${item%%:*}; file=${item#*:}
+  name=${item%%:*}
+  file=${item#*:}
   docker secret inspect "$name" >/dev/null 2>&1 || docker secret create "$name" "$file" >/dev/null
 done
-mapping_tmp=$(mktemp "$(dirname "$mapping_file")/.tls-secret-map.XXXXXX"); chmod 600 "$mapping_tmp"
+mapping_tmp=$(mktemp "$(dirname "$mapping_file")/.tls-secret-map.XXXXXX")
+chmod 600 "$mapping_tmp"
 awk -v cert="$cert_secret" -v key="$key_secret" '
   BEGIN { seen_cert=0; seen_key=0 }
   /^TLS_CERTIFICATE_SECRET_NAME=/ { print "TLS_CERTIFICATE_SECRET_NAME=" cert; seen_cert=1; next }
   /^TLS_PRIVATE_KEY_SECRET_NAME=/ { print "TLS_PRIVATE_KEY_SECRET_NAME=" key; seen_key=1; next }
   { print }
   END { if (!seen_cert) print "TLS_CERTIFICATE_SECRET_NAME=" cert; if (!seen_key) print "TLS_PRIVATE_KEY_SECRET_NAME=" key }
-' "$mapping_file" > "$mapping_tmp"
-mv "$mapping_tmp" "$mapping_file"; chmod 600 "$mapping_file"
+' "$mapping_file" >"$mapping_tmp"
+mv "$mapping_tmp" "$mapping_file"
+chmod 600 "$mapping_file"
 log 'TLS Docker Secret mapping updated; deploy separately after policy verification.'

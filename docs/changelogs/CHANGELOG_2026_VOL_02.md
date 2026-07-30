@@ -85,3 +85,10 @@
     Verification: The upstream receive authentication suite proves AUTH before STARTTLS is rejected and AUTH after TLS succeeds; control-plane rendering regression asserts both settings.
     Risks: A client configured for implicit TLS will fail until changed to STARTTLS; live proof still requires the non-production gateway deployment.
     Rollback: Restore `secure: true` only with a reviewed client-contract decision and matching TLS tests.
+
+2026-07-30 — Roadmap: reassign Task 4.2 follow-on blockers to their owners
+    Context: TLS/client-policy IaC was conflated with later secret lifecycle, deployment, release and client-compatibility work.
+    Change: Defined Task 4.2 completion boundary and assigned Gate B, SOPS/Secret lifecycle, live Swarm/network apply, GHCR digest evidence and deployed Moodle STARTTLS smoke to Tasks 2.5, 4.3, 5.1–5.3 and 6.1 respectively.
+    Verification: Cross-references match existing roadmap task ownership; no runtime, secret, DNS, Docker or firewall state changed.
+    Risks: Task 4.2 local policy evidence must not be represented as a deployed gateway or Gate C result.
+    Rollback: Restore the prior documentation mapping if roadmap phase ownership is formally revised.

@@ -2,12 +2,18 @@
 # Category 1a: validates declared and live non-production SMTP network policy.
 set -euo pipefail
 
-die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+die() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
 . "${project_root}/scripts/lib/read-deploy-env.sh"
 env_file=''
-if [[ "${1:-}" == --env-file ]]; then env_file=${2:-}; shift 2; fi
+if [[ "${1:-}" == --env-file ]]; then
+  env_file=${2:-}
+  shift 2
+fi
 load_deploy_env_file "$project_root" "$env_file" DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SWARM_STACK_NAME
 stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/smtp2graph.nonproduction.yml"}
 nft_file=${SMTP_NFT_FILE:-"${project_root}/deploy/network/smtp2graph.nft"}

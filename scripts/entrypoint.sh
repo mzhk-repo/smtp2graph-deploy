@@ -170,17 +170,18 @@ validate_inputs() {
 }
 
 render_credential_block() {
+  graph_credential_path=${GRAPH_CREDENTIAL_PATH:-}
   case "${GRAPH_AUTH_MODE}" in
     certificate)
       certificate_thumbprint=$(read_secret_line "${DOCKER_SECRETS_DIR}/graph-certificate-thumbprint")
-      graph_private_key_path=${GRAPH_PRIVATE_KEY_PATH:-"${DOCKER_SECRETS_DIR}/graph-private-key"}
+      graph_private_key_path=${GRAPH_PRIVATE_KEY_PATH:-${graph_credential_path:-"${DOCKER_SECRETS_DIR}/graph-private-key"}}
       require_secret_file "${graph_private_key_path}"
       printf '%s\n' '    certificate:'
       printf '      thumbprint: %s\n' "$(yaml_quote "${certificate_thumbprint}")"
       printf '      privateKeyPath: %s\n' "$(yaml_quote "${graph_private_key_path}")"
       ;;
     client-secret)
-      graph_client_secret=$(read_secret_line "${DOCKER_SECRETS_DIR}/graph-client-secret")
+      graph_client_secret=$(read_secret_line "${GRAPH_CLIENT_SECRET_PATH:-${graph_credential_path:-"${DOCKER_SECRETS_DIR}/graph-client-secret"}}")
       printf '    secret: %s\n' "$(yaml_quote "${graph_client_secret}")"
       unset graph_client_secret
       ;;

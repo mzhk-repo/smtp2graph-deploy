@@ -4,5 +4,7 @@ docs/hello-world.md
 .env
 .env.*
 !.env.example
+!env.dev.enc
+!env.prod.enc
 cert.pem
 private.key

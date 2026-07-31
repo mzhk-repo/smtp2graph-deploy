@@ -92,3 +92,10 @@
     Verification: Cross-references match existing roadmap task ownership; no runtime, secret, DNS, Docker or firewall state changed.
     Risks: Task 4.2 local policy evidence must not be represented as a deployed gateway or Gate C result.
     Rollback: Restore the prior documentation mapping if roadmap phase ownership is formally revised.
+
+2026-07-30 — Task 4.3: SOPS + age encrypted secret-source lifecycle
+    Context: Graph, SMTP and TLS secret values still depended on a local plaintext environment contract and a TLS-only Docker Secret reconciler.
+    Change: Added age policy, encrypted `env.dev.enc` and placeholder `env.prod.enc`, a shared `/dev/shm`-only reconciler with deterministic versioned Docker Secret names and atomic names-only mapping updates, plus Graph/SMTP Secret mounts for the non-production stack. The environment contract now includes the existing M365 qualification keys and canonical encrypted Graph/TLS/SMTP source keys.
+    Verification: SOPS reports both environment files encrypted. The isolated security test covers decryption, deterministic naming, fake Docker Secret reconciliation and production-apply refusal; entrypoint, shell, Markdown, YAML and format checks pass through `make validate`.
+    Risks: The encrypted development source intentionally keeps `SMTP_USERS_TSV` as a placeholder, so real reconciliation fails closed until the credential is approved. Age recovery custody, CI trust and any production action remain outside this change.
+    Rollback: Restore the prior encrypted mapping and redeploy only through approved orchestration after queue assessment. The reconciler never deletes Docker Secrets; removal of an obsolete version requires a separate explicit approval.

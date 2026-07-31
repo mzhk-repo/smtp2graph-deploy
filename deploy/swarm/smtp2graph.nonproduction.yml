@@ -1,6 +1,8 @@
 services:
   gateway:
     image: ${SMTP2GRAPH_IMAGE_DIGEST:?SMTP2GRAPH_IMAGE_DIGEST is required}
+    environment:
+      GRAPH_CREDENTIAL_PATH: /run/secrets/graph-credential
     networks:
       - smtp2graph_internal
     ports:
@@ -9,6 +11,31 @@ services:
         protocol: tcp
         mode: host
     secrets:
+      - source: graph_tenant_id
+        target: graph-tenant-id
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_client_id
+        target: graph-client-id
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_certificate_thumbprint
+        target: graph-certificate-thumbprint
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_credential
+        target: graph-credential
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+      - source: smtp_credentials
+        target: smtp-users
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
       - source: smtp_tls_certificate
         target: smtp-tls-cert
         uid: "65532"
@@ -31,6 +58,21 @@ networks:
     name: ${SWARM_OVERLAY_NETWORK:?SWARM_OVERLAY_NETWORK is required}
 
 secrets:
+  graph_tenant_id:
+    external: true
+    name: ${GRAPH_TENANT_ID_SECRET_NAME:?GRAPH_TENANT_ID_SECRET_NAME is required}
+  graph_client_id:
+    external: true
+    name: ${GRAPH_CLIENT_ID_SECRET_NAME:?GRAPH_CLIENT_ID_SECRET_NAME is required}
+  graph_certificate_thumbprint:
+    external: true
+    name: ${GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME:?GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME is required}
+  graph_credential:
+    external: true
+    name: ${GRAPH_CREDENTIAL_SECRET_NAME:?GRAPH_CREDENTIAL_SECRET_NAME is required}
+  smtp_credentials:
+    external: true
+    name: ${SMTP_CREDENTIALS_SECRET_NAME:?SMTP_CREDENTIALS_SECRET_NAME is required}
   smtp_tls_certificate:
     external: true
     name: ${TLS_CERTIFICATE_SECRET_NAME:?TLS_CERTIFICATE_SECRET_NAME is required}

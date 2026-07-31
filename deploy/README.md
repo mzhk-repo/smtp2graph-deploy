@@ -12,6 +12,7 @@ Koha-derived templates не можна копіювати сюди або вик
 
 - `public` — безпечні development values, які не є credentials;
 - `secret-reference` — лише майбутні versioned Docker Secret names, ніколи не secret values.
+- `secret-value` — лише safe placeholder у `.env.example`; реальне значення існує тільки у SOPS-encrypted `env.dev.enc` або `env.prod.enc` і дешифрується reconciliation-скриптом у `/dev/shm`.
 
 Перевірка не завантажує env-файл у shell:
 

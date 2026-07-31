@@ -3,11 +3,20 @@
 ## `reconcile-sops-secrets.sh`
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).
-- Inputs: explicit absolute `--env-file` encrypted by SOPS and an existing absolute `--mapping-file`. It parses only the required encrypted Graph, SMTP and TLS values; values are never logged.
+- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS and an existing absolute `--mapping-file`. It extracts only the required encrypted Graph, SMTP and TLS values; values are never logged or sourced by a shell.
 - Side effects: default mode validates and emits versioned Secret names only. `--apply` is limited to `non-production`; it decrypts only into a mode-`0700` directory under `/dev/shm`, creates missing immutable Docker Secrets and atomically updates the names-only mapping file.
 - Rotation: update the encrypted value, run validation, apply to create the new content-addressed Secret, deploy through the future approved Task 5.2 orchestration, complete smoke verification, then remove the prior Secret only by an explicitly approved cleanup operation.
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.
+
+## `init-storage.sh`
+
+- Category: 1b (non-production persistent-storage initialization).
+- Inputs: explicit canonical `--storage-root`; it must be an existing absolute non-symlink directory. Only its direct `queue` and `failed` children are in scope.
+- Side effects: default mode is validation-only. `--apply` is limited to `--environment non-production`, requires a privileged operator, and creates/corrects only empty direct children to UID/GID `65532` and mode `0700`.
+- Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads.
+- Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
+- Check: `./tests/security/test-container-hardening.sh`.
 
 ## `reconcile-tls-secret.sh`
 

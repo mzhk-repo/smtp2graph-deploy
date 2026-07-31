@@ -2,3 +2,7 @@ title = "smtp2graph secret scanning policy"
 
 [extend]
 useDefault = true
+
+[allowlist]
+description = "Historical synthetic PEM marker in SOPS reconciler test"
+commits = ["77014ce9ffa21c383a48fc5b1c0faeef6aacba01"]

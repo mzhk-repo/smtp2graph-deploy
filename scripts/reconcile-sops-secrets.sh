@@ -11,7 +11,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/reconcile-sops-secrets.sh --env-file FILE --mapping-file FILE [--environment non-production] [--apply]
 
-Validates an encrypted SOPS YAML environment file. With --apply, plaintext is
+Validates an encrypted SOPS Dotenv environment file. With --apply, plaintext is
 decrypted only under /dev/shm and materialized as deterministic versioned Docker
 Secrets. The mapping file contains names only and is updated atomically.
 USAGE
@@ -46,7 +46,7 @@ done
 
 [[ "$env_file" = /* && -f "$env_file" && ! -L "$env_file" ]] || die '--env-file must be an absolute regular non-symlink file.'
 [[ "$mapping_file" = /* && -f "$mapping_file" && ! -L "$mapping_file" ]] || die '--mapping-file must be an existing regular non-symlink file.'
-for tool in sops sha256sum mktemp stat awk install; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in dd grep sops sha256sum mktemp stat tail awk install; do command -v "$tool" >/dev/null || die "$tool is required."; done
 
 stage_dir=''
 cleanup() { [[ -z "$stage_dir" ]] || rm -rf -- "$stage_dir"; }
@@ -54,69 +54,56 @@ trap cleanup EXIT
 stage_dir=$(mktemp -d /dev/shm/smtp2graph-sops.XXXXXX)
 chmod 700 "$stage_dir"
 plain_env="$stage_dir/environment.env"
-sops --decrypt --input-type yaml --output-type dotenv "$env_file" >"$plain_env" || die 'could not decrypt the SOPS environment file.'
-chmod 600 "$plain_env"
-
-declare -A values=()
-declare -A seen=()
-allowed_keys=(
-  DEPLOY_ENVIRONMENT GRAPH_AUTH_MODE GRAPH_TENANT_ID GRAPH_CLIENT_ID
-  GRAPH_CERTIFICATE_THUMBPRINT GRAPH_CLIENT_SECRET SMTP_USERS_TSV
-  TLS_CERTIFICATE_PEM TLS_PRIVATE_KEY_PEM
-)
-while IFS= read -r line || [[ -n "$line" ]]; do
-  [[ -z "$line" || "$line" == \#* ]] && continue
-  [[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] || die 'decrypted environment has invalid syntax.'
-  key=${BASH_REMATCH[1]}
-  value=${BASH_REMATCH[2]}
-  known=false
-  for item in "${allowed_keys[@]}"; do [[ "$key" == "$item" ]] && {
-    known=true
-    break
-  }; done
-  "$known" || continue
-  [[ -z "${seen[$key]:-}" ]] || die "decrypted environment has duplicate key: $key."
-  seen[$key]=1
-  values[$key]=$value
-done <"$plain_env"
-
-require_value() {
-  local key=$1
-  [[ -n "${values[$key]:-}" ]] || die "required encrypted value is missing: $key."
-  [[ "${values[$key]}" != REPLACE_WITH_* ]] || die "required encrypted value is still a placeholder: $key."
-}
-for key in DEPLOY_ENVIRONMENT GRAPH_AUTH_MODE GRAPH_TENANT_ID GRAPH_CLIENT_ID SMTP_USERS_TSV TLS_CERTIFICATE_PEM TLS_PRIVATE_KEY_PEM; do require_value "$key"; done
-environment=${environment:-${values[DEPLOY_ENVIRONMENT]}}
-[[ "$environment" == non-production || "$environment" == production ]] || die 'environment must be non-production or production.'
-[[ "$environment" == "${values[DEPLOY_ENVIRONMENT]}" ]] || die '--environment does not match DEPLOY_ENVIRONMENT.'
-[[ "$apply" == false || "$environment" == non-production ]] || die '--apply is limited to non-production; production requires separately approved orchestration.'
-case "${values[GRAPH_AUTH_MODE]}" in
-  certificate)
-    credential_key=GRAPH_CERT_PRIVATE_KEY_PEM
-    require_value GRAPH_CERTIFICATE_THUMBPRINT
-    ;;
-  client-secret)
-    credential_key=GRAPH_CLIENT_SECRET
-    require_value GRAPH_CLIENT_SECRET
-    ;;
-  *) die 'GRAPH_AUTH_MODE must be certificate or client-secret.' ;;
-esac
+[[ ! -e "$plain_env" ]] || die 'internal plaintext staging path already exists.'
 
 extract_secret() {
-  local key=$1 target=$2
-  sops --decrypt --input-type yaml --extract "[\"$key\"]" --output-type binary "$env_file" >"$target" || die "could not extract encrypted value: $key."
+  local key=$1 target=$2 raw_target raw_size first_byte last_byte
+  raw_target="$target.raw"
+  sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file" >"$raw_target" || die "could not extract encrypted value: $key."
+  raw_size=$(stat -c '%s' "$raw_target") || die "could not inspect encrypted value: $key."
+  [[ "$raw_size" -gt 0 ]] || die "encrypted value is empty: $key."
+  first_byte=$(dd if="$raw_target" bs=1 count=1 status=none)
+  last_byte=$(tail -c 1 "$raw_target")
+  if [[ "$raw_size" -ge 2 && "$first_byte" == '"' && "$last_byte" == '"' ]]; then
+    dd if="$raw_target" of="$target" bs=1 skip=1 count=$((raw_size - 2)) status=none
+    rm -f -- "$raw_target"
+  else
+    mv "$raw_target" "$target"
+  fi
   chmod 400 "$target"
   [[ -s "$target" ]] || die "encrypted value is empty: $key."
+  ! grep -q '^REPLACE_WITH_' "$target" || die "required encrypted value is still a placeholder: $key."
 }
+extract_metadata() {
+  local key=$1 value
+  value=$(sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file") || die "could not extract encrypted value: $key."
+  if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]]; then
+    value=${value:1:${#value}-2}
+  fi
+  [[ -n "$value" ]] || die "encrypted value is empty: $key."
+  [[ "$value" != REPLACE_WITH_* ]] || die "required encrypted value is still a placeholder: $key."
+  printf '%s\n' "$value"
+}
+declared_environment=$(extract_metadata DEPLOY_ENVIRONMENT)
+graph_auth_mode=$(extract_metadata GRAPH_AUTH_MODE)
+environment=${environment:-$declared_environment}
+[[ "$environment" == non-production || "$environment" == production ]] || die 'environment must be non-production or production.'
+[[ "$environment" == "$declared_environment" ]] || die '--environment does not match DEPLOY_ENVIRONMENT.'
+[[ "$apply" == false || "$environment" == non-production ]] || die '--apply is limited to non-production; production requires separately approved orchestration.'
+
 extract_secret GRAPH_TENANT_ID "$stage_dir/graph-tenant-id"
 extract_secret GRAPH_CLIENT_ID "$stage_dir/graph-client-id"
-extract_secret "$credential_key" "$stage_dir/graph-credential"
 extract_secret SMTP_USERS_TSV "$stage_dir/smtp-users"
 extract_secret TLS_CERTIFICATE_PEM "$stage_dir/smtp-tls-cert"
 extract_secret TLS_PRIVATE_KEY_PEM "$stage_dir/smtp-tls-key"
-if [[ "${values[GRAPH_AUTH_MODE]}" == certificate ]]; then
-  extract_secret GRAPH_CERTIFICATE_THUMBPRINT "$stage_dir/graph-certificate-thumbprint"
-fi
+case "$graph_auth_mode" in
+  certificate)
+    extract_secret GRAPH_CERT_PRIVATE_KEY_PEM "$stage_dir/graph-credential"
+    extract_secret GRAPH_CERTIFICATE_THUMBPRINT "$stage_dir/graph-certificate-thumbprint"
+    ;;
+  client-secret) extract_secret GRAPH_CLIENT_SECRET "$stage_dir/graph-credential" ;;
+  *) die 'GRAPH_AUTH_MODE must be certificate or client-secret.' ;;
+esac
 
 declare -A secret_names=()
 secret_for() {
@@ -130,7 +117,7 @@ secret_names[GRAPH_CREDENTIAL_SECRET_NAME]=$(secret_for graph_credential "$stage
 secret_names[SMTP_CREDENTIALS_SECRET_NAME]=$(secret_for smtp_users "$stage_dir/smtp-users")
 secret_names[TLS_CERTIFICATE_SECRET_NAME]=$(secret_for tls_certificate "$stage_dir/smtp-tls-cert")
 secret_names[TLS_PRIVATE_KEY_SECRET_NAME]=$(secret_for tls_private_key "$stage_dir/smtp-tls-key")
-if [[ "${values[GRAPH_AUTH_MODE]}" == certificate ]]; then
+if [[ "$graph_auth_mode" == certificate ]]; then
   secret_names[GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME]=$(secret_for graph_certificate_thumbprint "$stage_dir/graph-certificate-thumbprint")
 fi
 

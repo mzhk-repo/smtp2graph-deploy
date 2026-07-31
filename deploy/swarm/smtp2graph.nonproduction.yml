@@ -1,6 +1,15 @@
 services:
   gateway:
     image: ${SMTP2GRAPH_IMAGE_DIGEST:?SMTP2GRAPH_IMAGE_DIGEST is required}
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
     environment:
       GRAPH_CREDENTIAL_PATH: /run/secrets/graph-credential
     networks:
@@ -48,6 +57,13 @@ services:
         mode: 0400
     deploy:
       replicas: 1
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+          pids: 64
+        reservations:
+          memory: 128M
       placement:
         constraints:
           - node.labels.smtp2graph_nonproduction == true

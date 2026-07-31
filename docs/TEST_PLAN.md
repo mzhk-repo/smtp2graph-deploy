@@ -1,5 +1,13 @@
 # План тестування
 
+## Task 5.1 — Single-node Swarm stack і storage/network IaC
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-SWARM-001 | Canonical stack uses only Swarm-native deployment fields, one constrained replica, host publish, persistent `/data`, reviewed Config/Secret mounts, healthcheck and no privileged/host-network/socket escape. | `./tests/security/test-swarm-stack.sh` | Static non-production evidence; no Docker API is required for render. |
+| TB-SWARM-002 | Bootstrap rejects missing/unencrypted overlay, public CIDR and unsafe storage root; explicit apply is idempotent for reviewed non-production prerequisites. | `./tests/security/test-bootstrap-swarm-host.sh` | Fake Docker/nft unit boundary; no host state is mutated. |
+| TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --env-file <non-production-env>` | Requires approved non-production Swarm manager and a deployed Task 5.3 digest. |
+
 ## Task 4.2 — TLS, network і client credential boundary
 
 | ID | Контроль | Команда / evidence | Межа |

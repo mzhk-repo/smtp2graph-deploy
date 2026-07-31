@@ -742,7 +742,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Depends on:** Phase 4.
 - **Definition of Ready:** host paths/volumes, UID/GID, port, overlay й resource limits визначені.
 - **Implementation Steps:** declarative stack; encrypted overlay; node constraint/label; queue/log/config tmpfs mounts; host-mode SMTP publish; rendered nftables apply; healthcheck; restart/update policy; versioned configs/secrets; 1 GiB queue guardrails; execute live `check-network-policy.sh` only after service is deployed.
-- **Files / Directories:** `deploy/swarm/stack.yml`, `deploy/swarm/`, `scripts/init-volumes.sh`.
+- **Files / Directories:** `deploy/swarm/stack.yml`, `deploy/swarm/`, `scripts/bootstrap-swarm-host.sh`.
 - **Artifacts:** deployment topology у AI_CONTEXT.
 - **Acceptance Criteria:** repeated deploy converges; service pinned to state node; no public port/host network; failed path `0700`; overlay encrypted; live policy check verifies service Secret target modes, listener and firewall boundary.
 - **Validation Commands:**

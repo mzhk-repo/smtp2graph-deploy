@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-stack="$root/deploy/swarm/smtp2graph.nonproduction.yml"
+stack="$root/deploy/swarm/stack.yml"
 storage_init="$root/scripts/init-storage.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT

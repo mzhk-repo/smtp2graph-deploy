@@ -15,3 +15,10 @@ make test-local
 ```
 
 Він створює лише temporary Docker resources і synthetic test material; production credentials, fixtures з PII та deployment state не використовуються.
+
+Task 5.1 static Swarm/IaC checks не вимагають доступу до Docker daemon:
+
+```bash
+./tests/security/test-swarm-stack.sh
+./tests/security/test-bootstrap-swarm-host.sh
+```

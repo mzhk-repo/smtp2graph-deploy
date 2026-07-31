@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-stack="${root}/deploy/swarm/smtp2graph.nonproduction.yml"
+stack="${root}/deploy/swarm/stack.yml"
 nft="${root}/deploy/network/smtp2graph.nft"
 renderer="${root}/scripts/render-network-policy.sh"
 rg -q 'mode: host' "$stack"

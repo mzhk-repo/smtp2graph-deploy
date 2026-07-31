@@ -2,7 +2,9 @@
 
 Цей каталог зарезервовано для reviewed SMTP2Graph IaC. Runtime manifests не додаються до завершення Gate B та відповідних задач roadmap.
 
-`swarm/smtp2graph.nonproduction.yml` і `network/smtp2graph.nft` є non-production Task 4.2 policy assets. Вони не застосовуються локальними checks і потребують Gate B, approved IPv4 CIDR та explicit deployment confirmation.
+`swarm/stack.yml` є канонічним non-production Task 5.1 Swarm manifest. Він використовує external encrypted overlay, versioned external Docker Secrets з names-only mapping, Swarm Configs для reviewed runtime files та bind mount `${SMTP2GRAPH_STORAGE_HOST_PATH}` у `/data`. Локальні checks не застосовують stack, nftables або Docker state.
+
+`scripts/bootstrap-swarm-host.sh --check` перевіряє host prerequisites. Його `--apply` створює лише reviewed non-production overlay/label/storage/firewall boundary і не deploy-ить stack, не створює Secrets та не має production mode.
 
 Koha-derived templates не можна копіювати сюди або використовувати як готову deployment implementation.
 

@@ -15,7 +15,7 @@ if [[ "${1:-}" == --env-file ]]; then
   shift 2
 fi
 load_deploy_env_file "$project_root" "$env_file" DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SWARM_STACK_NAME
-stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/smtp2graph.nonproduction.yml"}
+stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/stack.yml"}
 nft_file=${SMTP_NFT_FILE:-"${project_root}/deploy/network/smtp2graph.nft"}
 network=${SWARM_OVERLAY_NETWORK:-}
 stack_name=${SWARM_STACK_NAME:-smtp2graph}

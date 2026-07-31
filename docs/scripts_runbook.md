@@ -18,6 +18,14 @@
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
 
+## `bootstrap-swarm-host.sh`
+
+- Category: 1b (non-production Swarm host bootstrap).
+- Inputs: strict-parsed `--env-file` з `DEPLOY_ENVIRONMENT=non-production`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH` і private/approved `SMTP_ALLOWED_SOURCE_CIDRS`.
+- Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_nonproduction=true`, storage root/direct children та atomically applies rendered nftables table.
+- Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup.
+- Check: `./tests/security/test-bootstrap-swarm-host.sh`.
+
 ## `reconcile-tls-secret.sh`
 
 - Category: 1b (non-production deploy-adjacent TLS secret reconciliation).
@@ -31,7 +39,7 @@
 ## `check-network-policy.sh`
 
 - Category: 1a (read-only non-production SMTP network-policy validation).
-- Inputs: `SWARM_OVERLAY_NETWORK` and reviewed Swarm/nftables policy files.
+- Inputs: `SWARM_OVERLAY_NETWORK` and reviewed `deploy/swarm/stack.yml`/nftables policy files.
 - Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. `0.0.0.0` listener output is not treated as public exposure by itself.
 
 ## `render-network-policy.sh`

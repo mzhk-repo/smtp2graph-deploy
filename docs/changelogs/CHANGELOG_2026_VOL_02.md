@@ -120,3 +120,10 @@
     Verification: SPEC, roadmap, AI context and test plan now agree on the completed non-production Gate C result; no secret or production state was changed.
     Risks: Exact GHCR digest and Task 5.3 supply-chain evidence remain required before staging or production promotion. Live Swarm deployment and production authorization are not implied by this review.
     Rollback: Revert the reviewed documentation and Gate C status record; do not change Microsoft 365 permissions or deployment state as part of rollback.
+
+2026-07-31 — Task 5.1: non-production Single-node Swarm stack and host IaC
+    Context: The prior non-production policy manifest had no persistent storage mount, complete runtime configuration contract, Swarm Config delivery, restart/update policy or idempotent host-preparation boundary.
+    Change: Added canonical `deploy/swarm/stack.yml` with one constrained hardened replica, persistent `/data` bind mount from a public host-path input, host-mode SMTP publish, external encrypted overlay, versioned external Docker Secrets, Swarm Config-mounted runtime files, TCP healthcheck and Swarm-native restart/rollback policy. Added a fail-closed `bootstrap-swarm-host.sh` that validates or explicitly applies only the approved non-production overlay, node label, storage and nftables prerequisites.
+    Verification: Static stack render, ShellCheck, bootstrap fake Docker/nft tests, network policy and storage/hardening tests, `make validate` and `git diff --check` pass. Trivy is unavailable in the local environment.
+    Risks: No live Docker API is available locally. A Task 5.3 exact image digest, authorised non-production Swarm manager, approved CIDRs and explicit apply confirmation are required before host mutation or stack deployment.
+    Rollback: Restore the prior reviewed manifest and do not run bootstrap apply. After any live deployment, assess queue compatibility before reverting an image, manifest, Secret mapping or storage policy.

@@ -1,3 +1,5 @@
+destroy table inet smtp2graph
+
 table inet smtp2graph {
   chain input {
     type filter hook input priority filter; policy accept;

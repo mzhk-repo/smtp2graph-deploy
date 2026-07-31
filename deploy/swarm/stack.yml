@@ -1,0 +1,176 @@
+services:
+  gateway:
+    image: ${SMTP2GRAPH_IMAGE_DIGEST:?SMTP2GRAPH_IMAGE_DIGEST is required}
+    entrypoint:
+      - /bin/sh
+      - /run/configs/entrypoint.sh
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
+    volumes:
+      - type: bind
+        source: ${SMTP2GRAPH_STORAGE_HOST_PATH:?SMTP2GRAPH_STORAGE_HOST_PATH is required}
+        target: /data
+        read_only: false
+        bind:
+          create_host_path: false
+    environment:
+      RUNTIME_TEMPLATE_FILE: /run/configs/gateway-config.yml.template
+      RUNTIME_RENDER_HELPER_FILE: /run/configs/render-config.sh
+      GRAPH_CREDENTIAL_PATH: /run/secrets/graph-credential
+      DOCKER_SECRET_ALLOWED_UIDS: "0:65532"
+      SMTP2GRAPH_MODE: ${SMTP2GRAPH_MODE:?SMTP2GRAPH_MODE is required}
+      GRAPH_AUTH_MODE: ${GRAPH_AUTH_MODE:?GRAPH_AUTH_MODE is required}
+      SMTP_BIND_ADDRESS: 0.0.0.0
+      SMTP_LISTEN_PORT: "2525"
+      SMTP_MAX_MESSAGE_BYTES: ${SMTP_MAX_MESSAGE_BYTES:?SMTP_MAX_MESSAGE_BYTES is required}
+      SMTP_MAX_SESSIONS_PER_IP: ${SMTP_MAX_SESSIONS_PER_IP:?SMTP_MAX_SESSIONS_PER_IP is required}
+      SMTP_MESSAGES_PER_MINUTE: ${SMTP_MESSAGES_PER_MINUTE:?SMTP_MESSAGES_PER_MINUTE is required}
+      SMTP_ALLOWED_SOURCE_CIDRS: ${SMTP_ALLOWED_SOURCE_CIDRS:?SMTP_ALLOWED_SOURCE_CIDRS is required}
+      SMTP_ALLOWED_SENDER_ADDRESSES: ${SMTP_ALLOWED_SENDER_ADDRESSES:?SMTP_ALLOWED_SENDER_ADDRESSES is required}
+      GRAPH_SENDER_MAILBOX: ${GRAPH_SENDER_MAILBOX:?GRAPH_SENDER_MAILBOX is required}
+      SEND_RETRY_LIMIT: ${SEND_RETRY_LIMIT:?SEND_RETRY_LIMIT is required}
+      SEND_RETRY_INTERVAL_MINUTES: ${SEND_RETRY_INTERVAL_MINUTES:?SEND_RETRY_INTERVAL_MINUTES is required}
+      SMTP2GRAPH_STORAGE_ROOT: /data
+      QUEUE_MAX_BYTES: "1073741824"
+      QUEUE_REJECT_THRESHOLD_PERCENT: "80"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('net').connect(2525, '127.0.0.1').once('connect',
+          () => process.exit(0)).once('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - smtp2graph_internal
+    ports:
+      - target: 2525
+        published: 2525
+        protocol: tcp
+        mode: host
+    configs:
+      - source: gateway_entrypoint
+        target: /run/configs/entrypoint.sh
+        uid: "65532"
+        gid: "65532"
+        mode: 0555
+      - source: gateway_render_config
+        target: /run/configs/render-config.sh
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: gateway_config_template
+        target: /run/configs/gateway-config.yml.template
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+    secrets:
+      - source: graph_tenant_id
+        target: graph-tenant-id
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_client_id
+        target: graph-client-id
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_certificate_thumbprint
+        target: graph-certificate-thumbprint
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: graph_credential
+        target: graph-credential
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+      - source: smtp_credentials
+        target: smtp-users
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+      - source: smtp_tls_certificate
+        target: smtp-tls-cert
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+      - source: smtp_tls_private_key
+        target: smtp-tls-key
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+          pids: 64
+        reservations:
+          memory: 128M
+      placement:
+        constraints:
+          - node.labels.smtp2graph_nonproduction == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+      update_config:
+        parallelism: 1
+        delay: 0s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 0s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+
+networks:
+  smtp2graph_internal:
+    external: true
+    name: ${SWARM_OVERLAY_NETWORK:?SWARM_OVERLAY_NETWORK is required}
+
+configs:
+  gateway_entrypoint:
+    file: ../../scripts/entrypoint.sh
+  gateway_render_config:
+    file: ../../scripts/lib/render-config.sh
+  gateway_config_template:
+    file: ../config/gateway-config.yml.template
+
+secrets:
+  graph_tenant_id:
+    external: true
+    name: ${GRAPH_TENANT_ID_SECRET_NAME:?GRAPH_TENANT_ID_SECRET_NAME is required}
+  graph_client_id:
+    external: true
+    name: ${GRAPH_CLIENT_ID_SECRET_NAME:?GRAPH_CLIENT_ID_SECRET_NAME is required}
+  graph_certificate_thumbprint:
+    external: true
+    name: ${GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME:?GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME is required}
+  graph_credential:
+    external: true
+    name: ${GRAPH_CREDENTIAL_SECRET_NAME:?GRAPH_CREDENTIAL_SECRET_NAME is required}
+  smtp_credentials:
+    external: true
+    name: ${SMTP_CREDENTIALS_SECRET_NAME:?SMTP_CREDENTIALS_SECRET_NAME is required}
+  smtp_tls_certificate:
+    external: true
+    name: ${TLS_CERTIFICATE_SECRET_NAME:?TLS_CERTIFICATE_SECRET_NAME is required}
+  smtp_tls_private_key:
+    external: true
+    name: ${TLS_PRIVATE_KEY_SECRET_NAME:?TLS_PRIVATE_KEY_SECRET_NAME is required}

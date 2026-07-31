@@ -1,0 +1,5 @@
+# Control-plane IaC, deploy automation and release evidence ownership.
+/.github/ @mzhk-repo
+/deploy/ @mzhk-repo
+/scripts/ @mzhk-repo
+/docs/FORK_INTEGRATION.md @mzhk-repo

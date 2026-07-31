@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: reconcile non-production TLS Docker Secrets from protected PEM files.
+# Category 1b: reconcile dev/prod TLS Docker Secrets from protected PEM files.
 set -euo pipefail
 
 die() {
@@ -9,7 +9,7 @@ die() {
 log() { printf '[tls-secret] %s\n' "$*" >&2; }
 usage() {
   cat <<'USAGE'
-Usage: scripts/reconcile-tls-secret.sh [--env-file FILE] [--environment non-production] [--certificate-file FILE --key-file FILE --mapping-file FILE] [--apply]
+Usage: scripts/reconcile-tls-secret.sh [--env-file FILE] [--environment development|production] [--certificate-file FILE --key-file FILE --mapping-file FILE] [--approval-context ID] [--apply]
 
 Checks a PEM certificate/key pair for smtp-int.ldubgd.edu.ua. Without --apply it
 only validates and prints deterministic versioned Docker Secret names.
@@ -19,7 +19,7 @@ USAGE
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
 . "${root}/scripts/lib/read-deploy-env.sh"
-env_file='' environment='' certificate_file='' key_file='' mapping_file='' apply=false
+env_file='' environment='' certificate_file='' key_file='' mapping_file='' apply=false approval_context=''
 while (($#)); do
   case "$1" in
     --environment)
@@ -46,6 +46,10 @@ while (($#)); do
       apply=true
       shift
       ;;
+    --approval-context)
+      approval_context=${2:-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -61,7 +65,11 @@ key_file=${key_file:-${TLS_PRIVATE_KEY_FILE:-}}
 mapping_file=${mapping_file:-${TLS_SECRET_MAPPING_FILE:-}}
 tls_fqdn=${SMTP_TLS_FQDN:-smtp-int.ldubgd.edu.ua}
 
-[[ "$environment" == non-production ]] || die 'only --environment non-production is permitted.'
+[[ "$environment" == development || "$environment" == production ]] || die '--environment must be development or production.'
+require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
+if [[ "$apply" == true && "$environment" == production ]]; then
+  [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production --apply requires a safe --approval-context identifier.'
+fi
 for required in certificate_file key_file mapping_file; do [[ -n "${!required}" ]] || die "--${required//_/-} is required."; done
 for tool in openssl sha256sum mktemp stat awk; do command -v "$tool" >/dev/null || die "$tool is required."; done
 

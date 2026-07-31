@@ -2,10 +2,10 @@
 
 ## `deploy-orchestrator-swarm.sh`
 
-- Category: 1b (non-production Swarm orchestration).
-- Inputs: explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`) with only the allowlisted public stack inputs and versioned Docker Secret names. The script never reads a local `.env`, never sources an environment file and does not receive secret values.
-- Operations: `--check` renders and validates the canonical stack without Docker API mutation. `--deploy --apply` submits the canonical stack only to a non-production Swarm manager. `--status` reads the gateway service and its tasks. `--rollback --image-digest <immutable-digest> --queue-compatibility-confirmed --apply` submits the same canonical stack with one explicit prior image digest.
-- Safety: only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. Deploy and rollback refuse `development` and `production`, require `--apply`, do not use `--prune` and never delete stacks, services, networks, configs, Secrets or queue data. Production orchestration remains a separately approved implementation boundary.
+- Category: 1b (dev/prod Swarm orchestration).
+- Inputs: explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`) with only allowlisted public stack inputs and versioned Docker Secret names, plus host `SERVER_ENV=dev|prod` from `/etc/environment`. The script never reads a local `.env`, never sources an environment file and does not receive secret values.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Development `--deploy --apply` submits the canonical stack after `SERVER_ENV=dev` verification. Production requires `SERVER_ENV=prod`, an immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation.
+- Safety: only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
 - Check: `./tests/shell/test-deploy-orchestrator.sh`, `shellcheck scripts/deploy-orchestrator-swarm.sh`, `bash -n scripts/deploy-orchestrator-swarm.sh`.
 - Rollback: first assess queue compatibility, then select an explicit previously approved digest. Verify service state, live network policy and synthetic SMTP delivery before closing the rollback change.
@@ -14,25 +14,25 @@
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).
 - Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS and an existing absolute `--mapping-file`. It extracts only the required encrypted Graph, SMTP and TLS values; values are never logged or sourced by a shell.
-- Side effects: default mode validates and emits versioned Secret names only. `--apply` is limited to `non-production`; it decrypts only into a mode-`0700` directory under `/dev/shm`, creates missing immutable Docker Secrets and atomically updates the names-only mapping file.
+- Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. It decrypts only into a mode-`0700` directory under `/dev/shm`, creates missing immutable Docker Secrets and atomically updates the names-only mapping file.
 - Rotation: update the encrypted value, run validation, apply to create the new content-addressed Secret, deploy through the future approved Task 5.2 orchestration, complete smoke verification, then remove the prior Secret only by an explicitly approved cleanup operation.
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.
 
 ## `init-storage.sh`
 
-- Category: 1b (non-production persistent-storage initialization).
+- Category: 1b (dev/prod persistent-storage initialization).
 - Inputs: explicit canonical `--storage-root`; it must be an existing absolute non-symlink directory. Only its direct `queue` and `failed` children are in scope.
-- Side effects: default mode is validation-only. `--apply` is limited to `--environment non-production`, requires a privileged operator, and creates/corrects only empty direct children to UID/GID `65532` and mode `0700`.
+- Side effects: default mode is validation-only. `--apply` requires `--environment development|production`, matching `SERVER_ENV`, a privileged operator, and creates/corrects only empty direct children to UID/GID `65532` and mode `0700`.
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
 
 ## `bootstrap-swarm-host.sh`
 
-- Category: 1b (non-production Swarm host bootstrap).
-- Inputs: strict-parsed `--env-file` з `DEPLOY_ENVIRONMENT=non-production`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH` і private/approved `SMTP_ALLOWED_SOURCE_CIDRS`.
-- Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_nonproduction=true`, storage root/direct children та atomically applies rendered nftables table.
+- Category: 1b (dev/prod Swarm host bootstrap).
+- Inputs: strict-parsed `--env-file` з `DEPLOY_ENVIRONMENT=development|production`, `SMTP2GRAPH_NODE_LABEL`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`.
+- Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_dev=true` або `smtp2graph_prod=true`, storage root/direct children та atomically applies rendered nftables table. Production additionally needs `--approval-context`.
 - Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup.
 - Check: `./tests/security/test-bootstrap-swarm-host.sh`.
 

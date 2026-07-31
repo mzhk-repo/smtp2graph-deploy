@@ -2,7 +2,10 @@
 # Category 1b: explicitly migrate the legacy non-production host boundary to dev.
 set -euo pipefail
 
-die() { printf 'ERROR: %s\n' "$*" >&2; exit 64; }
+die() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 64
+}
 log() { printf '[dev-host-migration] %s\n' "$*" >&2; }
 usage() {
   cat <<'USAGE'
@@ -24,10 +27,22 @@ env_file=''
 apply=false
 while (($#)); do
   case "$1" in
-    --env-file) env_file=${2:-}; shift 2 ;;
-    --check) apply=false; shift ;;
-    --apply) apply=true; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --env-file)
+      env_file=${2:-}
+      shift 2
+      ;;
+    --check)
+      apply=false
+      shift
+      ;;
+    --apply)
+      apply=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) die "unsupported argument: $1" ;;
   esac
 done

@@ -2,9 +2,9 @@
 
 Цей каталог зарезервовано для reviewed SMTP2Graph IaC. Runtime manifests не додаються до завершення Gate B та відповідних задач roadmap.
 
-`swarm/stack.yml` є канонічним non-production Task 5.1 Swarm manifest. Він використовує external encrypted overlay, versioned external Docker Secrets з names-only mapping, Swarm Configs для reviewed runtime files та bind mount `${SMTP2GRAPH_STORAGE_HOST_PATH}` у `/data`. Локальні checks не застосовують stack, nftables або Docker state.
+`swarm/stack.yml` є канонічним dev/prod Task 5.1b Swarm manifest. Він використовує external encrypted overlay, versioned external Docker Secrets з names-only mapping, Swarm Configs для reviewed runtime files та bind mount `${SMTP2GRAPH_STORAGE_HOST_PATH}` у `/data`. Host contract — `SERVER_ENV=dev|prod` у `/etc/environment`, який має збігатися з encrypted `DEPLOY_ENVIRONMENT=development|production`. Локальні checks не застосовують stack, nftables або Docker state.
 
-`scripts/bootstrap-swarm-host.sh --check` перевіряє host prerequisites. Його `--apply` створює лише reviewed non-production overlay/label/storage/firewall boundary і не deploy-ить stack, не створює Secrets та не має production mode.
+`scripts/bootstrap-swarm-host.sh --check` перевіряє host prerequisites. Його `--apply` створює лише reviewed dev/prod overlay/label/storage/firewall boundary і не deploy-ить stack та не створює Secrets. Production mutation додатково вимагає `SERVER_ENV=prod` і явний `--approval-context`.
 
 Koha-derived templates не можна копіювати сюди або використовувати як готову deployment implementation.
 

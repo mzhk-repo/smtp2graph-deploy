@@ -5,16 +5,16 @@
 | ID | Контроль | Команда / evidence | Межа |
 |---|---|---|---|
 | TB-ORCH-001 | Strict env parsing accepts only required deployment inputs; local `.env`, mutable image tags and unsafe values are refused. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; no Docker API або stack state. |
-| TB-ORCH-002 | Repeated non-production deploy submits the same canonical stack without `--prune`; status is read-only. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; actual Swarm convergence належить Task 5.4. |
-| TB-ORCH-003 | Production deploy is refused; rollback requires explicit immutable digest, `--apply` і queue-compatibility confirmation. | `./tests/shell/test-deploy-orchestrator.sh` | Production orchestration та live rollback не входять у цю задачу. |
+| TB-ORCH-002 | Repeated development deploy submits the same canonical stack without `--prune`; status is read-only. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; actual Swarm convergence належить Task 5.4. |
+| TB-ORCH-003 | Production deploy requires `SERVER_ENV=prod`, a release tag, approval context, matching 40-character control-plane SHA and immutable digest; rollback also requires queue-compatibility confirmation. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; live production deploy remains separately approved. |
 
 ## Task 5.1 — Single-node Swarm stack і storage/network IaC
 
 | ID | Контроль | Команда / evidence | Межа |
 |---|---|---|---|
-| TB-SWARM-001 | Canonical stack uses only Swarm-native deployment fields, one constrained replica, host publish, persistent `/data`, reviewed Config/Secret mounts, healthcheck and no privileged/host-network/socket escape. | `./tests/security/test-swarm-stack.sh` | Static non-production evidence; no Docker API is required for render. |
-| TB-SWARM-002 | Bootstrap rejects missing/unencrypted overlay, public CIDR and unsafe storage root; explicit apply is idempotent for reviewed non-production prerequisites. | `./tests/security/test-bootstrap-swarm-host.sh` | Fake Docker/nft unit boundary; no host state is mutated. |
-| TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --env-file <non-production-env>` | Requires approved non-production Swarm manager and a deployed Task 5.3 digest. |
+| TB-SWARM-001 | Canonical stack uses only Swarm-native deployment fields, one constrained replica, host publish, persistent `/data`, reviewed Config/Secret mounts, healthcheck and no privileged/host-network/socket escape. | `./tests/security/test-swarm-stack.sh` | Static dev/prod evidence; no Docker API is required for render. |
+| TB-SWARM-002 | Bootstrap rejects missing/unencrypted overlay, public CIDR, unsafe storage root and `SERVER_ENV` mismatch; explicit apply is idempotent for reviewed dev prerequisites. | `./tests/security/test-bootstrap-swarm-host.sh` | Fake Docker/nft unit boundary; no host state is mutated. |
+| TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --env-file <development-env>` | Requires approved development Swarm manager and a deployed Task 5.3 digest. |
 
 ## Task 4.2 — TLS, network і client credential boundary
 

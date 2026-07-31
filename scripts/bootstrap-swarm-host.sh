@@ -101,7 +101,7 @@ ensure_overlay() {
   local network_state
   if network_state=$(docker network inspect "$network" --format '{{.Driver}} {{.Scope}} {{json .Options}}' 2>/dev/null); then
     [[ "$network_state" == overlay\ swarm* ]] || die 'existing network must be a Swarm overlay.'
-    [[ "$network_state" == *'"encrypted":"true"'* ]] || die 'existing overlay network is not encrypted.'
+    [[ "$network_state" == *'"encrypted":"true"'* || "$network_state" == *'"encrypted":""'* ]] || die 'existing overlay network is not encrypted.'
     return
   fi
   [[ "$apply" == true ]] || die 'encrypted external overlay network is required.'

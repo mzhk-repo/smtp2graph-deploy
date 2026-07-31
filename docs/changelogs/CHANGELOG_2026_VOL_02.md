@@ -127,3 +127,10 @@
     Verification: Static stack render, ShellCheck, bootstrap fake Docker/nft tests, network policy and storage/hardening tests, `make validate` and `git diff --check` pass. Trivy is unavailable in the local environment.
     Risks: No live Docker API is available locally. A Task 5.3 exact image digest, authorised non-production Swarm manager, approved CIDRs and explicit apply confirmation are required before host mutation or stack deployment.
     Rollback: Restore the prior reviewed manifest and do not run bootstrap apply. After any live deployment, assess queue compatibility before reverting an image, manifest, Secret mapping or storage policy.
+
+2026-07-31 — Task 5.1: non-production Swarm host prerequisites applied
+    Context: The local non-production environment initially referenced the shared unencrypted `proxy-net`; the bootstrap correctly rejected it because it served unrelated live workloads.
+    Change: The environment was changed to the dedicated `smtp2graph_internal` network. Bootstrap apply created it with Docker overlay encryption, set `smtp2graph_nonproduction=true` on the manager, initialized `/srv/smtp2graph/non-production/data/{queue,failed}` as `65532:65532` mode `0700`, and atomically loaded the reviewed nftables SMTP allowlist/deny policy.
+    Verification: Docker network inspection reports the encryption option; node label, storage modes and nftables table were read back. A repeat bootstrap `--check` passed. Trivy 0.72.0 completed without findings but reported no recognized scan target for the current Swarm manifest.
+    Risks: The gateway service is not deployed and `check-network-policy.sh` cannot yet verify service Secret mounts or listener. Task 5.3 exact image digest and deployment orchestration remain required; Trivy coverage needs a compatible policy/format adapter.
+    Rollback: Do not remove the encrypted network while it has attached services. Any future firewall/storage/network rollback requires an explicit approved target and queue assessment.

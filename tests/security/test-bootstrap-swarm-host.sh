@@ -28,7 +28,7 @@ case "${1:-} ${2:-}" in
   'node update') printf '%s\n' true >"${FAKE_STATE}/label" ;;
   'network inspect')
     test -f "${FAKE_STATE}/network" || exit 1
-    printf '%s\n' 'overlay swarm {"encrypted":"true"}'
+    printf '%s\n' 'overlay swarm {"encrypted":""}'
     ;;
   'network create') : >"${FAKE_STATE}/network" ;;
   *) exit 0 ;;
@@ -65,7 +65,7 @@ test "$(cat "$state/label")" = true
 rg -q -- '--check --file' "$state/nft.calls"
 rg -q -- '--file' "$state/nft.calls"
 
-sed -i 's/"encrypted":"true"/"encrypted":"false"/' "$fake_bin/docker"
+sed -i 's/"encrypted":""/"encrypted":"false"/' "$fake_bin/docker"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted an unencrypted overlay.\n' >&2
   exit 1

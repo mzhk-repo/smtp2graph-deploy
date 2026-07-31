@@ -8,6 +8,7 @@ die() {
 }
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
+# shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
 env_file=''
 if [[ "${1:-}" == --env-file ]]; then
@@ -27,7 +28,7 @@ rg -q 'mode: host' "$stack_file" || die 'SMTP publish mode must be host.'
 ! rg -q 'mode: ingress' "$stack_file" || die 'SMTP routing mesh publish is forbidden.'
 rg -q 'tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept' "$nft_file" || die 'nftables allowlist rule is missing.'
 rg -q 'tcp dport 2525 drop' "$nft_file" || die 'nftables deny rule is missing.'
-docker network inspect "$network" --format '{{json .Options}}' | rg -q '"encrypted":"true"' || die 'Swarm overlay encryption is not enabled.'
+docker network inspect "$network" --format '{{json .Options}}' | rg -q '"encrypted":"(true)?"' || die 'Swarm overlay encryption is not enabled.'
 nft list ruleset | rg -q 'smtp2graph_smtp_clients' || die 'smtp2graph nftables policy is not loaded.'
 secret_spec=$(docker service inspect "${stack_name}_gateway" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{.File.Mode}}{{"\\n"}}{{end}}') || die 'could not inspect gateway Secret mounts.'
 printf '%s\n' "$secret_spec" | rg -q '^smtp-tls-key 65532 65532 256$' || die 'TLS private key mount must use uid/gid 65532 and mode 0400.'

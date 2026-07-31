@@ -12,7 +12,7 @@ resolve_deploy_env_file() {
     return
   fi
   if [[ -f "$root/.env" ]]; then
-    printf 'WARNING: using local .env only for non-production.\n' >&2
+    printf 'WARNING: using local .env only for development.\n' >&2
     printf '%s\n' "$root/.env"
     return
   fi

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: render a non-production nftables policy from explicit non-public IPv4 CIDRs.
+# Category 1b: render a development nftables policy from explicit non-public IPv4 CIDRs.
 set -euo pipefail
 
 die() {

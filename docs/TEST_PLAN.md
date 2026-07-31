@@ -15,6 +15,7 @@
 | TB-SWARM-001 | Canonical stack uses only Swarm-native deployment fields, one constrained replica, host publish, persistent `/data`, reviewed Config/Secret mounts, healthcheck and no privileged/host-network/socket escape. | `./tests/security/test-swarm-stack.sh` | Static dev/prod evidence; no Docker API is required for render. |
 | TB-SWARM-002 | Bootstrap rejects missing/unencrypted overlay, public CIDR, unsafe storage root and `SERVER_ENV` mismatch; explicit apply is idempotent for reviewed dev prerequisites. | `./tests/security/test-bootstrap-swarm-host.sh` | Fake Docker/nft unit boundary; no host state is mutated. |
 | TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --env-file <development-env>` | Requires approved development Swarm manager and a deployed Task 5.3 digest. |
+| TB-SWARM-004 | Legacy label/storage migration refuses a running gateway and symlinked paths; explicit dev apply converges on repeated execution. | `./tests/security/test-migrate-dev-host.sh` | Fake Docker and test-only `/tmp` root; no host state is mutated. |
 
 ## Task 4.2 — TLS, network і client credential boundary
 

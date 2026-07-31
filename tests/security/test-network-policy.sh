@@ -32,4 +32,4 @@ if "$renderer" --env-file "$env_file" "$rendered" >/dev/null 2>&1; then
   printf 'ERROR: public CIDR unexpectedly rendered.\n' >&2
   exit 1
 fi
-printf 'PASS: non-production Swarm and nftables policy are deny-by-default.\n'
+printf 'PASS: development Swarm and nftables policy are deny-by-default.\n'

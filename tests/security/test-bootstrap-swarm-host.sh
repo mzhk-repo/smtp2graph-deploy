@@ -92,4 +92,4 @@ if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$serve
   exit 1
 fi
 
-printf 'PASS: Swarm bootstrap checks and applies only reviewed non-production prerequisites.\n'
+printf 'PASS: Swarm bootstrap checks and applies only reviewed development prerequisites.\n'

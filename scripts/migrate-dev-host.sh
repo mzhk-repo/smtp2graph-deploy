@@ -25,6 +25,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 env_file=''
 apply=false
+test_root=''
 while (($#)); do
   case "$1" in
     --env-file)
@@ -38,6 +39,10 @@ while (($#)); do
     --apply)
       apply=true
       shift
+      ;;
+    --test-root)
+      test_root=${2:-}
+      shift 2
       ;;
     -h | --help)
       usage
@@ -53,13 +58,19 @@ load_deploy_env_file "$project_root" "$env_file" DEPLOY_ENVIRONMENT SMTP2GRAPH_S
 [[ "${SMTP2GRAPH_NODE_LABEL:-}" == smtp2graph_dev ]] || die 'SMTP2GRAPH_NODE_LABEL must be smtp2graph_dev.'
 require_server_env_match development || die 'legacy migration requires host SERVER_ENV=dev.'
 
-legacy_root='/srv/smtp2graph/non-production'
-target_root=${SMTP2GRAPH_STORAGE_HOST_PATH%/data}
-[[ "$SMTP2GRAPH_STORAGE_HOST_PATH" == "$target_root/data" && "$target_root" == /srv/smtp2graph/dev ]] || die 'development storage path must be /srv/smtp2graph/dev/data.'
-for path in /srv/smtp2graph "$legacy_root" "$target_root"; do
+base_root='/srv/smtp2graph'
+if [[ -n "$test_root" ]]; then
+  [[ "${SMTP2GRAPH_TEST_MODE:-}" == 1 ]] || die '--test-root is available only with SMTP2GRAPH_TEST_MODE=1.'
+  [[ "$test_root" = /tmp/* && -d "$test_root" && ! -L "$test_root" ]] || die '--test-root must be an existing non-symlink directory under /tmp.'
+  base_root="$test_root/srv/smtp2graph"
+fi
+legacy_root="$base_root/non-production"
+target_root="$base_root/dev"
+[[ "$SMTP2GRAPH_STORAGE_HOST_PATH" == "$target_root/data" ]] || die "development storage path must be ${target_root}/data."
+for path in "$base_root" "$legacy_root" "$target_root"; do
   [[ ! -e "$path" || ! -L "$path" ]] || die "migration path must not be a symlink: $path"
 done
-[[ -d /srv/smtp2graph && ! -L /srv/smtp2graph ]] || die '/srv/smtp2graph must be an existing non-symlink directory.'
+[[ -d "$base_root" && ! -L "$base_root" ]] || die 'SMTP2Graph storage parent must be an existing non-symlink directory.'
 
 command -v docker >/dev/null || die 'docker is required.'
 docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'

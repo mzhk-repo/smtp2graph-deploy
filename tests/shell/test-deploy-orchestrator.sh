@@ -117,4 +117,4 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   exit 1
 fi
 
-printf 'PASS: Swarm orchestrator validates inputs and performs only explicit non-production operations.\n'
+printf 'PASS: Swarm orchestrator validates inputs and performs only explicit development operations.\n'

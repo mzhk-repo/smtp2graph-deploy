@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1a: validates declared and live non-production SMTP network policy.
+# Category 1a: validates declared and live development SMTP network policy.
 set -euo pipefail
 
 die() {

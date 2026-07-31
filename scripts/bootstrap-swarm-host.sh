@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: validate or initialize the non-production SMTP2Graph Swarm host boundary.
+# Category 1b: validate or initialize the SMTP2Graph dev/prod Swarm host boundary.
 set -euo pipefail
 
 die() {
@@ -11,9 +11,10 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/bootstrap-swarm-host.sh [--env-file FILE] [--check | --apply]
 
-Validates the non-production Docker Swarm manager, the encrypted external overlay,
+Validates the Docker Swarm manager, the encrypted external overlay,
 the reviewed node label, persistent storage, and rendered nftables policy. --apply
-is explicit, non-production only, and creates only missing reviewed prerequisites.
+is explicit and creates only missing reviewed prerequisites. Production additionally
+requires SERVER_ENV=prod and an explicit approval context.
 It never deploys a stack, creates Secrets, or removes Docker/nftables resources.
 USAGE
 }
@@ -25,6 +26,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 env_file=''
 apply=false
+approval_context=''
 while (($#)); do
   case "$1" in
     --env-file)
@@ -39,6 +41,10 @@ while (($#)); do
       apply=true
       shift
       ;;
+    --approval-context)
+      approval_context=${2:-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -48,15 +54,23 @@ while (($#)); do
 done
 
 load_deploy_env_file "$project_root" "$env_file" \
-  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP_ALLOWED_SOURCE_CIDRS
+  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP2GRAPH_NODE_LABEL SMTP_ALLOWED_SOURCE_CIDRS
 
 environment=${DEPLOY_ENVIRONMENT:-}
 network=${SWARM_OVERLAY_NETWORK:-}
 storage_root=${SMTP2GRAPH_STORAGE_HOST_PATH:-}
-node_label='smtp2graph_nonproduction'
+node_label=${SMTP2GRAPH_NODE_LABEL:-}
+case "$environment:$node_label" in
+  development:smtp2graph_dev | production:smtp2graph_prod) ;;
+  *) die 'SMTP2GRAPH_NODE_LABEL must match DEPLOY_ENVIRONMENT.' ;;
+esac
 node_label_value='true'
 
-[[ "$environment" == non-production ]] || die 'DEPLOY_ENVIRONMENT must be non-production.'
+require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
+if [[ "$environment" == production && "$apply" == true ]]; then
+  [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production --apply requires a safe --approval-context identifier.'
+fi
+[[ "$environment" != production || -z "$approval_context" || "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die '--approval-context has an unsafe value.'
 [[ "$network" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die 'SWARM_OVERLAY_NETWORK has an unsafe name.'
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /. '
 [[ -n "${SMTP_ALLOWED_SOURCE_CIDRS:-}" ]] || die 'SMTP_ALLOWED_SOURCE_CIDRS is required.'
@@ -122,7 +136,7 @@ ensure_overlay
 
 storage_args=(--storage-root "$storage_root")
 if [[ "$apply" == true ]]; then
-  storage_args+=(--environment non-production --apply)
+  storage_args+=(--environment "$environment" --apply)
 fi
 "${project_root}/scripts/init-storage.sh" "${storage_args[@]}"
 
@@ -134,7 +148,7 @@ if [[ "$apply" == true ]]; then
 fi
 
 if [[ "$apply" == true ]]; then
-  log 'PASS: non-production Swarm host prerequisites are applied.'
+  log "PASS: ${environment} Swarm host prerequisites are applied."
 else
-  log 'PASS: non-production Swarm host prerequisites are validated.'
+  log "PASS: ${environment} Swarm host prerequisites are validated."
 fi

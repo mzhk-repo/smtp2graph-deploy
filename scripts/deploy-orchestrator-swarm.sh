@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: validate, deploy, inspect, or explicitly roll back the non-production SMTP2Graph Swarm stack.
+# Category 1b: validate, deploy, inspect, or explicitly roll back the SMTP2Graph dev/prod Swarm stack.
 set -euo pipefail
 
 die() {
@@ -21,8 +21,8 @@ Usage:
     --image-digest IMAGE@sha256:DIGEST --queue-compatibility-confirmed --apply
 
 The script accepts only a strict allowlist of non-secret deployment settings and
-Docker Secret names. --deploy and --rollback are limited to non-production and
-never delete stacks, services, networks, configs, Secrets, or queue data.
+Docker Secret names. It requires matching SERVER_ENV from /etc/environment and
+never deletes stacks, services, networks, configs, Secrets, or queue data.
 USAGE
 }
 
@@ -36,6 +36,9 @@ operation=''
 apply=false
 rollback_image=''
 queue_compatibility_confirmed=false
+approval_context=''
+release_tag=''
+declared_deploy_ref=''
 
 while (($#)); do
   case "$1" in
@@ -60,6 +63,18 @@ while (($#)); do
       queue_compatibility_confirmed=true
       shift
       ;;
+    --approval-context)
+      approval_context=${2:-}
+      shift 2
+      ;;
+    --release-tag)
+      release_tag=${2:-}
+      shift 2
+      ;;
+    --declared-deploy-ref)
+      declared_deploy_ref=${2:-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -77,6 +92,7 @@ allowed_keys=(
   SWARM_STACK_NAME
   SWARM_OVERLAY_NETWORK
   SMTP2GRAPH_STORAGE_HOST_PATH
+  SMTP2GRAPH_NODE_LABEL
   SMTP2GRAPH_MODE
   GRAPH_AUTH_MODE
   SMTP_MAX_MESSAGE_BYTES
@@ -103,9 +119,10 @@ done
 
 environment=$DEPLOY_ENVIRONMENT
 case "$environment" in
-  development | non-production | production) ;;
-  *) die 'DEPLOY_ENVIRONMENT must be development, non-production, or production.' ;;
+  development | production) ;;
+  *) die 'DEPLOY_ENVIRONMENT must be development or production.' ;;
 esac
+require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
 
 is_digest() {
   [[ "$1" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]
@@ -117,11 +134,16 @@ is_name() {
 
 is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
 for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK \
+  SMTP2GRAPH_NODE_LABEL \
   GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME \
   GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME \
   TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME; do
   is_name "${!key}" || die "${key} has an unsafe name."
 done
+case "$environment:$SMTP2GRAPH_NODE_LABEL" in
+  development:smtp2graph_dev | production:smtp2graph_prod) ;;
+  *) die 'SMTP2GRAPH_NODE_LABEL must match DEPLOY_ENVIRONMENT.' ;;
+esac
 [[ "$SMTP2GRAPH_STORAGE_HOST_PATH" = /* && "$SMTP2GRAPH_STORAGE_HOST_PATH" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /.'
 
 stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/stack.yml"}
@@ -138,9 +160,16 @@ run_stack_config() {
   env "${stack_env[@]}" docker stack config -c "$stack_file" >/dev/null
 }
 
-require_nonproduction_apply() {
+require_apply_authorization() {
   [[ "$apply" == true ]] || die "--${operation} requires --apply."
-  [[ "$environment" == non-production ]] || die "--${operation} is limited to non-production; production requires separately approved orchestration."
+  if [[ "$environment" == production ]]; then
+    [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production requires a safe --approval-context identifier.'
+    [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'production requires --release-tag vX.Y.Z.'
+    [[ "$declared_deploy_ref" =~ ^[a-f0-9]{40}$ ]] || die 'production requires --declared-deploy-ref as a 40-character SHA.'
+    [[ "$(git -C "$project_root" rev-parse HEAD)" == "$declared_deploy_ref" ]] || die 'declared deploy ref does not match checked-out control-plane SHA.'
+  else
+    [[ -z "$approval_context" && -z "$release_tag" && -z "$declared_deploy_ref" ]] || die 'development deploy does not accept production release options.'
+  fi
   docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'
   [[ "$(docker info --format '{{.Swarm.ControlAvailable}}')" == true ]] || die 'Docker Swarm manager access is required.'
 }
@@ -154,13 +183,12 @@ case "$operation" in
   deploy)
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
     run_stack_config
-    require_nonproduction_apply
+    require_apply_authorization
     env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
-    log 'PASS: non-production stack deploy submitted; run check-network-policy.sh after service convergence.'
+    log "PASS: ${environment} stack deploy submitted; run check-network-policy.sh after service convergence."
     ;;
   status)
     [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--status accepts no mutation or rollback options.'
-    [[ "$environment" == non-production ]] || die '--status is available only for the reviewed non-production stack.'
     command -v docker >/dev/null || die 'docker is required.'
     docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'
     docker service inspect "${SWARM_STACK_NAME}_gateway" >/dev/null
@@ -171,9 +199,9 @@ case "$operation" in
     is_digest "$rollback_image" || die '--image-digest must be an immutable sha256 digest.'
     [[ "$queue_compatibility_confirmed" == true ]] || die '--rollback requires --queue-compatibility-confirmed.'
     run_stack_config
-    require_nonproduction_apply
+    require_apply_authorization
     rollback_env=("${stack_env[@]}" "SMTP2GRAPH_IMAGE_DIGEST=${rollback_image}")
     env "${rollback_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
-    log 'PASS: explicit non-production rollback deploy submitted; verify queue and SMTP delivery before closing the change.'
+    log "PASS: explicit ${environment} rollback deploy submitted; verify queue and SMTP delivery before closing the change."
     ;;
 esac

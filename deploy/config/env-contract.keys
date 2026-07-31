@@ -17,7 +17,8 @@ NONPRODUCTION_RECIPIENT_ALLOWLIST|required|public|recipient@example.invalid
 QUEUE_MAX_BYTES|required|public|1073741824
 QUEUE_REJECT_THRESHOLD_PERCENT|required|public|80
 SMTP2GRAPH_STORAGE_ROOT|required|public|/data
-SMTP2GRAPH_STORAGE_HOST_PATH|required|public|/srv/smtp2graph/non-production/data
+SMTP2GRAPH_STORAGE_HOST_PATH|required|public|/srv/smtp2graph/dev/data
+SMTP2GRAPH_NODE_LABEL|required|public|smtp2graph_dev
 SMTP2GRAPH_IMAGE_DIGEST|required|public|ghcr.io/example/smtp2graph@sha256:REPLACE_WITH_TASK_5_3_DIGEST
 FAILED_PAYLOAD_RETENTION_DAYS|required|public|7
 LOG_RETENTION_DAYS|required|public|30
@@ -25,11 +26,11 @@ SWARM_STACK_NAME|required|public|smtp2graph
 SWARM_OVERLAY_NETWORK|required|public|smtp2graph_internal
 SMTP_TLS_FQDN|required|public|smtp-int.ldubgd.edu.ua
 TLS_ACME_EMAIL|required|public|operator@example.invalid
-TLS_ACME_STATE_DIR|required|public|/srv/smtp2graph/non-production/acme
-TLS_OUTPUT_DIR|required|public|/srv/smtp2graph/non-production/tls
-TLS_CERTIFICATE_FILE|required|public|/srv/smtp2graph/non-production/tls/fullchain.pem
-TLS_PRIVATE_KEY_FILE|required|public|/srv/smtp2graph/non-production/tls/privkey.pem
-TLS_SECRET_MAPPING_FILE|required|public|/srv/smtp2graph/non-production/smtp2graph.env
+TLS_ACME_STATE_DIR|required|public|/srv/smtp2graph/dev/acme
+TLS_OUTPUT_DIR|required|public|/srv/smtp2graph/dev/tls
+TLS_CERTIFICATE_FILE|required|public|/srv/smtp2graph/dev/tls/fullchain.pem
+TLS_PRIVATE_KEY_FILE|required|public|/srv/smtp2graph/dev/tls/privkey.pem
+TLS_SECRET_MAPPING_FILE|required|public|/srv/smtp2graph/dev/smtp2graph.env
 CLOUDFLARE_ZONE_ID|required|public|REPLACE_WITH_CLOUDFLARE_ZONE_ID
 CLOUDFLARE_DNS_API_TOKEN|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
 ADDITIONALRECIPIENT|required|public|recipient@example.invalid

@@ -11,9 +11,9 @@ die() {
 }
 usage() {
   cat <<'USAGE'
-Usage: scripts/init-storage.sh --storage-root ABSOLUTE_PATH [--environment non-production] [--apply]
+Usage: scripts/init-storage.sh --storage-root ABSOLUTE_PATH [--environment development|production] [--apply]
 
-The default is validation-only. --apply is limited to non-production and creates
+The default is validation-only. --apply requires a matching host SERVER_ENV and creates
 or corrects only the direct queue and failed children with owner 65532:65532 and
 mode 0700. It never recursively changes ownership or traverses message payloads.
 USAGE
@@ -22,6 +22,10 @@ USAGE
 storage_root=''
 environment=''
 apply=false
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/lib/read-deploy-env.sh
+# shellcheck disable=SC1091
+. "${project_root}/scripts/lib/read-deploy-env.sh"
 while (($#)); do
   case "$1" in
     --storage-root)
@@ -50,7 +54,8 @@ for tool in find grep install realpath stat; do command -v "$tool" >/dev/null ||
 resolved_storage_root=$(realpath -e -- "$storage_root") || die 'could not resolve --storage-root.'
 [[ "$resolved_storage_root" == "$storage_root" ]] || die '--storage-root must not contain symlink components.'
 if [[ "$apply" == true ]]; then
-  [[ "$environment" == non-production ]] || die '--apply is limited to --environment non-production.'
+  [[ "$environment" == development || "$environment" == production ]] || die '--apply requires --environment development or production.'
+  require_server_env_match "$environment" || die 'host SERVER_ENV must match --environment.'
   [[ $(id -u) -eq 0 ]] || die '--apply requires a privileged operator to set the reviewed runtime owner.'
 fi
 

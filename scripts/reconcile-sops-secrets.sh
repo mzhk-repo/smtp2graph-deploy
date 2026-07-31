@@ -9,7 +9,7 @@ die() {
 log() { printf '[sops-secrets] %s\n' "$*" >&2; }
 usage() {
   cat <<'USAGE'
-Usage: scripts/reconcile-sops-secrets.sh --env-file FILE --mapping-file FILE [--environment non-production] [--apply]
+Usage: scripts/reconcile-sops-secrets.sh --env-file FILE --mapping-file FILE [--environment development|production] [--approval-context ID] [--apply]
 
 Validates an encrypted SOPS Dotenv environment file. With --apply, plaintext is
 decrypted only under /dev/shm and materialized as deterministic versioned Docker
@@ -17,7 +17,12 @@ Secrets. The mapping file contains names only and is updated atomically.
 USAGE
 }
 
-env_file='' mapping_file='' environment='' apply=false
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/lib/read-deploy-env.sh
+# shellcheck disable=SC1091
+. "${project_root}/scripts/lib/read-deploy-env.sh"
+
+env_file='' mapping_file='' environment='' apply=false approval_context=''
 while (($#)); do
   case "$1" in
     --env-file)
@@ -35,6 +40,10 @@ while (($#)); do
     --apply)
       apply=true
       shift
+      ;;
+    --approval-context)
+      approval_context=${2:-}
+      shift 2
       ;;
     -h | --help)
       usage
@@ -87,9 +96,12 @@ extract_metadata() {
 declared_environment=$(extract_metadata DEPLOY_ENVIRONMENT)
 graph_auth_mode=$(extract_metadata GRAPH_AUTH_MODE)
 environment=${environment:-$declared_environment}
-[[ "$environment" == non-production || "$environment" == production ]] || die 'environment must be non-production or production.'
+[[ "$environment" == development || "$environment" == production ]] || die 'environment must be development or production.'
 [[ "$environment" == "$declared_environment" ]] || die '--environment does not match DEPLOY_ENVIRONMENT.'
-[[ "$apply" == false || "$environment" == non-production ]] || die '--apply is limited to non-production; production requires separately approved orchestration.'
+require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
+if [[ "$apply" == true && "$environment" == production ]]; then
+  [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production --apply requires a safe --approval-context identifier.'
+fi
 
 extract_secret GRAPH_TENANT_ID "$stage_dir/graph-tenant-id"
 extract_secret GRAPH_CLIENT_ID "$stage_dir/graph-client-id"

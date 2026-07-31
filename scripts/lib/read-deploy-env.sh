@@ -51,3 +51,50 @@ load_deploy_env_file() {
     printf -v "$key" '%s' "$value"
   done <"$file"
 }
+
+expected_server_env() {
+  case "$1" in
+    development) printf '%s\n' dev ;;
+    production) printf '%s\n' prod ;;
+    *)
+      printf 'ERROR: DEPLOY_ENVIRONMENT must be development or production.\n' >&2
+      return 64
+      ;;
+  esac
+}
+
+read_server_env() {
+  local path=${SMTP2GRAPH_SERVER_ENV_FILE:-/etc/environment} line key value server_env=''
+  [[ "$path" = /* && -f "$path" && ! -L "$path" ]] || {
+    printf 'ERROR: server environment file must be an absolute regular non-symlink file.\n' >&2
+    return 64
+  }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] || continue
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    [[ "$key" == SERVER_ENV ]] || continue
+    [[ -z "$server_env" ]] || {
+      printf 'ERROR: duplicate SERVER_ENV in server environment file.\n' >&2
+      return 64
+    }
+    server_env=$value
+  done <"$path"
+  [[ "$server_env" == dev || "$server_env" == prod ]] || {
+    printf 'ERROR: SERVER_ENV must be dev or prod.\n' >&2
+    return 64
+  }
+  printf '%s\n' "$server_env"
+}
+
+require_server_env_match() {
+  local deployment_environment=$1 expected actual
+  expected=$(expected_server_env "$deployment_environment") || return
+  actual=$(read_server_env) || return
+  [[ "$actual" == "$expected" ]] || {
+    printf 'ERROR: host SERVER_ENV=%s does not match DEPLOY_ENVIRONMENT=%s.\n' "$actual" "$deployment_environment" >&2
+    return 64
+  }
+}

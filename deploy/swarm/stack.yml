@@ -120,7 +120,7 @@ services:
           memory: 128M
       placement:
         constraints:
-          - node.labels.smtp2graph_nonproduction == true
+          - node.labels.${SMTP2GRAPH_NODE_LABEL:?SMTP2GRAPH_NODE_LABEL is required} == true
       restart_policy:
         condition: on-failure
         delay: 5s

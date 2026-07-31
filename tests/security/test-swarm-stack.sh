@@ -8,7 +8,7 @@ rg -q '^    entrypoint:$' "$stack"
 rg -q '^      - /run/configs/entrypoint.sh$' "$stack"
 rg -Fq '        source: ${SMTP2GRAPH_STORAGE_HOST_PATH:' "$stack"
 rg -q '^        target: /data$' "$stack"
-rg -q '^          - node.labels.smtp2graph_nonproduction == true$' "$stack"
+rg -Fq 'node.labels.${SMTP2GRAPH_NODE_LABEL:' "$stack"
 rg -q '^      restart_policy:$' "$stack"
 rg -q '^      update_config:$' "$stack"
 rg -q '^      rollback_config:$' "$stack"
@@ -29,7 +29,8 @@ fi
 if command -v docker >/dev/null; then
   env \
     SMTP2GRAPH_IMAGE_DIGEST='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
-    SMTP2GRAPH_STORAGE_HOST_PATH=/srv/smtp2graph/non-production/data \
+    SMTP2GRAPH_STORAGE_HOST_PATH=/srv/smtp2graph/dev/data \
+    SMTP2GRAPH_NODE_LABEL=smtp2graph_dev \
     SMTP2GRAPH_MODE=full \
     GRAPH_AUTH_MODE=certificate \
     SMTP_MAX_MESSAGE_BYTES=26214400 \
@@ -51,4 +52,4 @@ if command -v docker >/dev/null; then
     docker stack config -c "$stack" >/dev/null
 fi
 
-printf 'PASS: non-production Swarm stack has reviewed runtime, storage and security controls.\n'
+printf 'PASS: dev/prod Swarm stack has reviewed runtime, storage and security controls.\n'

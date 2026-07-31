@@ -7,17 +7,19 @@ tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 fake_bin="$tmp/bin"
 calls="$tmp/docker.calls"
-env_file="$tmp/non-production.env"
+env_file="$tmp/development.env"
+server_env_file="$tmp/server.environment"
 mkdir -p "$fake_bin"
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 printf '%s\n' \
-  'DEPLOY_ENVIRONMENT=non-production' \
+  'DEPLOY_ENVIRONMENT=development' \
   "SMTP2GRAPH_IMAGE_DIGEST=${valid_digest}" \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${tmp}/data" \
+  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \
@@ -35,6 +37,7 @@ printf '%s\n' \
   'SMTP_CREDENTIALS_SECRET_NAME=smtp2graph_smtp_users_vtest' \
   'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vtest' \
   'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$env_file"
+printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -54,7 +57,7 @@ esac
 EOF
 chmod 700 "$fake_bin/docker"
 
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --check >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 rg -q '^stack config ' "$calls"
 if rg -q '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
@@ -62,8 +65,8 @@ if rg -q '^stack deploy ' "$calls"; then
 fi
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
 test "$(rg -c '^stack deploy ' "$calls")" -eq 2
 if rg -q -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
@@ -71,35 +74,45 @@ if rg -q -- '--prune' "$calls"; then
 fi
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --status >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --status >/dev/null
 rg -q '^service inspect smtp2graph_gateway$' "$calls"
 rg -q '^service ps smtp2graph_gateway --no-trunc$' "$calls"
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
 rg -q '^stack deploy ' "$calls"
 rg -q "^digest=${rollback_digest}$" "$calls"
 
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
   printf 'ERROR: rollback unexpectedly skipped queue compatibility confirmation.\n' >&2
   exit 1
 fi
 
 production_env="$tmp/production.env"
-sed 's/^DEPLOY_ENVIRONMENT=non-production$/DEPLOY_ENVIRONMENT=production/' "$env_file" >"$production_env"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
+sed -e 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' -e 's/^SMTP2GRAPH_NODE_LABEL=smtp2graph_dev$/SMTP2GRAPH_NODE_LABEL=smtp2graph_prod/' "$env_file" >"$production_env"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
   printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
+  exit 1
+fi
+
+printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
+control_plane_sha=$(git -C "$root" rev-parse HEAD)
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
+rg -q '^stack deploy ' "$calls"
+printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
+  printf 'ERROR: production deploy unexpectedly accepted SERVER_ENV mismatch.\n' >&2
   exit 1
 fi
 
 placeholder_env="$tmp/placeholder.env"
 sed 's#^SMTP2GRAPH_IMAGE_DIGEST=.*#SMTP2GRAPH_IMAGE_DIGEST=example.invalid/smtp2graph:latest#' "$env_file" >"$placeholder_env"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --env-file "$placeholder_env" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$placeholder_env" --check >/dev/null 2>&1; then
   printf 'ERROR: mutable image tag was unexpectedly accepted.\n' >&2
   exit 1
 fi
 
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" "$script" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --check >/dev/null 2>&1; then
   printf 'ERROR: implicit local env fallback was unexpectedly accepted.\n' >&2
   exit 1
 fi

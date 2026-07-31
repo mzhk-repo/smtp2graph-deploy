@@ -9,13 +9,16 @@ fake_bin="$tmp/bin"
 state="$tmp/state"
 storage_parent="$tmp/storage-parent"
 env_file="$tmp/deploy.env"
+server_env_file="$tmp/server.environment"
 mkdir -p "$fake_bin" "$state" "$storage_parent"
 
 printf '%s\n' \
-  'DEPLOY_ENVIRONMENT=non-production' \
+  'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${storage_parent}/data" \
+  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$env_file"
+printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -53,37 +56,38 @@ chmod 0700 -- "$target"
 EOF
 chmod 700 "$fake_bin/docker" "$fake_bin/nft" "$fake_bin/id" "$fake_bin/install"
 
-if PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted missing prerequisites.\n' >&2
   exit 1
 fi
 
-PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --apply >/dev/null
-PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
 test -f "$state/network"
 test "$(cat "$state/label")" = true
 rg -q -- '--check --file' "$state/nft.calls"
 rg -q -- '--file' "$state/nft.calls"
 
 sed -i 's/"encrypted":""/"encrypted":"false"/' "$fake_bin/docker"
-if PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted an unencrypted overlay.\n' >&2
   exit 1
 fi
 
 printf '%s\n' 'SMTP_ALLOWED_SOURCE_CIDRS=8.8.8.8/32' >>"$env_file"
-if PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted a public CIDR.\n' >&2
   exit 1
 fi
 
 unsafe_env="$tmp/unsafe.env"
 printf '%s\n' \
-  'DEPLOY_ENVIRONMENT=non-production' \
+  'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   'SMTP2GRAPH_STORAGE_HOST_PATH=/' \
+  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$unsafe_env"
-if PATH="$fake_bin:$PATH" FAKE_STATE="$state" "$script" --env-file "$unsafe_env" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$unsafe_env" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted the storage root.\n' >&2
   exit 1
 fi

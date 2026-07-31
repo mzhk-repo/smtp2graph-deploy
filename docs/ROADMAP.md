@@ -710,13 +710,13 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 ### Task 4.5 — Gate C review
 
 - **Priority:** Must
-- **Goal:** підтвердити production-compatible authorization і credential recovery.
+- **Goal:** підтвердити production-compatible authorization і mailbox scope.
 - **Depends on:** Tasks 4.1–4.4.
-- **Definition of Ready:** positive/negative evidence, expiry і revoke procedure готові.
+- **Definition of Ready:** positive/negative evidence та effective mailbox scope готові.
 - **Implementation Steps:** review M365 scope, secret surfaces, TLS/client boundary; зафіксувати sign-off.
 - **Files / Directories:** `docs/AI_CONTEXT.md`, Gate evidence, ADR.
 - **Artifacts:** Gate C decision.
-- **Acceptance Criteria:** allowed send/denied out-of-scope доказані; немає tenant-wide effective scope; rotation/revocation rehearsed.
+- **Acceptance Criteria:** allowed send/denied out-of-scope доказані; немає tenant-wide effective scope; фактичний механізм authorization задокументовано як RBAC for Applications.
 - **Validation Commands:** manual evidence review та повторна read-only permission verification.
 - **Risks:** stale cached authorization.
 - **Rollback Notes:** revoke credential і role assignment; не переносити test identity у production.
@@ -726,7 +726,6 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - [ ] Gate C passed.
 - [ ] TLS/network/auth negative tests зелені.
 - [ ] Secret leakage і container policy scans зелені.
-- [ ] Rotation/revocation rehearsal завершено.
 
 ## Phase 5 — Deployment and GitSecOps
 

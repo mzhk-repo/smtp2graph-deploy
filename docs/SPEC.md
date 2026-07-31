@@ -976,7 +976,7 @@ ADR не створюються для легко зворотних парам�
 - application-only authorization;
 - proof allowed mailbox success;
 - proof out-of-scope mailbox denial;
-- credential expiry та revocation procedure.
+- effective mailbox scope підтверджено через RBAC for Applications.
 
 ## Gate D: Production readiness
 

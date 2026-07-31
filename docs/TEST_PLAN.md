@@ -9,6 +9,16 @@
 | TB-NET-002 | Live overlay is encrypted and nftables policy loaded. | `SWARM_OVERLAY_NETWORK=<name> ./scripts/check-network-policy.sh` | Requires authorised Docker API on non-production deployment host. |
 | TB-TLS-002 | Gateway advertises STARTTLS; SMTP AUTH before upgrade is rejected and authenticated SMTP after trusted TLS succeeds. | `openssl s_client -starttls smtp -connect <FQDN>:2525 -verify_hostname <FQDN>` plus non-production SMTP client test. | Requires deployed gateway, nftables policy and encrypted overlay. |
 
+## Task 4.5 — Gate C Microsoft 365 authorization review
+
+| ID | Контроль | Evidence | Статус / межі |
+|---|---|---|---|
+| TB-GATE-C-001 | Dedicated sender mailbox, App Registration naming and ownership are approved. | Redacted Microsoft 365 owner approval and App Registration record. | Виконано для non-production Gate C review; secrets і private credentials не є evidence-артефактами. |
+| TB-GATE-C-002 | Application-only authorization sends from the approved mailbox and is denied for an out-of-scope mailbox. | Redacted allowed/denied mailbox results plus read-only verification of the current configuration. | Виконано; effective scope не є tenant-wide. |
+| TB-GATE-C-003 | The effective Microsoft 365 restriction mechanism is identified and documented. | Redacted policy review and read-only permission verification. | Виконано; фактичний механізм — Exchange Online RBAC for Applications. |
+
+Gate C result: **passed** for the reviewed non-production authorization boundary. Credential expiry, rotation and revocation procedure are outside the current Gate C acceptance scope.
+
 ## Task 3.2 — SMTP policy, rate limits і storage lifecycle
 
 ### Policy matrix

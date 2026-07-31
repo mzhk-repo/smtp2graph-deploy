@@ -106,3 +106,17 @@
     Verification: Dotenv SOPS reconciliation, hardening/storage security tests, Compose static render, ShellCheck, shell syntax, YAML, `make validate`, `git diff --check` and Gitleaks passed. No Docker Secret, storage ownership, firewall, stack or production state was changed.
     Risks: The hardening manifest is static evidence until Task 5.1 deploys it on an approved non-production host. Existing non-empty queue data with incompatible ownership requires a separate migration/recovery review.
     Rollback: Restore the prior reviewed manifest before deployment. After deployment, restore a prior manifest only after queue compatibility assessment; the initializer has no recursive or automatic ownership rollback.
+
+2026-07-31 — Task 4.4: runtime acceptance evidence completed
+    Context: The prior Task 4.4 control-plane checks were green, but the isolated Docker runtime probe had been pending Docker daemon availability.
+    Change: Recorded successful `./tests/acceptance/runtime/run.sh` evidence for secret rendering, non-root/read-only startup, listener readiness, graceful stop and restart.
+    Verification: The acceptance probe passed. No production credentials, Docker Secret reconciliation, stack deployment or persistent storage mutation was performed.
+    Risks: This remains isolated runtime evidence; approved non-production Swarm deployment, live storage initialization and Trivy config scanning are separate deployment/tooling boundaries.
+    Rollback: Documentation-only correction; retain the runtime evidence and revert only the status text if the recorded probe result is invalidated.
+
+2026-07-31 — Task 4.5: Gate C Microsoft 365 authorization review
+    Context: Functional Gate B evidence and the non-production security baseline were complete, but Gate C ownership and effective mailbox-scope evidence had not been recorded in the control-plane documentation.
+    Change: Recorded formal Gate B/fork owner approval, redacted App Registration ownership and effective mailbox-scope evidence, read-only allowed/denied mailbox verification, and RBAC for Applications as the actual Microsoft 365 restriction mechanism. Updated the Gate C acceptance scope accordingly.
+    Verification: SPEC, roadmap, AI context and test plan now agree on the completed non-production Gate C result; no secret or production state was changed.
+    Risks: Exact GHCR digest and Task 5.3 supply-chain evidence remain required before staging or production promotion. Live Swarm deployment and production authorization are not implied by this review.
+    Rollback: Revert the reviewed documentation and Gate C status record; do not change Microsoft 365 permissions or deployment state as part of rollback.

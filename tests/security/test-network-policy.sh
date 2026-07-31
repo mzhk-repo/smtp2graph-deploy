@@ -32,4 +32,10 @@ if "$renderer" --env-file "$env_file" "$rendered" >/dev/null 2>&1; then
   printf 'ERROR: public CIDR unexpectedly rendered.\n' >&2
   exit 1
 fi
+printf '%s\n' \
+  'DEPLOY_ENVIRONMENT=production' \
+  'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$env_file"
+"$renderer" --env-file "$env_file" "$rendered"
+rg -Fq 'table inet smtp2graph_prod {' "$rendered"
+rg -q 'smtp2graph_prod_smtp_clients' "$rendered"
 printf 'PASS: development Swarm and nftables policy are deny-by-default.\n'

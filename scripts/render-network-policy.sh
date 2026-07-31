@@ -9,7 +9,7 @@ die() {
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
 . "${root}/scripts/lib/read-deploy-env.sh"
-template=${SMTP_NFT_TEMPLATE:-"${root}/deploy/network/smtp2graph.nft"}
+template=${SMTP_NFT_TEMPLATE:-}
 env_file=''
 if [[ "${1:-}" == --env-file ]]; then
   env_file=${2:-}
@@ -19,6 +19,13 @@ load_deploy_env_file "$root" "$env_file" DEPLOY_ENVIRONMENT SMTP_ALLOWED_SOURCE_
 output=${1:-}
 cidrs=${SMTP_ALLOWED_SOURCE_CIDRS:-}
 [[ -n "$output" && "$output" = /* && -n "$cidrs" ]] || die 'absolute output path and SMTP_ALLOWED_SOURCE_CIDRS are required.'
+if [[ -z "$template" ]]; then
+  case "${DEPLOY_ENVIRONMENT:-development}" in
+    development) template="${root}/deploy/network/smtp2graph.nft" ;;
+    production) template="${root}/deploy/network/smtp2graph-prod.nft" ;;
+    *) die 'DEPLOY_ENVIRONMENT must be development or production.' ;;
+  esac
+fi
 [[ -f "$template" && ! -L "$template" ]] || die 'nftables template is unavailable.'
 IFS=',' read -r -a values <<<"$cidrs"
 rendered=()

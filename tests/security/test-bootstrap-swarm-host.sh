@@ -92,4 +92,14 @@ if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$serve
   exit 1
 fi
 
+production_env="$tmp/production.env"
+sed -i 's/"encrypted":"false"/"encrypted":""/' "$fake_bin/docker"
+sed -e '/^SMTP_ALLOWED_SOURCE_CIDRS=8\.8\.8\.8\/32$/d' -e 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' -e 's/^SMTP2GRAPH_NODE_LABEL=smtp2graph_dev$/SMTP2GRAPH_NODE_LABEL=smtp2graph_prod/' "$env_file" >"$production_env"
+printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
+if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --apply >/dev/null 2>&1; then
+  printf 'ERROR: production bootstrap unexpectedly accepted missing approval context.\n' >&2
+  exit 1
+fi
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --apply --approval-context production-bootstrap-20260801 >/dev/null
+
 printf 'PASS: Swarm bootstrap checks and applies only reviewed development prerequisites.\n'

@@ -754,6 +754,24 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Risks:** Swarm stack ignores unsupported Compose fields.
 - **Rollback Notes:** validate rendered stack; keep prior rendered manifest hash and digest.
 
+### Task 5.1b — Dev/prod host contract and production IaC boundary
+
+- **Priority:** Must
+- **Goal:** ізолювати production host boundary від development та зробити всі host mutations явними, перевірюваними й fail-closed.
+- **Depends on:** Task 5.1; Gate C.
+- **Definition of Ready:** `/etc/environment` містить `SERVER_ENV=prod`; encrypted production contract містить `DEPLOY_ENVIRONMENT=production`, `smtp2graph_prod`, `/srv/smtp2graph/prod/data`, isolated overlay і production Secret mapping.
+- **Implementation Steps:** normalize legacy development state through explicit migration; require matching `SERVER_ENV=dev|prod` for every deploy-adjacent action; render separate production nftables table and encrypted overlay; require an approval context for production bootstrap, Secret reconciliation and deploy.
+- **Files / Directories:** `env.dev.enc`, `env.prod.enc`, `deploy/network/smtp2graph-prod.nft`, `scripts/migrate-dev-host.sh`, `scripts/bootstrap-swarm-host.sh`, `scripts/deploy-orchestrator-swarm.sh`.
+- **Acceptance Criteria:** dev/prod label, storage and overlay values cannot be interchanged; production apply fails without `SERVER_ENV=prod` and approval context; legacy migration refuses running gateway, symlinks and incompatible state; production firewall uses a distinct nftables table.
+- **Validation Commands:**
+  ```bash
+  ./tests/security/test-migrate-dev-host.sh
+  ./tests/security/test-network-policy.sh
+  ./tests/security/test-bootstrap-swarm-host.sh
+  ```
+- **Risks:** no automation can prove a live production boundary without authorised host access; production apply remains outside local validation.
+- **Rollback Notes:** do not remove a legacy network/storage root or downgrade a deployed image without explicit queue compatibility assessment.
+
 ### Task 5.2 — Idempotent orchestration scripts
 
 - **Priority:** Must

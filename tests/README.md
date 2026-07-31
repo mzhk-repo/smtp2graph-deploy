@@ -22,3 +22,9 @@ Task 5.1 static Swarm/IaC checks не вимагають доступу до Doc
 ./tests/security/test-swarm-stack.sh
 ./tests/security/test-bootstrap-swarm-host.sh
 ```
+
+Shell regression suite, зокрема Task 5.2 fake-Docker orchestration checks:
+
+```bash
+./tests/shell/run.sh
+```

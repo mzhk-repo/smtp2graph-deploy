@@ -1,5 +1,13 @@
 # План тестування
 
+## Task 5.2 — Idempotent orchestration scripts
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-ORCH-001 | Strict env parsing accepts only required deployment inputs; local `.env`, mutable image tags and unsafe values are refused. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; no Docker API або stack state. |
+| TB-ORCH-002 | Repeated non-production deploy submits the same canonical stack without `--prune`; status is read-only. | `./tests/shell/test-deploy-orchestrator.sh` | Fake Docker boundary; actual Swarm convergence належить Task 5.4. |
+| TB-ORCH-003 | Production deploy is refused; rollback requires explicit immutable digest, `--apply` і queue-compatibility confirmation. | `./tests/shell/test-deploy-orchestrator.sh` | Production orchestration та live rollback не входять у цю задачу. |
+
 ## Task 5.1 — Single-node Swarm stack і storage/network IaC
 
 | ID | Контроль | Команда / evidence | Межа |

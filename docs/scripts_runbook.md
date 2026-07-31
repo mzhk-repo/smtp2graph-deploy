@@ -1,5 +1,15 @@
 # Script runbook
 
+## `deploy-orchestrator-swarm.sh`
+
+- Category: 1b (non-production Swarm orchestration).
+- Inputs: explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`) with only the allowlisted public stack inputs and versioned Docker Secret names. The script never reads a local `.env`, never sources an environment file and does not receive secret values.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. `--deploy --apply` submits the canonical stack only to a non-production Swarm manager. `--status` reads the gateway service and its tasks. `--rollback --image-digest <immutable-digest> --queue-compatibility-confirmed --apply` submits the same canonical stack with one explicit prior image digest.
+- Safety: only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. Deploy and rollback refuse `development` and `production`, require `--apply`, do not use `--prune` and never delete stacks, services, networks, configs, Secrets or queue data. Production orchestration remains a separately approved implementation boundary.
+- Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
+- Check: `./tests/shell/test-deploy-orchestrator.sh`, `shellcheck scripts/deploy-orchestrator-swarm.sh`, `bash -n scripts/deploy-orchestrator-swarm.sh`.
+- Rollback: first assess queue compatibility, then select an explicit previously approved digest. Verify service state, live network policy and synthetic SMTP delivery before closing the rollback change.
+
 ## `reconcile-sops-secrets.sh`
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).

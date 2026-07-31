@@ -134,3 +134,10 @@
     Verification: Docker network inspection reports the encryption option; node label, storage modes and nftables table were read back. A repeat bootstrap `--check` passed. Trivy 0.72.0 completed without findings but reported no recognized scan target for the current Swarm manifest.
     Risks: The gateway service is not deployed and `check-network-policy.sh` cannot yet verify service Secret mounts or listener. Task 5.3 exact image digest and deployment orchestration remain required; Trivy coverage needs a compatible policy/format adapter.
     Rollback: Do not remove the encrypted network while it has attached services. Any future firewall/storage/network rollback requires an explicit approved target and queue assessment.
+
+2026-07-31 — Task 5.2: fail-closed non-production Swarm orchestration
+    Context: The non-production stack and host prerequisites existed, but no reviewed entry point strictly validated deployment inputs or constrained declarative deploy, status and rollback actions.
+    Change: Added `deploy-orchestrator-swarm.sh` with strict allowlisted env parsing, immutable digest enforcement, explicit non-production `--apply` deploy, read-only status and rollback requiring a named prior digest plus queue-compatibility confirmation. Added fake-Docker regression coverage and documented its contract.
+    Verification: Shell syntax and fake-Docker tests cover stack render, repeated deploy submission without `--prune`, status, guarded rollback, production refusal, mutable-tag refusal and no local `.env` fallback. No Docker API, stack, Secret, queue, firewall or production state was changed.
+    Risks: Fake-Docker evidence does not prove live Swarm convergence, upgrade/rollback queue behavior, deployed network policy or SMTP delivery; these require Task 5.3 digest and Task 5.4 staging rehearsal.
+    Rollback: Restore the prior reviewed control-plane script only after confirming no automation run depends on this interface. A deployed rollback always requires an explicit prior digest and queue compatibility assessment; the script deletes no state.

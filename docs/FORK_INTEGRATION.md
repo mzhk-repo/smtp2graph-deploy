@@ -46,6 +46,13 @@ owner direction. Every other Action and container image reference is pinned to
 an immutable commit SHA or digest. `secrets: inherit` remains limited to the
 trusted same-organization shared workflow.
 
+The build caller contains no local Action or container `uses:`. Shared CI/CD is
+the source of truth for checkout, dependency review, Gitleaks, Trivy, Actionlint,
+GHCR and release-evidence Actions. The build repository supplies only the
+reviewed `scripts/ci-validate.sh` command for its source-specific npm build and
+receive tests. Superseded upstream workflows are retained as non-executable
+`.github/quarantine/*.disabled` assets.
+
 ## Поточна поведінка build і deploy
 
 Shared workflow runs source checks, filesystem Trivy, Gitleaks, Hadolint and

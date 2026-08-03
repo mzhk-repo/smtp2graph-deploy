@@ -155,3 +155,10 @@
     Verification: Workflow policy, YAML, shell and Gitleaks checks cover build-only routing, immutable references, manual production inputs and the adapter CLI contract. No GHCR push, GitHub Release, host mutation, stack deployment or production action was performed.
     Risks: `shared-ci-cd.yml@main` remains the sole owner-approved mutable reference. Production evidence review is manual within the protected environment; cross-repository read credentials are intentionally not used.
     Rollback: Disable the control-plane deploy workflow while retaining validation and release evidence. Revert the adapter and shared context changes together; never downgrade an image without queue compatibility assessment.
+
+2026-08-03 — Task 5.3: centralize build-plane CI uses in shared workflow
+    Context: The secure build caller still duplicated checkout, Node, Gitleaks and Actionlint implementation while legacy upstream workflows retained parallel mutable CI paths.
+    Change: Build PR/dev/tag jobs are now thin callers of shared CI/CD; the build repository contributes only a reviewed source-validation script. Shared CI/CD owns the pinned Action/image toolchain and Actionlint. Superseded upstream workflows were moved to `.github/quarantine/*.disabled`.
+    Verification: Build caller policy, shared workflow contract, YAML, shell, Actionlint and Zizmor checks passed. No GitHub workflow, registry push, release, host mutation or deployment was run.
+    Risks: `shared-ci-cd.yml@main` remains the sole approved mutable reference; the shared checkout remote must be aligned with `mzhk-repo/shared-workflows` before publishing.
+    Rollback: Restore a named reviewed legacy workflow only after verifying it has no unsafe publish/deploy path. Revert shared input handling and the thin caller together if source validation cannot be run through the shared workflow.

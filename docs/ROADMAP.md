@@ -797,10 +797,10 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** validate every change, build/publish digest-pinned fork releases with required supply-chain evidence й deploy only approved immutable releases.
 - **Depends on:** Tasks 5.1–5.2.
 - **Definition of Ready:** branch/environment protection і trusted runner model погоджені.
-- **Implementation Steps:** replace the quarantined gateway caller template only after its activation blockers are closed; least permissions; pin actions by commit; lint/tests/security scans; build and push the fork image; resolve and verify its exact digest; generate Trivy image scan with Formal Exception Record, Syft CycloneDX SBOM and OCI source/release/upstream-base labels for that digest; retain hashes and immutable artifact links; staging deploy; protected production approval; concurrency lock; log redaction.
+- **Implementation Steps:** build-plane PR/dev/tag paths validate, build and push only; tag path generates exact-digest Trivy/SBOM/checksum Release evidence without overwrite. Control-plane protected manual dispatch accepts only `IMAGE@sha256`, production tag and manual evidence attestation, then invokes the reviewed Swarm adapter. Pin Actions/images except the owner-approved `shared-ci-cd.yml@main` exception; retain hashes and immutable artifact links.
 - **Files / Directories:** build repository `.github/workflows/main.yml`, `.github/workflows/security.yml`, `.github/quarantine/main.yml.disabled`, `CODEOWNERS`, CI config; control-plane digest/evidence metadata.
 - **Artifacts:** pipeline threat notes; required checks list; exact fork image digest; Trivy scan/exception record; Syft CycloneDX SBOM; OCI metadata record; immutable artifact hashes/links.
-- **Acceptance Criteria:** PR не deploy-ить production; markdown-only changes все одно проходять релевантний docs/security validation; secrets недоступні untrusted PR; build output resolves to an exact digest rather than a mutable tag; Trivy, Syft and OCI records are generated for that digest and retained immutably; production consumes only an approved tag/digest pair after protected-environment approval.
+- **Acceptance Criteria:** build plane never deploys; PR has no package/deploy permissions or secrets; build output resolves to an exact digest rather than a mutable tag; tag release retains Trivy/Syft/checksum evidence without overwrite; control plane deploys only an explicit digest and production requires protected-environment approval plus manual evidence attestation.
 - **Validation Commands:**
   ```bash
   actionlint

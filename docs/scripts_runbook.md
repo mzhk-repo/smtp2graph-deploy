@@ -1,5 +1,13 @@
 # Script runbook
 
+## `ci-deploy-swarm.sh`
+
+- Category: 1b (CI-to-Swarm deployment adapter).
+- Inputs: the shared workflow provides an absolute `ORCHESTRATOR_ENV_FILE`, `ENVIRONMENT_NAME`, immutable image digest in the env contract, and production-only release tag, approval context and control-plane SHA.
+- Side effects: invokes only the reviewed `deploy-orchestrator-swarm.sh --env-file ... --deploy --apply` contract. It never builds, pushes, resolves tags, changes Secrets or bypasses host/environment guards.
+- Safety: development rejects production context. Production rejects missing or malformed tag, approval context or SHA before invoking the orchestrator.
+- Check: `bash -n scripts/ci-deploy-swarm.sh`, `./tests/shell/test-ci-deploy-swarm.sh`.
+
 ## `deploy-orchestrator-swarm.sh`
 
 - Category: 1b (dev/prod Swarm orchestration).

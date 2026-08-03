@@ -30,63 +30,35 @@ conflict resolution; деталі й recovery описані у `docs/UPSTREAM_P
 
 ## Shared CI/CD: фактичний caller contract
 
-Неактивний caller template зберігається у build repository за шляхом
-`.github/quarantine/main.yml.disabled`. Він не є GitHub Actions workflow, доки
-окремий reviewed change не перенесе його до `.github/workflows/` після закриття
-activation blockers. Koha-specific template більше не належить control-plane
-repository.
+Build repository викликає reusable dispatcher
+`mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main` лише для
+валідації, build і GHCR push. Він не передає `deploy: true` та не отримує
+deployment secrets. Caller routes are fixed as follows:
 
-Build repository викликає reusable workflow `shared-workflows/.github/workflows/shared-ci-cd-swarm.yml`. Сам shared workflow має лише trigger `workflow_call`; він не визначає гілки. Caller workflow має реалізовувати й зберігати такий mapping:
-
-| Caller push | `environment_name` | `deploy` | Очікуваний результат |
+| Caller event | `environment_name` | `deploy` | Expected result |
 |---|---|---:|---|
-| `dev` | `development` | `true` | GHCR build/push і автоматичний deploy у development |
-| `main` | `production` | `true` | GHCR build/push і автоматичний deploy у production |
+| PR to `dev` | n/a | n/a | validation only, no package/deploy permissions or secrets |
+| push to `dev` | `development` | `false` | build and push development image only |
+| tag `vX.Y.Z` | `production` | `false` | build/push, exact-digest Trivy, CycloneDX, checksums and non-overwritable GitHub Release |
 
-Для обох гілок caller передає `build_and_push_docker: true`, `docker_image_name: smtp2graph-build`, шлях до orchestration script та мінімально необхідні shared secrets. `push_docker_image` не потрібен за `deploy: true`, оскільки shared workflow у цьому режимі вже пушить image.
-
-Приклад структури caller (імена secret mappings належать конкретному репозиторію):
-
-```yaml
-on:
-  push:
-    branches: [main, dev]
-
-jobs:
-  deploy-development:
-    if: github.ref_name == 'dev'
-    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd-swarm.yml@<immutable-commit>
-    with:
-      environment_name: development
-      deploy: true
-      build_and_push_docker: true
-      docker_image_name: smtp2graph-build
-    secrets: inherit
-
-  deploy-production:
-    if: github.ref_name == 'main'
-    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd-swarm.yml@<immutable-commit>
-    with:
-      environment_name: production
-      deploy: true
-      build_and_push_docker: true
-      docker_image_name: smtp2graph-build
-    secrets: inherit
-```
-
-`secrets: inherit` у прикладі допустимий лише для trusted same-organization reusable workflow. Для менш широкого trust boundary caller має явно передавати тільки secrets, перелічені у workflow contract. `main` та production environment мають бути protected; автоматичний production deploy є поточною policy, а не Gate B approval.
-
-Поточний quarantined template використовує mutable `@main` на явний запит
-repository owner. Це тимчасовий security exception: до activation reference
-має бути замінений на immutable commit SHA після review shared workflow.
+`shared-ci-cd.yml@main` is the sole reviewed mutable-reference exception by
+owner direction. Every other Action and container image reference is pinned to
+an immutable commit SHA or digest. `secrets: inherit` remains limited to the
+trusted same-organization shared workflow.
 
 ## Поточна поведінка build і deploy
 
-Shared workflow спершу виконує CI checks, file-system Trivy scan, Gitleaks, Hadolint і compose validation. Якщо `build_and_push_docker: true`, він будує `ghcr.io/${owner}/smtp2graph-build`; metadata-action створює branch tag (`main` або `dev`) і SHA tag. За push у `main` або `dev` image пушиться, бо `deploy: true`.
+Shared workflow runs source checks, filesystem Trivy, Gitleaks, Hadolint and
+Compose validation. A build caller may set `build_and_push_docker: true` and
+`push_docker_image: true`; its image digest remains an optional shared input,
+not a deployment instruction.
 
-Після CI job `cd-deploy` отримує deployment credentials: SSH, Tailscale OAuth і SOPS age private key. Він decrypts environment file, підключається до remote host, checkout-ить exact caller commit (`DEPLOY_REF=${github.sha}`), потім виконує local orchestration script або Swarm compose fallback. Отже shared CI/CD фактично виконує автоматичний deploy у відповідне середовище; він не є build-only workflow.
-
-Remote deployment зобов'язаний використовувати immutable image digest у manifest/config, а не branch tags `main` чи `dev`. Поточний shared workflow не передає build digest як reusable-workflow output і не може сам гарантувати це правило: orchestration script має отримати або resolve/verify digest fail-closed до `docker stack deploy`.
+Deployment belongs only to the control plane `workflow_dispatch` workflow. It
+accepts an explicit `IMAGE@sha256:...`, invokes the shared Swarm path with
+`build_and_push_docker: false`, and runs `scripts/ci-deploy-swarm.sh` on the
+remote host. The wrapper maps only the reviewed context to
+`deploy-orchestrator-swarm.sh --env-file ... --deploy --apply`; production
+also requires release tag, approval context and exact control-plane SHA.
 
 ## Release supply-chain evidence — Task 5.3
 
@@ -96,7 +68,21 @@ Task 5.3 є єдиним власником GHCR build/push і трьох supply
 2. CycloneDX SBOM, згенерований Syft.
 3. OCI labels для fork release tag, source revision і upstream base commit.
 
-Поточний shared workflow надає GHCR build/push, але ще не створює ці три артефакти для exact digest. Digest залишається обов'язковим ідентифікатором image, бо саме він є target Trivy scan, SBOM і OCI metadata record. Functional Gate B не виконує build/push і не генерує release artifacts; Task 5.3 передає їх у control plane та вимагає перевірки застосовності перед staging/production promotion. Provenance attestation, signature verification та окремий reusable-workflow output не входять до погодженого scope. Для GHCR використовується scoped `GITHUB_TOKEN`; long-lived registry token не потрібний.
+The tag path generates these artifacts for the exact digest and refuses an
+existing GitHub Release tag. Before production deploy, the protected
+environment approver manually verifies the Release URL plus Trivy/SBOM hashes
+entered in the control-plane dispatch. No cross-repository read token or App
+credential is used. Functional Gate B does not perform build/push.
+
+## Historical Gitleaks classification
+
+Five historical upstream records are limited to API-key-like example values in
+`config.example.yml` and `test/readme.md`, plus the old self-signed
+`test/localhost.key`. The current source uses explicit non-secret markers and
+generates the localhost TLS pair at receive-test runtime; no Gitleaks baseline,
+allowlist or exception is added. A full history scan remains expected to report
+the immutable upstream commits until a separately approved history-rewrite
+decision exists.
 
 ## Передача у control plane
 

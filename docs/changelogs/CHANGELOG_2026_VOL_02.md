@@ -142,9 +142,16 @@
     Risks: Fake-Docker evidence does not prove live Swarm convergence, upgrade/rollback queue behavior, deployed network policy or SMTP delivery; these require Task 5.3 digest and Task 5.4 staging rehearsal.
     Rollback: Restore the prior reviewed control-plane script only after confirming no automation run depends on this interface. A deployed rollback always requires an explicit prior digest and queue compatibility assessment; the script deletes no state.
 
-2026-08-01 — Task 5.3: dev/prod host contract and secure release pipeline
+2026-07-31 — Task 5.3: dev/prod host contract and secure release pipeline
     Context: Deployment automation used a machine-readable `non-production` boundary and lacked a release caller that passed through digest-scoped supply-chain evidence.
     Change: Normalized the encrypted and host contracts to `SERVER_ENV=dev|prod` and `DEPLOY_ENVIRONMENT=development|production`; added guarded dev migration and production IaC/orchestration controls. Added build-plane release manifest `v1.1.6`, PR/dev/tag workflow split, CODEOWNERS, and shared Trivy, CycloneDX, OCI and checksum-backed release evidence before tag-based deployment.
     Verification: Local SOPS decrypt checks, shell syntax, fake-Docker orchestration/bootstrap tests, static stack render and build-plane `npm ci`, build and 31 receive tests passed. YAML parse and diff checks passed for changed workflows. No registry push, GitHub Release, host mutation, stack deployment or production action was performed.
     Risks: The release caller uses `mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main` by explicit owner direction; this mutable reference remains a reviewed security exception. Historical Gitleaks findings in legacy fixtures remain separate remediation work.
     Rollback: Revert the reviewed contracts and workflow changes together; do not execute host migration rollback or image downgrade without explicit queue compatibility assessment.
+
+2026-07-31 — Task 5.3: separate build publication from protected deployment
+    Context: The build-plane caller could request deployment, while the shared Swarm path did not safely connect an immutable image digest to the control-plane orchestrator CLI.
+    Change: Build-plane PR/dev/tag paths now validate and publish only; tag releases retain exact-digest Trivy, CycloneDX and checksum evidence without overwrite. Added a protected control-plane manual digest dispatcher and narrow Swarm CLI adapter. Shared dispatch now forwards reviewed production context and replaces, rather than duplicates, an optional supplied image digest.
+    Verification: Workflow policy, YAML, shell and Gitleaks checks cover build-only routing, immutable references, manual production inputs and the adapter CLI contract. No GHCR push, GitHub Release, host mutation, stack deployment or production action was performed.
+    Risks: `shared-ci-cd.yml@main` remains the sole owner-approved mutable reference. Production evidence review is manual within the protected environment; cross-repository read credentials are intentionally not used.
+    Rollback: Disable the control-plane deploy workflow while retaining validation and release evidence. Revert the adapter and shared context changes together; never downgrade an image without queue compatibility assessment.

@@ -3,6 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 tests=(
+  tests/shell/test-ci-deploy-swarm.sh
   tests/shell/test-deploy-orchestrator.sh
   tests/shell/test-entrypoint.sh
   tests/shell/test-purge-failed.sh

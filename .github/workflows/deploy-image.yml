@@ -1,0 +1,106 @@
+name: Deploy verified SMTP2Graph image
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [development, production]
+      image_digest:
+        description: 'Immutable IMAGE@sha256:DIGEST reference'
+        required: true
+        type: string
+      release_tag:
+        description: 'Required for production: vX.Y.Z build-plane release tag'
+        required: false
+        type: string
+      release_evidence_url:
+        description: 'Required for production: reviewed GitHub Release URL'
+        required: false
+        type: string
+      trivy_sha256:
+        description: 'Required for production: manually verified Trivy JSON SHA-256'
+        required: false
+        type: string
+      sbom_sha256:
+        description: 'Required for production: manually verified CycloneDX SBOM SHA-256'
+        required: false
+        type: string
+      release_evidence_verified:
+        description: 'Production approver manually verified release assets and hashes'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-request:
+    name: Validate immutable deployment request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_EVIDENCE_URL: ${{ inputs.release_evidence_url }}
+          TRIVY_SHA256: ${{ inputs.trivy_sha256 }}
+          SBOM_SHA256: ${{ inputs.sbom_sha256 }}
+          EVIDENCE_VERIFIED: ${{ inputs.release_evidence_verified }}
+        run: |
+          set -euo pipefail
+          [[ "${ENVIRONMENT_NAME}" == development || "${ENVIRONMENT_NAME}" == production ]]
+          [[ "${IMAGE_DIGEST}" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]
+          if [[ "${ENVIRONMENT_NAME}" == production ]]; then
+            [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            [[ "${RELEASE_EVIDENCE_URL}" =~ ^https://github\.com/mzhk-repo/smtp2graph-gateway/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            [[ "${TRIVY_SHA256}" =~ ^[a-f0-9]{64}$ ]]
+            [[ "${SBOM_SHA256}" =~ ^[a-f0-9]{64}$ ]]
+            [[ "${EVIDENCE_VERIFIED}" == true ]]
+          fi
+      - name: Record non-secret production evidence attestation
+        if: inputs.environment_name == 'production'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_EVIDENCE_URL: ${{ inputs.release_evidence_url }}
+          TRIVY_SHA256: ${{ inputs.trivy_sha256 }}
+          SBOM_SHA256: ${{ inputs.sbom_sha256 }}
+        run: |
+          {
+            echo '## Production release-evidence attestation'
+            echo "- Tag: ${RELEASE_TAG}"
+            echo "- Evidence: ${RELEASE_EVIDENCE_URL}"
+            echo "- Trivy SHA-256: ${TRIVY_SHA256}"
+            echo "- SBOM SHA-256: ${SBOM_SHA256}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy immutable image
+    needs: validate-request
+    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main # reviewed mutable exception; pin after shared-workflow release policy is available
+    with:
+      environment_name: ${{ inputs.environment_name }}
+      deploy: true
+      use_ansible: true
+      build_and_push_docker: false
+      docker_image_name: smtp2graph-build
+      orchestration_script_path: scripts/ci-deploy-swarm.sh
+      resolved_image_digest: ${{ inputs.image_digest }}
+      deployment_release_tag: ${{ inputs.environment_name == 'production' && inputs.release_tag || '' }}
+      control_plane_sha: ${{ github.sha }}
+      declared_deploy_ref: ${{ github.sha }}
+      approval_context: gha-${{ github.run_id }}
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+      SSH_HOST_KEY_PUB: ${{ secrets.SSH_HOST_KEY_PUB }}
+      DEPLOY_PROJECT_DIR: ${{ secrets.DEPLOY_PROJECT_DIR }}
+      SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}

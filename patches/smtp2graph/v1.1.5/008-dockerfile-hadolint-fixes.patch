@@ -1,10 +1,8 @@
 diff --git a/Dockerfile b/Dockerfile
-index 45bf136..7e6f663 100644
+index 45bf136..ff9e9a4 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -11,8 +11,7 @@ COPY docker/startup.sh /bin/
- COPY docker/test.sh /bin/
- 
+@@ -11,8 +11,7 @@ COPY docker/test.sh /bin/
  # Set execute permissions
 -RUN chmod +x /bin/startup.sh
 -RUN chmod +x /bin/test.sh

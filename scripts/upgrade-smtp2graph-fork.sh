@@ -100,7 +100,11 @@ cleanup() {
   if ((status == 0)); then
     if [[ -n "${target_branch:-}" && -d "${worktree:-}" ]]; then
       target_commit=$(git -C "$worktree" rev-parse HEAD)
-      git -C "$build_repo" branch -f "$target_branch" "$target_commit" >/dev/null
+      if [[ "$(git -C "$build_repo" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$target_branch" ]]; then
+        git -C "$build_repo" reset --hard "$target_commit" >/dev/null
+      else
+        git -C "$build_repo" branch -f "$target_branch" "$target_commit" >/dev/null
+      fi
       printf 'TARGET_BRANCH: updated %s to %s in build repository\n' "$target_branch" "$target_commit"
     fi
     git -C "$build_repo" worktree remove --force "$worktree"

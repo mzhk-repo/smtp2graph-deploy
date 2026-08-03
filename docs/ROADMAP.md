@@ -815,18 +815,18 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Priority:** Must
 - **Goal:** довести deployment lifecycle без production traffic.
 - **Depends on:** Tasks 5.1–5.3.
-- **Definition of Ready:** staging host backup і test queue; approved current/candidate digests.
-- **Implementation Steps:** fresh deploy; no-op redeploy; versioned secret rotation; upgrade with queued item; rollback compatibility check; collect timings/evidence.
-- **Files / Directories:** `tests/acceptance/deployment/`, `docs/RUNBOOK.md` draft.
-- **Artifacts:** staging deployment evidence.
-- **Acceptance Criteria:** deploy і no-op repeat успішні; queue not lost; rollback documented; incompatible queue format fails safe.
+- **Definition of Ready:** development staging host backup reference, test queue, approved current/candidate Task 5.3 digests and declared exact-digest compatibility pair.
+- **Implementation Steps:** fresh deploy; no-op redeploy; temporary versioned invalid Graph credential rotation; SMTP-created queued item; candidate upgrade; explicit compatible rollback; restore credential mapping; collect non-secret evidence and read-only mailbox proof.
+- **Files / Directories:** `tests/acceptance/deployment/`, `scripts/rehearse-deployment.sh`, `deploy/config/queue-compatibility.yml`, `docs/RUNBOOK.md`.
+- **Artifacts:** development staging rehearsal evidence and `X-Rehearsal-ID` mailbox verification.
+- **Acceptance Criteria:** deploy і no-op repeat успішні; SMTP-created queue payload survives upgrade; rollback requires declared compatible pair and queue drains after credential restoration; possible duplicate delivery is documented as At-Least-Once.
 - **Validation Commands:**
   ```bash
-  ./scripts/deploy-orchestrator-swarm.sh --environment staging --check
-  ./tests/acceptance/deployment/smoke.sh
+  ./tests/shell/test-rehearse-deployment.sh
+  ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
   ```
-- **Risks:** rollback duplicates delivery.
-- **Rollback Notes:** freeze acceptance, snapshot metadata/config, inspect queue compatibility before downgrade.
+- **Risks:** rollback duplicates delivery; no live evidence is valid until approved Task 5.3 digests and non-production host access exist.
+- **Rollback Notes:** freeze acceptance, snapshot metadata/config, inspect explicit queue compatibility before downgrade; retain At-Least-Once duplicate evidence.
 
 **Phase 5 Quality Gate**
 

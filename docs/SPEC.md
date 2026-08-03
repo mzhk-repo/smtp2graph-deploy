@@ -582,7 +582,7 @@ erDiagram
 - deployment manifests;
 - failed-message evidence лише за operational need і в зашифрованому вигляді. Включення каталогу `/data/failed` у планові резервні копії (backups) суворо заборонено для уникнення витоку чутливих даних у довгострокові архіви.
 
-Live queue не є mail archive. Restore може спричинити duplicate delivery, тому процедура має враховувати replay risk.
+Live queue не є mail archive. Restore, rollback або replay можуть спричинити duplicate delivery. Production minimum використовує At-Least-Once delivery для цих exceptional paths: можливий duplicate є прийнятнішим за silent message loss; exactly-once delivery не входить у v1.0.
 
 ---
 

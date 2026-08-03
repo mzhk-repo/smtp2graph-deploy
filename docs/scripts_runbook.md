@@ -27,6 +27,15 @@
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.
 
+## `rehearse-deployment.sh`
+
+- Category: 1b (development deployment lifecycle rehearsal).
+- Inputs: explicit development env-file, two Task 5.3-approved immutable digests, an exact pair in `deploy/config/queue-compatibility.yml`, exact allowlisted non-production recipient, SMTP username, runner-owned mode-`0600` password file under `/dev/shm`, backup reference and operator-only evidence directory.
+- Side effects: performs explicit development deploy/upgrade/rollback; creates one temporary synthetic invalid Graph credential Docker Secret and a mode-`0600` temporary env-file under `/dev/shm`; submits one synthetic SMTP message. It restores the original Secret mapping before removing its own temporary Secret.
+- Safety: refuses production, tags, unknown evidence/compatibility metadata, recipient outside allowlist, unsafe password/evidence paths and unsafe storage. It never reads Docker Secret content, puts passwords in arguments/logs or automatically deletes mailbox data.
+- Rollback: the service model is At-Least-Once under recovery. Freeze acceptance, use only a declared compatible pair, preserve queue state and verify the emitted `X-Rehearsal-ID` with a read-only mailbox query.
+- Check: `./tests/shell/test-rehearse-deployment.sh`, `bash -n scripts/rehearse-deployment.sh`.
+
 ## `init-storage.sh`
 
 - Category: 1b (dev/prod persistent-storage initialization).

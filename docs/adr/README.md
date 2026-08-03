@@ -15,5 +15,6 @@ ADR створюються лише для довготривалих архіт
 | [ADR-0005](ADR-0005-restrict-graph-mail-send-to-sender-mailbox.md) | Mail.Send обмежується sender mailbox | Accepted | Gate C allowed/denied proof |
 | [ADR-0006](ADR-0006-runtime-secrets-and-sops-age-policy.md) | Docker Secrets runtime boundary та SOPS + age | Accepted | Gate B compatibility; Gate C secret review |
 | [ADR-0007](ADR-0007-single-instance-with-cold-recovery.md) | Single instance із cold recovery | Accepted | Gate D recovery evidence |
+| [ADR-0008](ADR-0008-at-least-once-delivery-during-recovery.md) | At-Least-Once delivery під час rollback/recovery | Accepted | Task 5.4; Gate D |
 
 `Accepted` означає прийняту baseline-архітектурну політику, а не завершене runtime-тестування. Qualification evidence залишається обов’язковим за відповідним gate.

@@ -1,0 +1,14 @@
+# Exact Task 5.3 release evidence and queue-format compatibility for Task 5.4.
+#
+# Add an image only after its immutable digest, Trivy result, Syft CycloneDX SBOM
+# and OCI metadata have been reviewed.  Do not use tags or inferred compatibility.
+version: 1
+# Example after Task 5.3 approval (do not add placeholder digests):
+# approved_images:
+#   - digest: "ghcr.io/example/gateway@sha256:<64-lowercase-hex>"
+#     release_evidence: "https://github.example/release/vX.Y.Z"
+# compatible_pairs:
+#   - current: "ghcr.io/example/gateway@sha256:<64-lowercase-hex>"
+#     candidate: "ghcr.io/example/gateway@sha256:<64-lowercase-hex>"
+approved_images: []
+compatible_pairs: []

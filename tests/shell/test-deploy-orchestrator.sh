@@ -9,6 +9,7 @@ fake_bin="$tmp/bin"
 calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
 server_env_file="$tmp/server.environment"
+compatibility_file="$tmp/queue-compatibility.yml"
 mkdir -p "$fake_bin"
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -38,6 +39,14 @@ printf '%s\n' \
   'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vtest' \
   'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$env_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
+cat >"$compatibility_file" <<EOF
+version: 1
+approved_images: []
+compatible_pairs:
+  - current: "${valid_digest}"
+    candidate: "${rollback_digest}"
+EOF
+export SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility_file"
 
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -85,6 +94,12 @@ rg -q "^digest=${rollback_digest}$" "$calls"
 
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
   printf 'ERROR: rollback unexpectedly skipped queue compatibility confirmation.\n' >&2
+  exit 1
+fi
+
+unknown_digest='example.invalid/smtp2graph@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null 2>&1; then
+  printf 'ERROR: rollback unexpectedly accepted an unknown queue compatibility pair.\n' >&2
   exit 1
 fi
 

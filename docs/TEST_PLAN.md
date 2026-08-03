@@ -1,5 +1,14 @@
 # План тестування
 
+## Task 5.4 — Development staging deploy, upgrade і rollback rehearsal
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-DEPLOY-001 | Read-only smoke підтверджує одну desired Running task, SMTP `220` і declared Docker Secret mount modes без читання secret content. | `./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph` | Потребує authorised development Swarm manager; не виконує `docker exec`. |
+| TB-DEPLOY-002 | Репетиція відхиляє mutable/непогоджені digests, unknown queue pair, public recipient, password file поза `/dev/shm` або без mode `0600`. | `./tests/shell/test-rehearse-deployment.sh` | Fake Docker boundary; не створює host або M365 state. |
+| TB-DEPLOY-003 | Fresh deploy, no-op redeploy, temporary invalid Graph credential, SMTP-created queue item, candidate upgrade, compatible rollback і queue drain проходять без втрати queue state. | `./scripts/rehearse-deployment.sh ... --apply` та non-secret evidence file | Потребує Task 5.3 digest evidence, development host і read-only mailbox proof. |
+| TB-DEPLOY-004 | Rollback/recovery semantics є At-Least-Once; duplicate delivery дозволена за невизначеної completion boundary, silent loss — ні. | ADR-0008, RUNBOOK, `X-Rehearsal-ID` evidence | Не є exactly-once proof і не автоматично видаляє test mail. |
+
 ## Task 5.2 — Idempotent orchestration scripts
 
 | ID | Контроль | Команда / evidence | Межа |

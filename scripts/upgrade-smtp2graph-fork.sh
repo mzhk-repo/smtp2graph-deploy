@@ -12,7 +12,9 @@ release=""
 env_file=""
 test_image=""
 
-usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH] [--test-image NAME:TAG]\n' "$0" >&2; }
+target_branch=""
+
+usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH] [--test-image NAME:TAG] [--target-branch BRANCH]\n' "$0" >&2; }
 die() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -45,6 +47,11 @@ while (($#)); do
       test_image=${2:?}
       shift 2
       ;;
+    --target-branch)
+      [[ -z "$target_branch" ]] || die 'target branch may be specified only once'
+      target_branch=${2:?}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -62,6 +69,10 @@ done
 if [[ -n "$test_image" ]]; then
   [[ "$mode" == apply ]] || die '--test-image requires --apply'
   printf '%s\n' "$test_image" | grep -Eq '^[a-z0-9][a-z0-9._/-]*:[a-z0-9][a-z0-9._-]*$' || die 'test image must use a safe local NAME:TAG reference'
+fi
+if [[ -n "$target_branch" ]]; then
+  [[ "$mode" == apply ]] || die '--target-branch requires --apply'
+  printf '%s\n' "$target_branch" | grep -Eq '^[a-zA-Z0-9._/-]+$' || die 'target branch must use a safe branch name reference'
 fi
 [[ -f "$manifest" && -d "$build_repo/.git" ]] || die 'bundle or build repository is unavailable'
 upstream_remote=$(awk -F= '$1=="UPSTREAM_REMOTE" {print $2}' "$manifest")
@@ -87,6 +98,11 @@ worktree=$(mktemp -d "${TMPDIR:-/tmp}/smtp2graph-upgrade.XXXXXX")
 cleanup() {
   status=$?
   if ((status == 0)); then
+    if [[ -n "${target_branch:-}" && -d "${worktree:-}" ]]; then
+      target_commit=$(git -C "$worktree" rev-parse HEAD)
+      git -C "$build_repo" branch -f "$target_branch" "$target_commit" >/dev/null
+      printf 'TARGET_BRANCH: updated %s to %s in build repository\n' "$target_branch" "$target_commit"
+    fi
     git -C "$build_repo" worktree remove --force "$worktree"
     git -C "$build_repo" branch -D "$branch"
   else

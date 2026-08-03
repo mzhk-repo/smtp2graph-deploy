@@ -169,3 +169,17 @@
     Verification: Shell syntax, Node syntax, fake-Docker orchestrator and rehearsal regressions pass; `git diff --check` passes. No live Docker API, stack deploy, Docker Secret, queue mutation or Microsoft 365 request was performed.
     Risks: Live evidence remains blocked until two Task 5.3-approved digests, evidence metadata, authorised development host access and non-production mailbox verification are available. Recovery may duplicate a message when Graph completion precedes interrupted queue cleanup.
     Rollback: Restore the prior reviewed scripts/docs as one change. For a live interruption, the rehearsal restores the original mapping before deleting only its uniquely prefixed temporary Secret; never delete queue data or automatically delete mailbox evidence.
+
+2026-08-03 — Task 5.3: Hadolint Dockerfile linter fix via patch asset 008
+    Context: Hadolint reported warnings DL3059 (multiple sequential RUN instructions) and DL3025 (shell-form ENTRYPOINT instead of JSON array) in the build-plane Dockerfile.
+    Change: Added versioned control-plane asset `008-dockerfile-hadolint-fixes.patch` merging consecutive `RUN chmod` lines and converting `ENTRYPOINT` to exec/JSON syntax, and registered it in `manifest.env`.
+    Verification: `make validate` passed.
+    Risks: None; no production image, queue state or secrets modified.
+    Rollback: Remove asset `008` and its entry from `manifest.env`.
+
+2026-08-03 — Task 5.3: add --target-branch support to upgrade-smtp2graph-fork.sh
+    Context: Maintenance workflows required a mechanism to update a specific branch in the build repository with applied patch assets after successful regression testing.
+    Change: Added `--target-branch BRANCH` option to `scripts/upgrade-smtp2graph-fork.sh` which updates/creates the target branch in the build repository only after 100% successful local regressions, and updated documentation in `scripts_runbook.md`.
+    Verification: `bash -n` syntax check and `make validate` passed; tested against `/opt/smtp2graph-build` updating branch `v1.1.5-patched`.
+    Risks: None; changes apply only after all local regression tests pass.
+    Rollback: Revert script and documentation changes.

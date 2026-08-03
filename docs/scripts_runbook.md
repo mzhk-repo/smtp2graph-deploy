@@ -87,9 +87,14 @@
 ## `upgrade-smtp2graph-fork.sh`
 
 - Category: 2 (manual maintenance with Git ref/worktree side effects).
-- Inputs: explicit build repo, upstream tag or `--latest`, reviewed patch bundle, optional ignored M365 env file, optional safe local `--test-image NAME:TAG`. Без explicit `--env-file` script не читає build-plane `.env` і не запускає M365 suite.
-- Side effects: fetches upstream tags, creates a temporary local `upgrade/vX.Y.Z` branch and worktree. With `--test-image`, after successful local regressions it builds a local Docker image from this worktree; the caller removes that image. On success automation removes the worktree and branch; on failure it preserves them for review. It never pushes, deploys, deletes an existing branch or resolves conflicts.
+- Inputs: explicit build repo, upstream tag or `--latest`, reviewed patch bundle, optional ignored M365 env file, optional safe local `--test-image NAME:TAG`, optional `--target-branch BRANCH`. Без explicit `--env-file` script не читає build-plane `.env` і не запускає M365 suite.
+- Side effects: fetches upstream tags, creates a temporary local `upgrade/vX.Y.Z` branch and worktree. With `--target-branch BRANCH`, upon 100% successful local regressions it updates/creates the target branch in the build repository to point to the patched commit before removing the temporary worktree. With `--test-image`, after successful local regressions it builds a local Docker image from this worktree; the caller removes that image. On success automation removes the worktree and temporary branch; on failure it preserves them for review. It never pushes, deploys, deletes an existing branch or resolves conflicts.
 - Check: `--check` validates release selection without creating a branch.
+- Examples:
+  - Check release availability: `./scripts/upgrade-smtp2graph-fork.sh --build-repo /opt/smtp2graph-build --release v1.1.5 --check`
+  - Apply patches and run local regressions: `./scripts/upgrade-smtp2graph-fork.sh --build-repo /opt/smtp2graph-build --release v1.1.5 --apply`
+  - Apply patches and update target build-repo branch: `./scripts/upgrade-smtp2graph-fork.sh --build-repo /opt/smtp2graph-build --release v1.1.5 --apply --target-branch v1.1.5-patched`
+  - Apply patches and build local test image: `./scripts/upgrade-smtp2graph-fork.sh --build-repo /opt/smtp2graph-build --release v1.1.5 --apply --test-image smtp2graph-test:local`
 - Rollback: on a failed run, remove only the explicitly reviewed local `upgrade/vX.Y.Z` branch after confirming it is not checked out; upstream v1.1.5 is not a production rollback target.
 
 ## `tests/smoke/run.sh`

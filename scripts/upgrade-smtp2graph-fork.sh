@@ -13,8 +13,9 @@ env_file=""
 test_image=""
 
 target_branch=""
+do_push=0
 
-usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH] [--test-image NAME:TAG] [--target-branch BRANCH]\n' "$0" >&2; }
+usage() { printf 'Usage: %s [--build-repo PATH] (--release vX.Y.Z | --latest) (--check | --apply) [--env-file PATH] [--test-image NAME:TAG] [--target-branch BRANCH] [--push]\n' "$0" >&2; }
 die() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -52,6 +53,10 @@ while (($#)); do
       target_branch=${2:?}
       shift 2
       ;;
+    --push)
+      do_push=1
+      shift
+      ;;
     -h | --help)
       usage
       exit 0
@@ -73,6 +78,9 @@ fi
 if [[ -n "$target_branch" ]]; then
   [[ "$mode" == apply ]] || die '--target-branch requires --apply'
   printf '%s\n' "$target_branch" | grep -Eq '^[a-zA-Z0-9._/-]+$' || die 'target branch must use a safe branch name reference'
+fi
+if ((do_push)); then
+  [[ -n "$target_branch" ]] || die '--push requires --target-branch'
 fi
 [[ -f "$manifest" && -d "$build_repo/.git" ]] || die 'bundle or build repository is unavailable'
 upstream_remote=$(awk -F= '$1=="UPSTREAM_REMOTE" {print $2}' "$manifest")
@@ -106,6 +114,10 @@ cleanup() {
         git -C "$build_repo" branch -f "$target_branch" "$target_commit" >/dev/null
       fi
       printf 'TARGET_BRANCH: updated %s to %s in build repository\n' "$target_branch" "$target_commit"
+      if ((do_push)); then
+        git -C "$build_repo" push --force-with-lease origin "$target_branch" >/dev/null
+        printf 'PUSH: updated remote origin/%s in build repository\n' "$target_branch"
+      fi
     fi
     git -C "$build_repo" worktree remove --force "$worktree"
     git -C "$build_repo" branch -D "$branch"

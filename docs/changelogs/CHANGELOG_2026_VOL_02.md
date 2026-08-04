@@ -183,3 +183,10 @@
     Verification: `bash -n` syntax check and `make validate` passed; tested against `/opt/smtp2graph-build` updating branch `v1.1.5-patched`.
     Risks: None; changes apply only after all local regression tests pass.
     Rollback: Revert script and documentation changes.
+
+2026-08-03 — Task 5.3: add Gitleaks allowlist patch 009 and --push option
+    Context: Build-plane CI failed secret scanning on historical upstream test fixtures, and manual pushes risked non-fast-forward merge conflicts.
+    Change: Added versioned asset `009-gitleaks-allowlist.patch` creating `.gitleaks.toml` for historical upstream test fixtures, added `--push` option to `scripts/upgrade-smtp2graph-fork.sh` for optional automated force-with-lease push after successful regressions, and updated `scripts_runbook.md`.
+    Verification: `make validate` passed; tested against `/opt/smtp2graph-build` updating target branch `v1.1.6`.
+    Risks: None; push requires explicit `--push` flag and executes only after 100% test pass.
+    Rollback: Remove asset `009` and revert script/docs changes.

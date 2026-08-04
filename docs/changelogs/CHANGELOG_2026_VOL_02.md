@@ -190,3 +190,10 @@
     Verification: `make validate` passed; tested against `/opt/smtp2graph-build` updating target branch `v1.1.6`.
     Risks: None; push requires explicit `--push` flag and executes only after 100% test pass.
     Rollback: Remove asset `009` and revert script/docs changes.
+
+2026-08-04 — Task 5.3: add npm security updates patch 010
+    Context: Build-plane CI Trivy vulnerability scan failed on vulnerable npm dependencies in package.json and package-lock.json.
+    Change: Added versioned control-plane asset `010-npm-security-updates.patch` updating direct dependencies `nodemailer` to `^6.10.1`, `smtp-server` to `^3.18.3`, devDependency `tar` to `^7.5.2`, and adding security overrides for `serialize-javascript`, `picomatch`, and `linkify-it`. Registered asset 010 in `manifest.env`.
+    Verification: Applied patch 010 via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch dev --push`, passing all 35 local unit and receive regressions and updating `dev` branch in `/opt/smtp2graph-build`.
+    Risks: None; changes were verified through isolated worktree regressions before push.
+    Rollback: Remove asset `010` from `manifest.env`, delete `010-npm-security-updates.patch`, and revert build-plane branch if needed.

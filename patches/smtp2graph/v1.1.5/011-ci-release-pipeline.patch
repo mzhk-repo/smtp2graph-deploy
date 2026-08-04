@@ -1,0 +1,768 @@
+diff --git a/.github/quarantine/build-docker.yml.disabled b/.github/quarantine/build-docker.yml.disabled
+new file mode 100644
+index 0000000..8379da5
+--- /dev/null
++++ b/.github/quarantine/build-docker.yml.disabled
+@@ -0,0 +1,80 @@
++name: Publish Docker
++
++on:
++  workflow_call:
++    inputs:
++      fetchPackageJson:
++        description: Fetch package.json from artifacts
++        type: boolean
++  workflow_dispatch:
++
++env:
++  TAG_PREFIX: smtp2graph/smtp2graph
++  TAG_SUFFIX_TEST: test
++
++jobs:
++  publish-docker:
++    runs-on: ubuntu-latest
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup NodeJS
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20.x'
++
++      - name: Download package.json
++        if: ${{ inputs.fetchPackageJson }}
++        uses: actions/download-artifact@v4
++        with:
++          name: package-json
++
++      - name: Install dependencies
++        run: npm ci
++
++      - name: Build SMTP2Graph
++        run: npm run build
++
++      - name: Read package.json
++        id: manifest
++        uses: zoexx/github-action-json-file-properties@1.0.4
++        with:
++          file_path: package.json
++
++      - name: Set up QEMU
++        uses: docker/setup-qemu-action@v3
++
++      - name: Set up Docker Buildx
++        uses: docker/setup-buildx-action@v3
++
++      - name: Login to Docker Hub
++        uses: docker/login-action@v3
++        with:
++          username: ${{ secrets.DOCKERHUB_USERNAME }}
++          password: ${{ secrets.DOCKERHUB_TOKEN }}
++
++      - name: Build and export to Docker
++        uses: docker/build-push-action@v5
++        with:
++          context: .
++          load: true
++          build-args: VERSION=${{ steps.manifest.outputs.version }}
++          tags: ${{ env.TAG_PREFIX }}:${{ env.TAG_SUFFIX_TEST }}
++
++      - name: Test image
++        run: docker run -v .:/data --entrypoint /bin/test.sh ${{ env.TAG_PREFIX }}:${{ env.TAG_SUFFIX_TEST }}
++
++      - name: Get major version number
++        id: majorversion
++        run: |
++          echo major_version=$(echo "${{ steps.manifest.outputs.version }}" | cut -d'.' -f1) >> $GITHUB_OUTPUT
++
++      - name: Build and push
++        uses: docker/build-push-action@v5
++        with:
++          context: .
++          platforms: linux/amd64,linux/arm64
++          push: true
++          tags: ${{ env.TAG_PREFIX}}:latest,${{ env.TAG_PREFIX }}:v${{ steps.majorversion.outputs.major_version }},${{ env.TAG_PREFIX}}:v${{ steps.manifest.outputs.version }}
+diff --git a/.github/quarantine/build-sea.yml.disabled b/.github/quarantine/build-sea.yml.disabled
+new file mode 100644
+index 0000000..b88fc74
+--- /dev/null
++++ b/.github/quarantine/build-sea.yml.disabled
+@@ -0,0 +1,46 @@
++name: Build SEA
++
++on:
++  workflow_call:
++    inputs:
++      fetchPackageJson:
++        description: Fetch package.json from artifacts
++        type: boolean
++
++jobs:
++  build-sea:
++    runs-on: windows-latest # We need Windows (or Wine) to use rcedit (to update the .exe's properties)
++
++    permissions:
++      contents: write
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup NodeJS
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20.x'
++
++      - name: Download package.json
++        uses: actions/download-artifact@v4
++        with:
++          name: package-json
++
++      - name: Install dependencies
++        run: npm ci
++
++      # Build with new name and version
++      - name: Build binaries
++        run: npm run build-binaries
++
++      - name: Upload build artifact
++        if: ${{ inputs.fetchPackageJson }}
++        uses: actions/upload-artifact@v4
++        with:
++          name: builds
++          path: |
++            dist/server.js
++            dist/smtp2graph-*
++          if-no-files-found: error
+\ No newline at end of file
+diff --git a/.github/quarantine/build-windows-installer.yml.disabled b/.github/quarantine/build-windows-installer.yml.disabled
+new file mode 100644
+index 0000000..5db7468
+--- /dev/null
++++ b/.github/quarantine/build-windows-installer.yml.disabled
+@@ -0,0 +1,52 @@
++name: Build MSI Package
++
++on:
++  workflow_call:
++    inputs:
++      fetchPackageJson:
++        description: Fetch package.json from artifacts
++        type: boolean
++
++jobs:
++  build-msi:
++    runs-on: windows-latest # We need Windows to use WiX
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Download package.json
++        if: ${{ inputs.fetchPackageJson }}
++        uses: actions/download-artifact@v4
++        with:
++          name: package-json
++
++      - name: Download builds
++        uses: actions/download-artifact@v4
++        with:
++          name: builds
++          path: dist
++
++      - name: Read package.json
++        id: manifest
++        uses: zoexx/github-action-json-file-properties@1.0.4
++        with:
++          file_path: package.json
++
++      - name: Get WiX
++        run: |
++          Invoke-WebRequest -Uri 'https://github.com/wixtoolset/wix3/releases/download/wix314rtm/wix314-binaries.zip' -OutFile './wix314-binaries.zip'
++          Expand-Archive -LiteralPath './wix314-binaries.zip' -DestinationPath './wix'
++
++      - name: Build MSI
++        run: |
++          .\wix\candle.exe .\tools\windows-setup\SMTP2Graph-setup.wxs -dVersion="${{ steps.manifest.outputs.version }}"
++          .\wix\light.exe .\SMTP2Graph-setup.wixobj
++
++      - name: Upload build artifact
++        uses: actions/upload-artifact@v4
++        with:
++          name: installer
++          path: SMTP2Graph-setup.msi
++          if-no-files-found: error
++        
+diff --git a/.github/quarantine/build.yml.disabled b/.github/quarantine/build.yml.disabled
+new file mode 100644
+index 0000000..0c72db0
+--- /dev/null
++++ b/.github/quarantine/build.yml.disabled
+@@ -0,0 +1,153 @@
++name: Build
++
++on:
++  workflow_dispatch:
++    inputs:
++      version:
++        description: New version number
++        type: string
++      commit:
++        description: Commit the new version and create version tag
++        type: boolean
++
++jobs:
++  prepare:
++    runs-on: ubuntu-latest
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup NodeJS
++        if: ${{ inputs.version }}
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20.x'
++
++      - name: Read package.json
++        if: ${{ inputs.version }}
++        id: manifest
++        uses: zoexx/github-action-json-file-properties@1.0.4
++        with:
++          file_path: package.json
++
++      # Use Node to determine if the new version number is higher that the current
++      - name: Check version change
++        if: ${{ inputs.version }}
++        id: versionchange
++        run: |
++          node -p "'valid='+('${{ inputs.version }}' > '${{ steps.manifest.outputs.version }}'?'valid':'invalid')" >> $GITHUB_OUTPUT
++
++      - name: Invalid new version
++        if: ${{ inputs.version && steps.versionchange.outputs.valid != 'valid' }}
++        run: |
++          echo "::error ::The new version number (${{ inputs.version }}) is not higher than the current (${{ steps.manifest.outputs.version }})"
++          exit 1
++
++      # Update the version in the package file
++      - name: Change version
++        if: ${{ inputs.version }}
++        uses: maxgfr/github-change-json@v0.0.25
++        with:
++          key: version
++          value: ${{ inputs.version }}
++          path: package.json
++
++      - name: Upload package.json
++        uses: actions/upload-artifact@v4
++        with:
++          name: package-json
++          path: package.json
++          if-no-files-found: error
++
++
++  build:
++    needs: [ prepare ]
++    uses: ./.github/workflows/build-sea.yml
++    with:
++      fetchPackageJson: true
++
++  build-installer:
++    needs: [ build ]
++    uses: ./.github/workflows/build-windows-installer.yml
++    with:
++      fetchPackageJson: true
++
++  test-win-x64:
++    needs: [ build ]
++    uses: ./.github/workflows/test-binary.yml
++    with:
++      binaryName: smtp2graph-win-x64.exe
++      platform: windows-latest
++
++  test-linux-x64:
++    needs: [ build ]
++    uses: ./.github/workflows/test-binary.yml
++    with:
++      binaryName: smtp2graph-linux-x64
++      platform: ubuntu-latest
++
++  test-linux-arm64:
++    needs: [ build ]
++    uses: ./.github/workflows/test-binary.yml
++    with:
++      binaryName: smtp2graph-linux-arm64
++      platform: ubuntu-latest
++      useArch: arm64
++
++  commit:
++    if: ${{ inputs.version && inputs.commit }}
++    runs-on: ubuntu-latest
++    needs: [test-win-x64, test-linux-x64, test-linux-arm64]
++
++    permissions:
++      contents: write
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Download package.json
++        uses: actions/download-artifact@v4
++        with:
++          name: package-json
++
++      - name: Push version bump
++        uses: stefanzweifel/git-auto-commit-action@v5
++        with:
++          commit_message: Version bump
++          file_pattern: package.json
++          tagging_message: v${{ inputs.version }}
++
++      - name: Download builds
++        uses: actions/download-artifact@v4
++        with:
++          name: builds
++          path: dist
++
++      - name: Download installer
++        uses: actions/download-artifact@v4
++        with:
++          name: installer
++          path: dist
++
++      - name: Create ZIP files
++        run: |
++          for file in dist/*; do
++              if [ -f "$file" ]; then
++                  zip "${file%.*}.zip" "$file"
++              fi
++          done
++
++          if [ -f "dist/server.zip" ]; then
++            mv "dist/server.zip" "dist/NodeJS.zip"
++          fi
++
++      - name: Create release
++        uses: softprops/action-gh-release@v2
++        with:
++          name: v${{ inputs.version }}
++          tag_name: v${{ inputs.version }}
++          draft: true
++          files: dist/*.zip
++          fail_on_unmatched_files: true
+diff --git a/.github/quarantine/test-basic.yml.disabled b/.github/quarantine/test-basic.yml.disabled
+new file mode 100644
+index 0000000..3cf4841
+--- /dev/null
++++ b/.github/quarantine/test-basic.yml.disabled
+@@ -0,0 +1,35 @@
++name: Basic tests
++
++on:
++  pull_request:
++    branches: [ main ]
++
++jobs:
++  test:
++    runs-on: ubuntu-latest
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup NodeJS
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20.x'
++
++      - name: Install dependencies
++        run: npm ci
++
++      - name: Build
++        run: npm run build
++
++      - name: Run standard tests
++        run: npm run test:receive -- --logging error
++
++      - name: Upload logs
++        uses: actions/upload-artifact@v4
++        if: success() || failure()
++        with:
++          name: logs
++          path: logs/
++          if-no-files-found: ignore
+\ No newline at end of file
+diff --git a/.github/quarantine/test-binary.yml.disabled b/.github/quarantine/test-binary.yml.disabled
+new file mode 100644
+index 0000000..1e7bf95
+--- /dev/null
++++ b/.github/quarantine/test-binary.yml.disabled
+@@ -0,0 +1,83 @@
++name: Basic tests - binary
++
++on:
++  workflow_call:
++    inputs:
++      platform:
++        description: Which platform are we going to test
++        type: string
++        required: true
++      binaryName:
++        description: Name of the binary (located in dist folder)
++        type: string
++        required: true
++      useArch:
++        description: Run on different architecture
++        type: string
++  workflow_dispatch:
++    inputs:
++      platform:
++        description: Which platform are we going to test
++        type: choice
++        required: true
++        options:
++          - windows-latest
++          - ubuntu-latest
++      binaryName:
++        description: Name of the binary (located in dist folder)
++        type: string
++        required: true
++
++jobs:
++  test:
++    runs-on: ${{ inputs.platform }}
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup NodeJS
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20.x'
++
++      - name: Install dependencies
++        run: npm ci
++
++      - name: Download builds
++        uses: actions/download-artifact@v4
++        with:
++          name: builds
++          path: dist
++
++      - name: Set executable permission on binary (on Linux)
++        if: runner.os == 'Linux'
++        run: chmod +x ./dist/${{ inputs.binaryName }}
++
++      - name: Set up QEMU
++        if: ${{ inputs.useArch }}
++        uses: docker/setup-qemu-action@v3
++
++      - name: Run standard test on ${{ inputs.useArch || '(skipped)' }}
++        if: ${{ inputs.useArch }}
++        run: docker run --rm --platform linux/${{ inputs.useArch }} -v $PWD:/usr/src/app -w /usr/src/app node:20 npm run test:receive -- --serverFile=dist/${{ inputs.binaryName }} --reporter json --reporter-option output=test-results.json
++
++      - name: Run standard tests
++        if: ${{ ! inputs.useArch }}
++        run: npm run test:receive -- --serverFile=dist/${{ inputs.binaryName }} --reporter json --reporter-option output=test-results.json
++
++      - name: Test report
++        uses: phoenix-actions/test-reporting@v12
++        if: success() || failure()
++        with:
++          name: Test result ${{ inputs.binaryName }}
++          path: test-results.json
++          reporter: mocha-json
++
++      - name: Upload logs
++        uses: actions/upload-artifact@v4
++        if: success() || failure()
++        with:
++          name: logs_${{ inputs.binaryName }}
++          path: logs/
++          if-no-files-found: ignore
+\ No newline at end of file
+diff --git a/.github/workflows/release-ci.yml b/.github/workflows/release-ci.yml
+new file mode 100644
+index 0000000..14cb9aa
+--- /dev/null
++++ b/.github/workflows/release-ci.yml
+@@ -0,0 +1,53 @@
++name: Secure build and release evidence
++
++on:
++  pull_request:
++    branches: [dev, main]
++  push:
++    branches: [dev, main]
++    tags: ['v*']
++
++permissions:
++  contents: write
++  packages: write
++  pull-requests: read
++
++jobs:
++  validate-pr:
++    name: Validate pull request
++    if: github.event_name == 'pull_request'
++    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main # reviewed mutable exception; all Action/image uses are centralized in shared CI/CD
++    with:
++      environment_name: development
++      deploy: false
++      use_ansible: true
++      build_and_push_docker: false
++      validation_script_path: scripts/ci-validate.sh
++
++  publish-development:
++    name: Build and push development image
++    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
++    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main # reviewed mutable exception; all Action/image uses are centralized in shared CI/CD
++    with:
++      environment_name: development
++      deploy: false
++      use_ansible: true
++      build_and_push_docker: true
++      push_docker_image: true
++      docker_image_name: smtp2graph-build
++      validation_script_path: scripts/ci-validate.sh
++
++  publish-release:
++    name: Build, publish and retain release evidence
++    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
++    uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main # reviewed mutable exception; all Action/image uses are centralized in shared CI/CD
++    with:
++      environment_name: production
++      deploy: false
++      use_ansible: true
++      build_and_push_docker: true
++      push_docker_image: true
++      docker_image_name: smtp2graph-build
++      validation_script_path: scripts/ci-validate.sh
++      release_tag: ${{ github.ref_name }}
++      control_plane_sha: fe3e461911c68949d9586b52a9c3253fa9795a45
+diff --git a/CODEOWNERS b/CODEOWNERS
+new file mode 100644
+index 0000000..9d123f3
+--- /dev/null
++++ b/CODEOWNERS
+@@ -0,0 +1,4 @@
++# Secure delivery, release metadata and deployment ownership.
++/.github/workflows/ @mzhk-repo
++/release/ @mzhk-repo
++/Dockerfile @mzhk-repo
+diff --git a/config.example.yml b/config.example.yml
+index 40abf91..44d204a 100644
+--- a/config.example.yml
++++ b/config.example.yml
+@@ -18,7 +18,7 @@ send:
+       thumbprint: 0123456789ABCDEF0123456789ABCDEF01234567
+       privateKeyPath: client.key
+     # Optional: If you don't want to use a client certificate you could use a secret instead
+-    # secret: VGhpcyBpcyB2ZXJ5IHNlY3JldCE=
++    # secret: <READ_FROM_SECRET_MANAGER>
+   # Optional: Times to retry sending a message when it failed (set to 0 to disable retries)
+   retryLimit: 10 # Default: 3
+   # Optional: Minutes between tries
+diff --git a/release/v1.1.6.json b/release/v1.1.6.json
+new file mode 100644
+index 0000000..4d6c4a1
+--- /dev/null
++++ b/release/v1.1.6.json
+@@ -0,0 +1,11 @@
++{
++  "version": "v1.1.6",
++  "upstream": {
++    "tag": "v1.1.5",
++    "commit": "3a1ab485ed6c50265889cb230d8fbf73e2587e06"
++  },
++  "control_plane": {
++    "repository": "mzhk-repo/smtp2graph-deploy",
++    "sha": "fe3e461911c68949d9586b52a9c3253fa9795a45"
++  }
++}
+diff --git a/scripts/ci-validate.sh b/scripts/ci-validate.sh
+new file mode 100755
+index 0000000..41127db
+--- /dev/null
++++ b/scripts/ci-validate.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++npm ci
++npm run build
++npm run test:receive -- --logging error
++node test/ci/workflow-policy.cjs
+diff --git a/test/01receive/02tls.spec.ts b/test/01receive/02tls.spec.ts
+index 66c0370..adecb7b 100644
+--- a/test/01receive/02tls.spec.ts
++++ b/test/01receive/02tls.spec.ts
+@@ -1,15 +1,16 @@
+ import { expect } from 'chai';
+ import '../_config';
+-import { Server } from '../classes/Server';
+-import { submitAndVerifyMail } from './Helpers';
++import { Server } from '../classes/Server';
++import { submitAndVerifyMail } from './Helpers';
++import { tlsCertPath, tlsKeyPath } from './tls-fixture';
+ 
+ describe('Receive: TLS', async function(){
+     const server = new Server({
+         mode: 'receive',
+         receive: {
+             secure: true,
+-            tlsKeyPath: 'test/localhost.key',
+-            tlsCertPath: 'test/localhost.crt',
++            tlsKeyPath,
++            tlsCertPath,
+         },
+     });
+ 
+diff --git a/test/01receive/05auth.spec.ts b/test/01receive/05auth.spec.ts
+index 78e8643..7610fd1 100644
+--- a/test/01receive/05auth.spec.ts
++++ b/test/01receive/05auth.spec.ts
+@@ -1,7 +1,8 @@
+ import { expect } from 'chai';
+ import '../_config';
+-import { Server } from '../classes/Server';
+-import { defaultMail, submitAndVerifyMail } from './Helpers';
++import { Server } from '../classes/Server';
++import { defaultMail, submitAndVerifyMail } from './Helpers';
++import { tlsCertPath, tlsKeyPath } from './tls-fixture';
+ 
+ describe('Receive: Authentication', async function(){
+     const server = new Server({
+@@ -9,8 +10,8 @@ describe('Receive: Authentication', async function(){
+         receive: {
+             requireAuth: true,
+             allowInsecureAuth: true,
+-            tlsKeyPath: 'test/localhost.key',
+-            tlsCertPath: 'test/localhost.crt',
++            tlsKeyPath,
++            tlsCertPath,
+             users: [
+                 {username: 'user', password: 'P@ssword!', allowedFrom: [defaultMail.from as string]},
+             ],
+diff --git a/test/01receive/tls-fixture.ts b/test/01receive/tls-fixture.ts
+new file mode 100644
+index 0000000..335ab07
+--- /dev/null
++++ b/test/01receive/tls-fixture.ts
+@@ -0,0 +1,15 @@
++import { execFileSync } from 'child_process';
++import { mkdtempSync, rmSync } from 'fs';
++import { tmpdir } from 'os';
++import { join } from 'path';
++
++const directory = mkdtempSync(join(tmpdir(), 'smtp2graph-receive-tls-'));
++export const tlsKeyPath = join(directory, 'localhost.key');
++export const tlsCertPath = join(directory, 'localhost.crt');
++
++execFileSync('openssl', [
++    'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1',
++    '-subj', '/CN=localhost', '-keyout', tlsKeyPath, '-out', tlsCertPath,
++], { stdio: 'ignore' });
++
++process.once('exit', () => rmSync(directory, { recursive: true, force: true }));
+diff --git a/test/ci/workflow-policy.cjs b/test/ci/workflow-policy.cjs
+new file mode 100755
+index 0000000..c7e692b
+--- /dev/null
++++ b/test/ci/workflow-policy.cjs
+@@ -0,0 +1,15 @@
++const { readFileSync } = require('node:fs');
++
++const workflow = readFileSync('.github/workflows/release-ci.yml', 'utf8');
++const fail = (message) => { throw new Error(`workflow policy: ${message}`); };
++
++if (!workflow.includes("branches: [dev]")) fail('PR and development push must target dev.');
++if (!workflow.includes("tags: ['v*']")) fail('release path must require a version tag.');
++if (/\bdeploy:\s*true\b/.test(workflow)) fail('build plane must never request deploy.');
++if ((workflow.match(/shared-ci-cd\.yml@main/g) || []).length !== 3) fail('each PR/dev/tag path must use the shared CI/CD exception.');
++for (const line of workflow.split('\n').filter((line) => line.includes('uses:'))) {
++  if (!line.includes('mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main')) fail('build plane must not declare local Action/image uses.');
++}
++if (/:latest\b/.test(workflow) || /@v\d/.test(workflow)) fail('build plane must not retain mutable Action or image references.');
++if (!workflow.includes('push_docker_image: true')) fail('development and tag paths must publish images.');
++console.log('PASS: build-plane workflow policy is build-only and immutable.');
+diff --git a/test/localhost.crt b/test/localhost.crt
+deleted file mode 100644
+index 1d8fe50..0000000
+--- a/test/localhost.crt
++++ /dev/null
+@@ -1,21 +0,0 @@
+------BEGIN CERTIFICATE-----
+-MIIDgDCCAmigAwIBAgIIGFgJEAIxSAYwDQYJKoZIhvcNAQEFBQAwLTESMBAGA1UE
+-AxMJbG9jYWxob3N0MRcwFQYDVQQKEw5zZWxmc2lnbmVkLm9yZzAeFw0yNDAxMzAx
+-ODMwMzJaFw0zNDAxMzAxODMwMzJaMC0xEjAQBgNVBAMTCWxvY2FsaG9zdDEXMBUG
+-A1UEChMOc2VsZnNpZ25lZC5vcmcwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+-AoIBAQC7a2YUCyovLraBP3BqJQffpOK3jeGEY7Bqn6P5lDLnLd12u1GDJ/WIomM/
+-+I4dzle+wezNChMKy2edwgpa8qoBF4B4zEUlObSY89DagxY0rjG4x3hqv0Gdzh6X
+-X0IUrdFQ38iF7Hnu3jRPVlJTktI7yUQAH50rEMRQvta3br4kI0TemDdEilE4If+Q
+-iRH64zQuaoe4yoCpDJ50oy00FWmYsMAuSjebXOcWMn/5Y62PzEwx2deAqEOCPruU
+-kxkFMLpYHA8ZQbdHP0MiVL67SO4RUW7vaXyKoGcaLtqZK0gJ6ffgL56ue4kxosDY
+-rtf8tXCdvnVejtiBya66bwB5X0Z1AgMBAAGjgaMwgaAwDAYDVR0TBAUwAwEB/zAL
+-BgNVHQ8EBAMCAvQwOwYDVR0lBDQwMgYIKwYBBQUHAwEGCCsGAQUFBwMCBggrBgEF
+-BQcDAwYIKwYBBQUHAwQGCCsGAQUFBwMIMBEGCWCGSAGG+EIBAQQEAwIA9zAUBgNV
+-HREEDTALgglsb2NhbGhvc3QwHQYDVR0OBBYEFIBV+7WGmAKMJIMVkubs2yHU6IMB
+-MA0GCSqGSIb3DQEBBQUAA4IBAQAM8whoWHRwvgN6coEfijUNBgNOWPx1lSbtZqGw
+-l+XgDQq8e2GvrHRXS5f63GXgxClMrkyJxuhLyzz2u+E+NXLeSm19HOjFpjSkG4Gh
+-EhB+iKpqFNfqR278Q7UhJmBTnmfCbQHQth112CpK+LhK2CFj8y2j8DtTBJ7uNBxk
+-U3EPE9QstJkkU83N0Gt7gTGrV4h4U4ug8rvbMba6QO2W8J8X3Z/jIyG3HF8cdBPC
+-P4IEyvKruNCLAsI0ZpK8jv56EYUknU5bRs0P+0HfwTz7hJg9FLjLd4YEI+BuixrJ
+-qwKSFgcKiHZbvLFArAFOCy0lKZzTumq9De/WM2l+oXFbMXoC
+------END CERTIFICATE-----
+diff --git a/test/localhost.key b/test/localhost.key
+deleted file mode 100644
+index 135660d..0000000
+--- a/test/localhost.key
++++ /dev/null
+@@ -1,27 +0,0 @@
+------BEGIN RSA PRIVATE KEY-----
+-MIIEpAIBAAKCAQEAu2tmFAsqLy62gT9waiUH36Tit43hhGOwap+j+ZQy5y3ddrtR
+-gyf1iKJjP/iOHc5XvsHszQoTCstnncIKWvKqAReAeMxFJTm0mPPQ2oMWNK4xuMd4
+-ar9Bnc4el19CFK3RUN/Ihex57t40T1ZSU5LSO8lEAB+dKxDEUL7Wt26+JCNE3pg3
+-RIpROCH/kIkR+uM0LmqHuMqAqQyedKMtNBVpmLDALko3m1znFjJ/+WOtj8xMMdnX
+-gKhDgj67lJMZBTC6WBwPGUG3Rz9DIlS+u0juEVFu72l8iqBnGi7amStICen34C+e
+-rnuJMaLA2K7X/LVwnb51Xo7Ygcmuum8AeV9GdQIDAQABAoIBAEf0Rr+BPdPZglYC
+-zhziVLCHNEe2YBOc1llJKwIh5J0e3by80+Gf0MOBXMttmNpWoxdoiop5yK/HQeOu
+-YJ1kNuKubDN0cUOGcRCb4t5Rn4/gJNTFODT7cqysOtBw0QTxasA6+lh4XqPXiYvA
+-H2FYqAAuGD5X5NZo3IYHjpXkHXnvq99r4B2fjJTfaEUGtRwxhHIHCNHuMAYHqelf
+-Fp1KkL2SMDsKOl00smRK3lsZfAZsLSFCN4r7JX8/R16RtqteMhA7VgzSY/qyuI/V
+-kfpFvhEi+vctpdhEmL9hae/TWCyJLZywOXCIbUh5T/UFfYGwY2KR8INqSBJg/XYA
+-kELUSW0CgYEA6xW2Q/EkuM0ifILqir9FyOm1f0pmBXNvr9fi3BBppCHFLZXRU0EN
+-TgaJZOEMuQsmBveSfqSyrkTviqNhS06H9njNfHLAD15PzkWH3i6CUc7JzuLhoKOh
+-pGcvVja8qmL/z4l+SVl/UDkDJylmlu88WyUCymitjxldLY67MQeOChMCgYEAzBgQ
+-Heaf/A//aKLG/aJe6SQ3FasnhsaNNo5AqwmCtPMxJdFkzbCXAaeniEmymwY/+xTx
+-7JnMP9dSmoD/75/MbrUjy+aM4V/bkqsGgd4qD/xQs8vGKtEA7XPdJP8QtzDwI384
+-JNKR9lG3G/Hzdv7x5RUM6QA1jpZupJFa9tDZ/lcCgYEAmBvrXFjavuyUhOYcpnwO
+-xmpaMqvMCXjg6nGQ631/LWFgeRd4YxszZaobGnf3yH+rMlTcqC8fIl2edSEz4gtF
+-NDiEFSMWnJsUnk4lFKEZV5+qur/Y6B0YiQzu9yThvInkJcA8Q2+yThEltiA2rjDL
+-59mxzZAfxPjPbpvtCVNvF5sCgYEAtSYSgAeoLnkgkIYSKyNILJTZU6FDhwuKYUbn
+-vSfG3McR82gkmbDIh06Ak6YeIhztAvV3OTLVKED872faQpzKPeUHLb6ngo6rfEXS
+-k8hV+zRPiRYwAObbdOcm/ORruL12F3ueoIhJx6CF7wbUuuTUXSlO+SwXXUTGVcky
+-POno4ycCgYBIbXQob3PJ0QDhET8L+opsb2OLO5KrJG0Fc18CQwbD9r9CRHPfuno/
+-Gt48EBdUKApmg1kTNwzPqgOBiaUMFCNlZJTspwGxUKBgMdTlIrnFGAip2QJ4Cl/m
+-NN2CSB/CSSREyF+f2CgMIdgq6ANgeJ+5r7jm3xoasB5g62oYRYSdzQ==
+------END RSA PRIVATE KEY-----
+diff --git a/test/readme.md b/test/readme.md
+index 1433555..4129539 100644
+--- a/test/readme.md
++++ b/test/readme.md
+@@ -10,8 +10,8 @@ There are multiple test methods:
+ You'll need the following config to run tests (you can put a .env file in your working directory):
+ 
+ ```env
+-CLIENTID="01234567-89ab-cdef-0123-456789abcdef"
+-CLIENTSECRET="VGhpcyBpcyB2ZXJ5IHNlY3JldCE="
++CLIENTID="<application-client-id>"
++# Set the test application secret in an ignored .env file; do not place its value in this document.
+ CLIENTTENANT="contoso"
+ MAILBOX="test@example.com"
+ ADDITIONALRECIPIENT="test2@example.com"

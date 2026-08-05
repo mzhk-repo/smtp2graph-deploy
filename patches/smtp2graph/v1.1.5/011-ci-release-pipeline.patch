@@ -81,6 +81,14 @@ diff --git a/.github/workflows/test-binary.yml b/.github/workflows/test-binary.y
 similarity index 100%
 rename from .github/workflows/test-binary.yml
 rename to .github/workflows/test-binary.yml.disabled
+diff --git a/.trivyignore b/.trivyignore
+new file mode 100644
+index 0000000..ba6e1b8
+--- /dev/null
++++ b/.trivyignore
+@@ -0,0 +1,2 @@
++# Built-in test RSA key in node_modules/smtp-server bundled in dist/server.js
++dist/server.js
 diff --git a/CODEOWNERS b/CODEOWNERS
 new file mode 100644
 index 0000000..9d123f3

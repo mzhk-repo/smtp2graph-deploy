@@ -1,3 +1,19 @@
+diff --git a/.github/workflows/build-docker.yml b/.github/workflows/build-docker.yml.disabled
+similarity index 100%
+rename from .github/workflows/build-docker.yml
+rename to .github/workflows/build-docker.yml.disabled
+diff --git a/.github/workflows/build-sea.yml b/.github/workflows/build-sea.yml.disabled
+similarity index 100%
+rename from .github/workflows/build-sea.yml
+rename to .github/workflows/build-sea.yml.disabled
+diff --git a/.github/workflows/build-windows-installer.yml b/.github/workflows/build-windows-installer.yml.disabled
+similarity index 100%
+rename from .github/workflows/build-windows-installer.yml
+rename to .github/workflows/build-windows-installer.yml.disabled
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml.disabled
+similarity index 100%
+rename from .github/workflows/build.yml
+rename to .github/workflows/build.yml.disabled
 diff --git a/.github/workflows/release-ci.yml b/.github/workflows/release-ci.yml
 new file mode 100644
 index 0000000..11ec3a3
@@ -57,9 +73,17 @@ index 0000000..11ec3a3
 +      validation_script_path: scripts/ci-validate.sh
 +      release_tag: ${{ github.ref_name }}
 +      control_plane_sha: fe3e461911c68949d9586b52a9c3253fa9795a45
+diff --git a/.github/workflows/test-basic.yml b/.github/workflows/test-basic.yml.disabled
+similarity index 100%
+rename from .github/workflows/test-basic.yml
+rename to .github/workflows/test-basic.yml.disabled
+diff --git a/.github/workflows/test-binary.yml b/.github/workflows/test-binary.yml.disabled
+similarity index 100%
+rename from .github/workflows/test-binary.yml
+rename to .github/workflows/test-binary.yml.disabled
 diff --git a/CODEOWNERS b/CODEOWNERS
 new file mode 100644
-index 0000000..f78026f
+index 0000000..9d123f3
 --- /dev/null
 +++ b/CODEOWNERS
 @@ -0,0 +1,4 @@
@@ -68,7 +92,7 @@ index 0000000..f78026f
 +/release/ @mzhk-repo
 +/Dockerfile @mzhk-repo
 diff --git a/config.example.yml b/config.example.yml
-index 40abf91..e79aa6c 100644
+index 40abf91..44d204a 100644
 --- a/config.example.yml
 +++ b/config.example.yml
 @@ -18,7 +18,7 @@ send:
@@ -82,7 +106,7 @@ index 40abf91..e79aa6c 100644
    # Optional: Minutes between tries
 diff --git a/release/v1.1.6.json b/release/v1.1.6.json
 new file mode 100644
-index 0000000..f5d8907
+index 0000000..4d6c4a1
 --- /dev/null
 +++ b/release/v1.1.6.json
 @@ -0,0 +1,11 @@
@@ -99,7 +123,7 @@ index 0000000..f5d8907
 +}
 diff --git a/scripts/ci-validate.sh b/scripts/ci-validate.sh
 new file mode 100755
-index 0000000..f39bf62
+index 0000000..41127db
 --- /dev/null
 +++ b/scripts/ci-validate.sh
 @@ -0,0 +1,7 @@
@@ -111,7 +135,7 @@ index 0000000..f39bf62
 +npm run test:receive -- --logging error
 +node test/ci/workflow-policy.cjs
 diff --git a/test/01receive/02tls.spec.ts b/test/01receive/02tls.spec.ts
-index 66c0370..540d147 100644
+index 66c0370..dfd5910 100644
 --- a/test/01receive/02tls.spec.ts
 +++ b/test/01receive/02tls.spec.ts
 @@ -2,14 +2,15 @@ import { expect } from 'chai';
@@ -133,7 +157,7 @@ index 66c0370..540d147 100644
      });
 
 diff --git a/test/01receive/05auth.spec.ts b/test/01receive/05auth.spec.ts
-index 78e8643..7ac6e94 100644
+index 78e8643..41411fb 100644
 --- a/test/01receive/05auth.spec.ts
 +++ b/test/01receive/05auth.spec.ts
 @@ -2,6 +2,7 @@ import { expect } from 'chai';
@@ -157,7 +181,7 @@ index 78e8643..7ac6e94 100644
              ],
 diff --git a/test/01receive/tls-fixture.ts b/test/01receive/tls-fixture.ts
 new file mode 100644
-index 0000000..175f969
+index 0000000..335ab07
 --- /dev/null
 +++ b/test/01receive/tls-fixture.ts
 @@ -0,0 +1,15 @@
@@ -258,7 +282,7 @@ index 135660d..0000000
 -NN2CSB/CSSREyF+f2CgMIdgq6ANgeJ+5r7jm3xoasB5g62oYRYSdzQ==
 ------END RSA PRIVATE KEY-----
 diff --git a/test/readme.md b/test/readme.md
-index 1433555..23658cb 100644
+index 1433555..4129539 100644
 --- a/test/readme.md
 +++ b/test/readme.md
 @@ -10,8 +10,8 @@ There are multiple test methods:

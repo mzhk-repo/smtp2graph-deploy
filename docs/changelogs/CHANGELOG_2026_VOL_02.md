@@ -197,3 +197,17 @@
     Verification: Applied patch 010 via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch dev --push`, passing all 35 local unit and receive regressions and updating `dev` branch in `/opt/smtp2graph-build`.
     Risks: None; changes were verified through isolated worktree regressions before push.
     Rollback: Remove asset `010` from `manifest.env`, delete `010-npm-security-updates.patch`, and revert build-plane branch if needed.
+
+2026-08-05 — Task 5.3: release CI workflow refactoring via patch asset 011
+    Context: Control-plane patch 011 created quarantine directories for superseded upstream workflows, while CI Actionlint required a clean build-plane workflow structure supporting `dev` and `main` branches.
+    Change: Updated versioned asset `011-ci-release-pipeline.patch` to create `.github/workflows/release-ci.yml` targeting both `dev` and `main` branches, rename superseded upstream workflows to `.disabled` without quarantine, and update `test/ci/workflow-policy.cjs`.
+    Verification: Applied patch 011 via `./scripts/upgrade-smtp2graph-fork.sh`, passing all 35 unit/receive regressions and workflow policy checks; `make validate` passed.
+    Risks: None; workflow policy strictly prohibits deploy actions from the build plane.
+    Rollback: Revert `011-ci-release-pipeline.patch` and target build-plane branch if needed.
+
+2026-08-05 — Task 5.3: resolve Trivy vulnerabilities, Dockerfile hardening and CIDR compatibility
+    Context: CI Trivy security scan reported npm vulnerabilities, missing Dockerfile non-root USER instruction (DS-0002), false-positive secret scan on bundled fallback RSA test key in `dist/server.js`, while forcing `ip-address` v10 override broke `ip-cidr` CJS runtime compatibility in `Allowed CIDR` regression.
+    Change: Updated asset `008-dockerfile-hadolint-fixes.patch` adding `USER 65532:65532` in Dockerfile, asset `010-npm-security-updates.patch` updating `axios` to `^1.8.2` and overrides for `axios` and `jws`, and asset `011-ci-release-pipeline.patch` adding `.trivyignore` for `dist/server.js` and `CVE-2026-69192` (`ip-address` 9.0.5).
+    Verification: Local Trivy scan reported 0 vulnerabilities, 0 misconfigurations, 0 secrets. Replayed all 11 patch assets via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch dev`, passing 100% of regressions (35/35, including `Allowed CIDR`); `make validate` passed.
+    Risks: `CVE-2026-69192` remains ignored in `.trivyignore` to preserve `ip-cidr` CJS runtime parsing of gateway allowlist CIDRs; `ip-address` is not exposed to untrusted external input.
+    Rollback: Revert patch assets `008`, `010`, `011` and target build-plane branch if needed.

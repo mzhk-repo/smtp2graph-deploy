@@ -211,3 +211,10 @@
     Verification: Local Trivy scan reported 0 vulnerabilities, 0 misconfigurations, 0 secrets. Replayed all 11 patch assets via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch dev`, passing 100% of regressions (35/35, including `Allowed CIDR`); `make validate` passed.
     Risks: `CVE-2026-69192` remains ignored in `.trivyignore` to preserve `ip-cidr` CJS runtime parsing of gateway allowlist CIDRs; `ip-address` is not exposed to untrusted external input.
     Rollback: Revert patch assets `008`, `010`, `011` and target build-plane branch if needed.
+
+2026-08-06 — Task 5.3: resolve nodemailer CVEs, braces vulnerability and Trivy secret scanner rule
+    Context: Trivy security scan detected HIGH severity vulnerabilities in npm dependencies (CVE-2024-4068 for braces, CVE-2025-14874 and GHSA-p6gq-j5cr-w38f for nodemailer) and reported a secret scan finding for a bundled fallback test RSA key in dist/server.js.
+    Change: Updated asset `010-npm-security-updates.patch` adding overrides for `braces` (`^3.0.3`) and updating `nodemailer` to `^9.0.4` in dependencies and overrides. Updated asset `011-ci-release-pipeline.patch` adding rule ID `private-key` to `.trivyignore`.
+    Verification: Replayed all 11 patch assets via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch v1.1.6 --push`, passing 100% of regressions (41/41 total, 6 unit and 35 receive); build repository target branch `v1.1.6` updated and pushed to remote origin.
+    Risks: None; all unit and receive regressions passed with nodemailer v9.0.4; secret rule ignore applies strictly to test RSA fallback key.
+    Rollback: Revert updated patch assets `010` and `011`, and reset build-plane branch if needed.

@@ -1,6 +1,34 @@
 #!/usr/bin/env bash
 # Strict parser for deploy-adjacent environment files; never source this file.
 
+SOPS_DEPLOY_STAGE_DIR=''
+SOPS_DEPLOY_ENV_FILE=''
+
+prepare_sops_deploy_env() {
+  local root=$1 requested=$2 server_env encrypted
+  server_env=$(read_server_env) || return
+  if [[ -n "$requested" ]]; then encrypted=$requested
+  else
+    case "$server_env" in
+      dev) encrypted="$root/env.dev.enc" ;;
+      prod) encrypted="$root/env.prod.enc" ;;
+    esac
+  fi
+  [[ "$encrypted" = /* && -f "$encrypted" && ! -L "$encrypted" ]] || { printf 'ERROR: encrypted deploy env must be an absolute regular non-symlink file.\n' >&2; return 64; }
+  command -v sops >/dev/null || { printf 'ERROR: sops is required for deploy environment decryption.\n' >&2; return 69; }
+  SOPS_DEPLOY_STAGE_DIR=$(mktemp -d /dev/shm/smtp2graph-deploy-env.XXXXXX) || return
+  chmod 700 "$SOPS_DEPLOY_STAGE_DIR"
+  SOPS_DEPLOY_ENV_FILE="$SOPS_DEPLOY_STAGE_DIR/environment.env"
+  sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || { rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"; SOPS_DEPLOY_STAGE_DIR=''; return 64; }
+  chmod 600 "$SOPS_DEPLOY_ENV_FILE"
+}
+
+cleanup_sops_deploy_env() {
+  [[ -z "$SOPS_DEPLOY_STAGE_DIR" ]] || rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+  SOPS_DEPLOY_STAGE_DIR=''
+  SOPS_DEPLOY_ENV_FILE=''
+}
+
 resolve_deploy_env_file() {
   local root=$1 requested=$2
   if [[ -n "$requested" ]]; then

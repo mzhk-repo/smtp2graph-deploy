@@ -85,6 +85,8 @@ while (($#)); do
 done
 
 [[ -n "$operation" ]] || die 'choose one operation.'
+prepare_sops_deploy_env "$project_root" "$env_file" || die 'could not prepare encrypted deployment environment.'
+trap cleanup_sops_deploy_env EXIT
 allowed_keys=(
   DEPLOY_ENVIRONMENT
   SMTP2GRAPH_IMAGE_DIGEST
@@ -109,7 +111,7 @@ allowed_keys=(
   TLS_CERTIFICATE_SECRET_NAME
   TLS_PRIVATE_KEY_SECRET_NAME
 )
-load_deploy_env_file "$project_root" "$env_file" "${allowed_keys[@]}"
+load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" "${allowed_keys[@]}"
 
 for key in "${allowed_keys[@]}"; do
   [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."

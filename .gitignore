@@ -6,5 +6,6 @@ docs/hello-world.md
 !.env.example
 !env.dev.enc
 !env.prod.enc
+.decrypted~env.*.enc
 cert.pem
 private.key

@@ -53,7 +53,9 @@ while (($#)); do
   esac
 done
 
-load_deploy_env_file "$project_root" "$env_file" \
+prepare_sops_deploy_env "$project_root" "$env_file" || die 'could not prepare encrypted deployment environment.'
+trap cleanup_sops_deploy_env EXIT
+load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" \
   DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP_ALLOWED_SOURCE_CIDRS
 
 environment=${DEPLOY_ENVIRONMENT:-}
@@ -123,7 +125,10 @@ ensure_overlay() {
 }
 
 rendered_nft=''
-cleanup() { [[ -z "$rendered_nft" ]] || rm -f -- "$rendered_nft"; }
+cleanup() {
+  [[ -z "$rendered_nft" ]] || rm -f -- "$rendered_nft"
+  cleanup_sops_deploy_env
+}
 trap cleanup EXIT
 
 if [[ "$apply" == true ]]; then
@@ -140,7 +145,7 @@ fi
 "${project_root}/scripts/init-storage.sh" "${storage_args[@]}"
 
 rendered_nft=$(mktemp /dev/shm/smtp2graph-nft.XXXXXX)
-"${project_root}/scripts/render-network-policy.sh" --env-file "$(resolve_deploy_env_file "$project_root" "$env_file")" "$rendered_nft"
+"${project_root}/scripts/render-network-policy.sh" --env-file "$SOPS_DEPLOY_ENV_FILE" "$rendered_nft"
 nft --check --file "$rendered_nft" >/dev/null
 if [[ "$apply" == true ]]; then
   nft --file "$rendered_nft"

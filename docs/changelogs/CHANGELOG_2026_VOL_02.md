@@ -232,3 +232,17 @@
     Verification: Release artifact contents and checksums were independently verified by the release owner; Markdown/YAML validation remains required for this control-plane update. No Docker pull, stack deployment, Docker Secret, queue or Microsoft 365 action was performed.
     Risks: One verified release still cannot prove upgrade, rollback or queue compatibility; production promotion remains blocked on the applicable gates and a second compatible release.
     Rollback: Revert the metadata status only if the verified artifact set is later found inconsistent; do not infer a compatibility pair or execute rollback from this single-release record.
+
+2026-08-07 — Task 5.4: simplify development deployment inputs
+    Context: Live development smoke evidence was blocked by a development-only node label requirement and a separate environment-file path, although the approved single-release digest already exists in control-plane metadata.
+    Change: Development now uses the ignored repository-local `.env` through strict parsing, derives its only deployable digest from the unique `development-smoke-verified` entry in `deploy/config/queue-compatibility.yml`, and uses the base stack without a node-label constraint. Production retains the separate reviewed placement override and requires `smtp2graph_prod=true`, explicit env input and approval guards.
+    Verification: Shell regressions cover metadata selection, absent-metadata refusal, development deploy idempotency and production label/authorization requirements; static stack checks confirm the label is production-only.
+    Risks: Development scheduling is no longer pinned by a node label, so the authorised development Swarm must remain a single-node boundary or use a separately reviewed scheduler constraint. `.env` remains ignored and must not be printed, sourced or committed.
+    Rollback: Restore the prior base-stack placement constraint and explicit development env-file requirement only through a reviewed change; do not use rollback deployment without a declared compatible digest pair.
+
+2026-08-07 — Task 5.4: restore env-derived development placement and digest
+    Context: Operator review clarified that development and production must use the same env-derived node-label model, and the deploy image reference must be controlled by the selected environment contract rather than inferred from release-evidence metadata.
+    Change: Restored required `SMTP2GRAPH_NODE_LABEL=smtp2graph_dev|smtp2graph_prod`, canonical `node.labels.<label> == true` placement and bootstrap reconciliation for both environments. Restored env-derived immutable `SMTP2GRAPH_IMAGE_DIGEST`; `queue-compatibility.yml` remains rollback/evidence metadata only. Development retains strict local `.env` fallback without shell sourcing; encrypted `.env.dev.enc` remains reserved for SOPS Secret reconciliation.
+    Verification: Shell/security regressions cover env-derived digest and label validation, repeated deploy submission, bootstrap label reconciliation, stack rendering, production guards and local `.env` fallback behavior.
+    Risks: Development deploy requires an authorised host label and a valid ignored `.env`; a stale label or mutable digest fails closed. Do not parse encrypted SOPS material through the deployment environment parser.
+    Rollback: Change the env contract and stack placement only together through a reviewed change; never bypass queue compatibility assessment for rollback.

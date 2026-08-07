@@ -111,6 +111,9 @@ services:
         mode: 0400
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.labels.${SMTP2GRAPH_NODE_LABEL:?SMTP2GRAPH_NODE_LABEL is required} == true
       resources:
         limits:
           cpus: "1.00"
@@ -118,9 +121,6 @@ services:
           pids: 64
         reservations:
           memory: 128M
-      placement:
-        constraints:
-          - node.labels.${SMTP2GRAPH_NODE_LABEL:?SMTP2GRAPH_NODE_LABEL is required} == true
       restart_policy:
         condition: on-failure
         delay: 5s

@@ -8,7 +8,7 @@
 
 - `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-verified` та independently reviewed release evidence.
 - Host має `SERVER_ENV=dev`, development storage root є здоровим, а configuration/host backup reference зафіксовано. Планові backups ніколи не містять live `queue/` або `failed/` payloads.
-- Authorized operator має non-secret development env-file з цим digest.
+- Authorized operator має local ignored `.env` з allowlisted development inputs, `SMTP2GRAPH_NODE_LABEL=smtp2graph_dev`, exact immutable `SMTP2GRAPH_IMAGE_DIGEST` і versioned Docker Secret names. `queue-compatibility.yml` є evidence/rollback metadata, а не джерелом deploy digest.
 
 ### Run
 
@@ -16,13 +16,11 @@
 
 ```bash
 ./scripts/deploy-orchestrator-swarm.sh \
-  --env-file /approved/path/development.env \
   --deploy --apply
 
 ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
 
 ./scripts/deploy-orchestrator-swarm.sh \
-  --env-file /approved/path/development.env \
   --deploy --apply
 
 ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
@@ -32,7 +30,7 @@
 
 ### Verify and close
 
-- Зберегти non-secret command output як operator evidence і виконати `scripts/check-network-policy.sh --env-file <development-env>`.
+- Зберегти non-secret command output як operator evidence і виконати `scripts/check-network-policy.sh`.
 - Не записувати Docker Secret content, SMTP passwords або message bodies у evidence.
 
 ### Deferred rollback і duplicate risk

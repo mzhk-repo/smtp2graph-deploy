@@ -11,8 +11,8 @@
 ## `deploy-orchestrator-swarm.sh`
 
 - Category: 1b (dev/prod Swarm orchestration).
-- Inputs: explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`) with only allowlisted public stack inputs and versioned Docker Secret names, plus host `SERVER_ENV=dev|prod` from `/etc/environment`. The script never reads a local `.env`, never sources an environment file and does not receive secret values.
-- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Development `--deploy --apply` submits the canonical stack after `SERVER_ENV=dev` verification. Production requires `SERVER_ENV=prod`, an immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation.
+- Inputs: development may use the repository-local ignored `.env`; production requires an explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`). Both paths are strictly parsed without `source`, consuming only allowlisted public stack inputs, exact immutable image digest and versioned Docker Secret names, plus host `SERVER_ENV=dev|prod` from `/etc/environment`. `.env.dev.enc` remains a SOPS Secret-source input for reconciliation and is not parsed by deploy orchestration.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments require an env-derived placement label (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` uses local `.env` fallback after `SERVER_ENV=dev` verification. Production requires `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation.
 - Safety: only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
 - Check: `./tests/shell/test-deploy-orchestrator.sh`, `shellcheck scripts/deploy-orchestrator-swarm.sh`, `bash -n scripts/deploy-orchestrator-swarm.sh`.
@@ -49,7 +49,7 @@
 ## `bootstrap-swarm-host.sh`
 
 - Category: 1b (dev/prod Swarm host bootstrap).
-- Inputs: strict-parsed `--env-file` з `DEPLOY_ENVIRONMENT=development|production`, `SMTP2GRAPH_NODE_LABEL`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`.
+- Inputs: strict-parsed development `.env` or explicit production env-file з `DEPLOY_ENVIRONMENT=development|production`, `SMTP2GRAPH_NODE_LABEL`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`.
 - Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_dev=true` або `smtp2graph_prod=true`, storage root/direct children та atomically applies rendered nftables table. Production additionally needs `--approval-context`.
 - Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup.
 - Check: `./tests/security/test-bootstrap-swarm-host.sh`.

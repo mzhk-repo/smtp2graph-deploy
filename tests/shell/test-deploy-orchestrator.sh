@@ -41,7 +41,8 @@ printf '%s\n' \
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 cat >"$compatibility_file" <<EOF
 version: 1
-approved_images: []
+approved_images:
+  - digest: "${valid_digest}"
 compatible_pairs:
   - current: "${valid_digest}"
     candidate: "${rollback_digest}"
@@ -128,7 +129,7 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
 fi
 
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --check >/dev/null 2>&1; then
-  printf 'ERROR: implicit local env fallback was unexpectedly accepted.\n' >&2
+  printf 'ERROR: implicit local env fallback unexpectedly succeeded without a valid development .env.\n' >&2
   exit 1
 fi
 

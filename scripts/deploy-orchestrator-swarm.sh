@@ -84,8 +84,6 @@ while (($#)); do
 done
 
 [[ -n "$operation" ]] || die 'choose one operation.'
-[[ -n "$env_file" || -n "${ORCHESTRATOR_ENV_FILE:-}" ]] || die '--env-file or ORCHESTRATOR_ENV_FILE is required; local .env fallback is not allowed here.'
-
 allowed_keys=(
   DEPLOY_ENVIRONMENT
   SMTP2GRAPH_IMAGE_DIGEST
@@ -132,14 +130,13 @@ is_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]
 }
 
-is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
 for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK \
-  SMTP2GRAPH_NODE_LABEL \
   GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME \
   GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME \
   TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME; do
   is_name "${!key}" || die "${key} has an unsafe name."
 done
+is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
 case "$environment:$SMTP2GRAPH_NODE_LABEL" in
   development:smtp2graph_dev | production:smtp2graph_prod) ;;
   *) die 'SMTP2GRAPH_NODE_LABEL must match DEPLOY_ENVIRONMENT.' ;;
@@ -154,12 +151,16 @@ queue_compatibility_file=${SMTP_QUEUE_COMPATIBILITY_FILE:-"${project_root}/deplo
 stack_env=()
 for key in "${allowed_keys[@]}"; do
   [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME ]] && continue
-  stack_env+=("${key}=${!key}")
+  stack_env+=("${key}=${!key:-}")
 done
 
 run_stack_config() {
   command -v docker >/dev/null || die 'docker is required.'
   env "${stack_env[@]}" docker stack config -c "$stack_file" >/dev/null
+}
+
+deploy_stack() {
+  env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
 }
 
 queue_pair_is_approved() {
@@ -199,7 +200,7 @@ case "$operation" in
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
     run_stack_config
     require_apply_authorization
-    env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
+    deploy_stack
     log "PASS: ${environment} stack deploy submitted; run check-network-policy.sh after service convergence."
     ;;
   status)

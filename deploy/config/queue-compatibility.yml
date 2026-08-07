@@ -10,5 +10,16 @@ version: 1
 # compatible_pairs:
 #   - current: "ghcr.io/example/gateway@sha256:<64-lowercase-hex>"
 #     candidate: "ghcr.io/example/gateway@sha256:<64-lowercase-hex>"
-approved_images: []
+# The following URLs were supplied by the release owner for a development-only
+# single-release smoke rehearsal. They must be independently reviewed before
+# the image is used for a compatibility pair, rollback, or production promotion.
+approved_images:
+  - digest: "ghcr.io/mzhk-repo/smtp2graph-build@sha256:3d5069229059411988884913b6afba2d198c43e2440c1037e44d6aa54f172f65"
+    release_tag: "v0.0.7"
+    release_evidence: "https://github.com/mzhk-repo/smtp2graph-build/releases/download/v0.0.7/release-evidence.env"
+    trivy_report: "https://github.com/mzhk-repo/smtp2graph-build/releases/download/v0.0.7/trivy-v0.0.7.json"
+    cyclonedx_sbom: "https://github.com/mzhk-repo/smtp2graph-build/releases/download/v0.0.7/sbom-v0.0.7.cdx.json"
+    image_cyclonedx_sbom: "https://github.com/mzhk-repo/smtp2graph-build/releases/download/v0.0.7/mzhk-repo-smtp2graph-build_sha256_3d5069229059411988884913b6afba2d198c43e2440c1037e44d6aa54f172f65.cyclonedx.json"
+    checksums: "https://github.com/mzhk-repo/smtp2graph-build/releases/download/v0.0.7/SHA256SUMS"
+    status: "development-smoke-only"
 compatible_pairs: []

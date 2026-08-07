@@ -1,42 +1,40 @@
-# SMTP2Graph deployment and rollback runbook
+# Runbook розгортання SMTP2Graph
 
-## Task 5.4 development rehearsal
+## Task 5.4 — development single-release rehearsal
 
-This procedure is development-only and must not be pointed at a production host, production credentials or production recipients.
+Ця процедура призначена лише для development і не використовує production host, credentials або recipients.
 
 ### Preconditions
 
-- Task 5.3 has approved the current and candidate immutable image digests and retained their Trivy, Syft and OCI evidence.
-- `deploy/config/queue-compatibility.yml` contains both evidence-backed images and their explicit compatible pair.
-- The host has `SERVER_ENV=dev`, the development storage root is healthy, and a configuration/host backup reference is recorded. Routine backups never include live `queue/` or `failed/` payloads.
-- The selected recipient exactly matches `NONPRODUCTION_RECIPIENT_ALLOWLIST`.
-- Protected CI creates the test SMTP password file only below `/dev/shm`, owned by the runner and mode `0600`; the file is removed by CI cleanup.
+- `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-only` та посиланнями на release evidence.
+- Host має `SERVER_ENV=dev`, development storage root є здоровим, а configuration/host backup reference зафіксовано. Планові backups ніколи не містять live `queue/` або `failed/` payloads.
+- Authorized operator має non-secret development env-file з цим digest.
 
 ### Run
 
-Run only from the authorised development Swarm manager. Store the generated non-secret evidence file in an operator-only directory.
+Виконувати лише на authorised development Swarm manager.
 
 ```bash
-./scripts/rehearse-deployment.sh \
+./scripts/deploy-orchestrator-swarm.sh \
   --env-file /approved/path/development.env \
-  --current-digest IMAGE@sha256:CURRENT \
-  --candidate-digest IMAGE@sha256:CANDIDATE \
-  --recipient approved-test-mailbox@example.invalid \
-  --smtp-user rehearsal-client \
-  --password-file /dev/shm/smtp2graph-rehearsal-password \
-  --backup-reference backup-reference-id \
-  --evidence-dir /approved/operator-only/evidence \
-  --apply
+  --deploy --apply
+
+./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
+
+./scripts/deploy-orchestrator-swarm.sh \
+  --env-file /approved/path/development.env \
+  --deploy --apply
+
+./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
 ```
 
-The script creates a temporary invalid Graph credential Secret, submits one synthetic STARTTLS SMTP message, upgrades to the candidate digest, rolls back to the current digest and restores the normal credential mapping. It removes only its own `smtp2graph_rehearsal_graph_cred_*` Secret after the service no longer references it.
+Ця репетиція не створює Docker Secrets, не надсилає SMTP test message і не змінює queue. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
 
 ### Verify and close
 
-- Read the generated evidence file and run `tests/acceptance/deployment/smoke.sh` plus `scripts/check-network-policy.sh --env-file <development-env>`.
-- Use a read-only query against the non-production mailbox to confirm the reported `X-Rehearsal-ID`; do not place message bodies or credentials in evidence.
-- Confirm that the queue drained. Do not automatically delete the mailbox test message.
+- Зберегти non-secret command output як operator evidence і виконати `scripts/check-network-policy.sh --env-file <development-env>`.
+- Не записувати Docker Secret content, SMTP passwords або message bodies у evidence.
 
-### Rollback and duplicate risk
+### Deferred rollback і duplicate risk
 
-Freeze new acceptance before an emergency rollback. The rollback command requires an explicit immutable digest and a pair declared in `queue-compatibility.yml`. This service uses At-Least-Once delivery during rollback/recovery: if Graph accepted a message before an interrupted queue cleanup, a replay can produce a duplicate. Prefer this over silent loss, record the affected interval, and investigate duplicates from metadata without logging message content.
+Live rollback rehearsal відкладено до появи другого independently reviewed fork release і declared queue-compatible pair. До того моменту не використовувати rollback command для цього single-release deployment. ADR-0008 залишається чинним: під час майбутнього rollback/recovery модель delivery є At-Least-Once, тому можливий duplicate є прийнятнішим за silent loss.

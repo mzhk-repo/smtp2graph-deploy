@@ -218,3 +218,10 @@
     Verification: Replayed all 11 patch assets via `./scripts/upgrade-smtp2graph-fork.sh --release v1.1.5 --apply --target-branch v1.1.6 --push`, passing 100% of regressions (41/41 total, 6 unit and 35 receive); build repository target branch `v1.1.6` updated and pushed to remote origin.
     Risks: None; all unit and receive regressions passed with nodemailer v9.0.4; secret rule ignore applies strictly to test RSA fallback key.
     Rollback: Revert updated patch assets `010` and `011`, and reset build-plane branch if needed.
+
+2026-08-07 — Task 5.4: single-release development deploy and smoke scope
+    Context: Only one new fork release digest is available, so an upgrade/rollback rehearsal cannot establish queue compatibility honestly.
+    Change: Task 5.4 now covers fresh development deploy, no-op redeploy and read-only smoke for `ghcr.io/mzhk-repo/smtp2graph-build@sha256:3d5069229059411988884913b6afba2d198c43e2440c1037e44d6aa54f172f65`. Control-plane metadata records the user-provided v0.0.7 Trivy, CycloneDX, image-specific CycloneDX, checksum and release-evidence artifact URLs. Upgrade, queue migration and rollback rehearsal are explicitly deferred and no longer block the single-release Phase 5 smoke gate.
+    Verification: Metadata and documentation updated; supplied GitHub download URLs did not expose artifact content through the available read-only browser channel. No Docker pull, stack deployment, Docker Secret, queue or Microsoft 365 action was performed.
+    Risks: Artifact contents and checksums still require independent review before production promotion or a queue compatibility declaration. One release cannot prove upgrade, rollback or queue preservation.
+    Rollback: Do not use rollback for the single-release rehearsal. Restore this scope decision only with a reviewed second fork digest and explicit compatibility evidence; retain ADR-0008 At-Least-Once recovery policy.

@@ -35,6 +35,7 @@
 - Safety: refuses production, tags, unknown evidence/compatibility metadata, recipient outside allowlist, unsafe password/evidence paths and unsafe storage. It never reads Docker Secret content, puts passwords in arguments/logs or automatically deletes mailbox data.
 - Rollback: the service model is At-Least-Once under recovery. Freeze acceptance, use only a declared compatible pair, preserve queue state and verify the emitted `X-Rehearsal-ID` with a read-only mailbox query.
 - Check: `./tests/shell/test-rehearse-deployment.sh`, `bash -n scripts/rehearse-deployment.sh`.
+- Current Task 5.4 scope: this script is retained for a future two-release compatibility rehearsal and must not be run for the current single-release development smoke.
 
 ## `init-storage.sh`
 

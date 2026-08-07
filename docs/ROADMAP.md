@@ -810,28 +810,28 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Risks:** reusable workflow pinned to mutable `@main`; fork PR secret exposure; artifact incorrectly associated with another digest.
 - **Rollback Notes:** disable deploy job, не validation; retain prior approved digest and its evidence; prior workflow не відновлювати, якщо він Koha-specific/unsafe.
 
-### Task 5.4 — Staging deploy, upgrade і rollback rehearsal
+### Task 5.4 — Staging single-release deploy і smoke rehearsal
 
 - **Priority:** Must
-- **Goal:** довести deployment lifecycle без production traffic.
+- **Goal:** довести безпечний deploy одного immutable release без production traffic.
 - **Depends on:** Tasks 5.1–5.3.
-- **Definition of Ready:** development staging host backup reference, test queue, approved current/candidate Task 5.3 digests and declared exact-digest compatibility pair.
-- **Implementation Steps:** fresh deploy; no-op redeploy; temporary versioned invalid Graph credential rotation; SMTP-created queued item; candidate upgrade; explicit compatible rollback; restore credential mapping; collect non-secret evidence and read-only mailbox proof.
-- **Files / Directories:** `tests/acceptance/deployment/`, `scripts/rehearse-deployment.sh`, `deploy/config/queue-compatibility.yml`, `docs/RUNBOOK.md`.
-- **Artifacts:** development staging rehearsal evidence and `X-Rehearsal-ID` mailbox verification.
-- **Acceptance Criteria:** deploy і no-op repeat успішні; SMTP-created queue payload survives upgrade; rollback requires declared compatible pair and queue drains after credential restoration; possible duplicate delivery is documented as At-Least-Once.
+- **Definition of Ready:** development staging host backup reference; один Task 5.3 immutable digest із release evidence; matching development env contract.
+- **Implementation Steps:** fresh deploy; read-only smoke; no-op redeploy; повторний smoke; зібрати non-secret evidence. Upgrade, queue migration і rollback rehearsal виконуються лише після появи другого independently reviewed queue-compatible fork release.
+- **Files / Directories:** `tests/acceptance/deployment/`, `deploy/config/queue-compatibility.yml`, `docs/RUNBOOK.md`.
+- **Artifacts:** development single-release deployment evidence.
+- **Acceptance Criteria:** fresh deploy і no-op repeat успішні; один desired task `Running`; SMTP повертає `220`; Secret mount modes відповідають stack contract; rollback procedure документована як deferred, але не є умовою Phase 5 Quality Gate.
 - **Validation Commands:**
   ```bash
-  ./tests/shell/test-rehearse-deployment.sh
+  ./tests/shell/test-deployment-smoke.sh
   ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
   ```
-- **Risks:** rollback duplicates delivery; no live evidence is valid until approved Task 5.3 digests and non-production host access exist.
-- **Rollback Notes:** freeze acceptance, snapshot metadata/config, inspect explicit queue compatibility before downgrade; retain At-Least-Once duplicate evidence.
+- **Risks:** один release не доводить upgrade, rollback або queue compatibility; live evidence requires authorised non-production host access.
+- **Rollback Notes:** rollback не виконувати в межах цієї задачі. Freeze acceptance і використовувати explicit compatible fork digest pair лише після окремого review.
 
 **Phase 5 Quality Gate**
 
 - [ ] Stack render/IaC/security checks проходять.
-- [ ] Fresh deploy, idempotent redeploy, upgrade і rollback rehearsed.
+- [ ] Fresh deploy, idempotent redeploy і smoke rehearsal пройдені; rollback procedure задокументована та явно deferred до появи другого compatible release.
 - [ ] Production approval та untrusted PR isolation перевірені.
 
 ## Phase 6 — Testing, Stabilization and Release Candidate

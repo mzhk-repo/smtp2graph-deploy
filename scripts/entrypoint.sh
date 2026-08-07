@@ -95,9 +95,12 @@ parse_runtime_input_file() {
 }
 
 require_tmpfs_dir() {
-  if [ ! -d "${RUNTIME_CONFIG_DIR}" ] || [ -L "${RUNTIME_CONFIG_DIR}" ]; then
-    die 'runtime configuration directory must be an existing directory.' 66
+  if [ ! -e "${RUNTIME_CONFIG_DIR}" ]; then
+    umask 077
+    mkdir -p -- "${RUNTIME_CONFIG_DIR}" || die 'runtime configuration directory could not be created.' 66
+    chmod 0700 -- "${RUNTIME_CONFIG_DIR}" || die 'runtime configuration directory mode could not be set.' 66
   fi
+  [ -d "${RUNTIME_CONFIG_DIR}" ] && [ ! -L "${RUNTIME_CONFIG_DIR}" ] || die 'runtime configuration directory must be a non-symlink directory.' 66
   awk -v mount_path="${RUNTIME_CONFIG_DIR}" '$3 == "tmpfs" && ($2 == mount_path || index(mount_path, $2 "/") == 1) { found = 1 } END { exit !found }' /proc/mounts || die 'runtime configuration directory must be a dedicated tmpfs mount.' 66
 }
 

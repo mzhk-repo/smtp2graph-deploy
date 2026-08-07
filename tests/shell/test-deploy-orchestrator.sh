@@ -15,7 +15,7 @@ mkdir -p "$fake_bin"
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 printf '%s\n' \
-  'DEPLOY_ENVIRONMENT=development' \
+  'DEPLOY_ENVIRONMENT="development"' \
   "SMTP2GRAPH_IMAGE_DIGEST=${valid_digest}" \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
@@ -112,7 +112,7 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
 fi
 
 production_env="$tmp/production.env"
-sed 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' "$env_file" >"$production_env"
+sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
   printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
   exit 1

@@ -65,6 +65,9 @@ load_deploy_env_file() {
     }
     key=${BASH_REMATCH[1]}
     value=${BASH_REMATCH[2]}
+    if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+      value=${BASH_REMATCH[1]}
+    fi
     allowed=false
     for item in "$@"; do [[ "$key" == "$item" ]] && {
       allowed=true

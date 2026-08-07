@@ -31,6 +31,7 @@ if command -v docker >/dev/null; then
     SMTP2GRAPH_IMAGE_DIGEST='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
     SMTP2GRAPH_STORAGE_HOST_PATH=/srv/smtp2graph/dev/data \
     SMTP2GRAPH_NODE_LABEL=smtp2graph_dev \
+    SMTP2GRAPH_CONFIG_VERSION=testconfig000001 \
     SMTP2GRAPH_MODE=full \
     GRAPH_AUTH_MODE=certificate \
     SMTP_MAX_MESSAGE_BYTES=26214400 \

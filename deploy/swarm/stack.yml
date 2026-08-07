@@ -21,6 +21,7 @@ services:
         bind:
           create_host_path: false
     environment:
+      RUNTIME_CONFIG_DIR: /tmp/smtp2graph-runtime
       RUNTIME_TEMPLATE_FILE: /run/configs/gateway-config.yml.template
       RUNTIME_RENDER_HELPER_FILE: /run/configs/render-config.sh
       GRAPH_CREDENTIAL_PATH: /run/secrets/graph-credential
@@ -146,10 +147,13 @@ networks:
 
 configs:
   gateway_entrypoint:
+    name: smtp2graph_gateway_entrypoint_${SMTP2GRAPH_CONFIG_VERSION:?SMTP2GRAPH_CONFIG_VERSION is required}
     file: ../../scripts/entrypoint.sh
   gateway_render_config:
+    name: smtp2graph_gateway_render_config_${SMTP2GRAPH_CONFIG_VERSION:?SMTP2GRAPH_CONFIG_VERSION is required}
     file: ../../scripts/lib/render-config.sh
   gateway_config_template:
+    name: smtp2graph_gateway_config_template_${SMTP2GRAPH_CONFIG_VERSION:?SMTP2GRAPH_CONFIG_VERSION is required}
     file: ../config/gateway-config.yml.template
 
 secrets:

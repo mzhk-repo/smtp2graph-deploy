@@ -156,6 +156,8 @@ for key in "${allowed_keys[@]}"; do
   stack_env+=("${key}=${!key:-}")
 done
 stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")
+config_version=$(sha256sum "$project_root/scripts/entrypoint.sh" "$project_root/scripts/lib/render-config.sh" "$project_root/deploy/config/gateway-config.yml.template" | sha256sum | awk '{print substr($1, 1, 16)}')
+stack_env+=("SMTP2GRAPH_CONFIG_VERSION=${config_version}")
 
 run_stack_config() {
   command -v docker >/dev/null || die 'docker is required.'

@@ -6,7 +6,7 @@
 |---|---|---|---|
 | TB-DEPLOY-001 | Read-only smoke підтверджує одну desired Running task, SMTP `220` і declared Docker Secret mount modes без читання secret content. | `./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph` | Потребує authorised development Swarm manager; не виконує `docker exec`. |
 | TB-DEPLOY-002 | Fresh deploy і повторний deploy одного evidence-backed immutable digest не замінюють desired running task; stack не використовує `--prune`. | `./tests/shell/test-deploy-orchestrator.sh` і live operator evidence | Fake Docker покриває CLI contract; live Swarm потрібен для фактичної convergence evidence. |
-| TB-DEPLOY-003 | Один release має Trivy, CycloneDX, image-specific CycloneDX і checksum artifact URLs у control-plane metadata. | `deploy/config/queue-compatibility.yml` | URLs надані release owner; їхній content/hash review виконується перед promotion або compatibility declaration. |
+| TB-DEPLOY-003 | Один release має independently reviewed Trivy, CycloneDX, image-specific CycloneDX і checksum artifacts у control-plane metadata. | `deploy/config/queue-compatibility.yml` | Digest `sha256:3d506…f172f65` verified для development smoke; другий reviewed release потрібний перед promotion або compatibility declaration. |
 | TB-DEPLOY-004 | Upgrade, queue migration і rollback rehearsal deferred до другого independently reviewed queue-compatible fork release. | ADR-0008, RUNBOOK | Не блокує single-release Phase 5 smoke; не є production approval. |
 
 ## Task 5.2 — Idempotent orchestration scripts

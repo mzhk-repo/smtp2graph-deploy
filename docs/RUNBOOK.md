@@ -6,7 +6,7 @@
 
 ### Preconditions
 
-- `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-only` та посиланнями на release evidence.
+- `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-verified` та independently reviewed release evidence.
 - Host має `SERVER_ENV=dev`, development storage root є здоровим, а configuration/host backup reference зафіксовано. Планові backups ніколи не містять live `queue/` або `failed/` payloads.
 - Authorized operator має non-secret development env-file з цим digest.
 

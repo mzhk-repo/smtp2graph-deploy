@@ -815,7 +815,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Priority:** Must
 - **Goal:** довести безпечний deploy одного immutable release без production traffic.
 - **Depends on:** Tasks 5.1–5.3.
-- **Definition of Ready:** development staging host backup reference; один Task 5.3 immutable digest із release evidence; matching development env contract.
+- **Definition of Ready:** development staging host backup reference; один Task 5.3 immutable digest із independently reviewed release evidence; matching development env contract.
 - **Implementation Steps:** fresh deploy; read-only smoke; no-op redeploy; повторний smoke; зібрати non-secret evidence. Upgrade, queue migration і rollback rehearsal виконуються лише після появи другого independently reviewed queue-compatible fork release.
 - **Files / Directories:** `tests/acceptance/deployment/`, `deploy/config/queue-compatibility.yml`, `docs/RUNBOOK.md`.
 - **Artifacts:** development single-release deployment evidence.

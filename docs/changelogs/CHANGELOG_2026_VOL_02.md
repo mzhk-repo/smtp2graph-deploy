@@ -225,3 +225,10 @@
     Verification: Metadata and documentation updated; supplied GitHub download URLs did not expose artifact content through the available read-only browser channel. No Docker pull, stack deployment, Docker Secret, queue or Microsoft 365 action was performed.
     Risks: Artifact contents and checksums still require independent review before production promotion or a queue compatibility declaration. One release cannot prove upgrade, rollback or queue preservation.
     Rollback: Do not use rollback for the single-release rehearsal. Restore this scope decision only with a reviewed second fork digest and explicit compatibility evidence; retain ADR-0008 At-Least-Once recovery policy.
+
+2026-08-07 — Task 5.4: v0.0.7 release evidence independently verified
+    Context: The single-release development smoke scope required evidence review before its fork digest could be treated as verified metadata rather than user-provided artifact links.
+    Change: Marked `ghcr.io/mzhk-repo/smtp2graph-build@sha256:3d5069229059411988884913b6afba2d198c43e2440c1037e44d6aa54f172f65` as `development-smoke-verified` after independent review of its release evidence and checksums. Documentation now distinguishes this verified single release from the still-deferred two-release compatibility/rollback evidence.
+    Verification: Release artifact contents and checksums were independently verified by the release owner; Markdown/YAML validation remains required for this control-plane update. No Docker pull, stack deployment, Docker Secret, queue or Microsoft 365 action was performed.
+    Risks: One verified release still cannot prove upgrade, rollback or queue compatibility; production promotion remains blocked on the applicable gates and a second compatible release.
+    Rollback: Revert the metadata status only if the verified artifact set is later found inconsistent; do not infer a compatibility pair or execute rollback from this single-release record.

@@ -53,9 +53,9 @@ while (($#)); do
 done
 
 [[ -n "$env_file" ]] || die '--env-file is required.'
-load_deploy_env_file "$project_root" "$env_file" DEPLOY_ENVIRONMENT SMTP2GRAPH_STORAGE_HOST_PATH SMTP2GRAPH_NODE_LABEL SWARM_STACK_NAME
+load_deploy_env_file "$project_root" "$env_file" DEPLOY_ENVIRONMENT SMTP2GRAPH_STORAGE_HOST_PATH SWARM_STACK_NAME
 [[ "${DEPLOY_ENVIRONMENT:-}" == development ]] || die 'legacy migration is available only for DEPLOY_ENVIRONMENT=development.'
-[[ "${SMTP2GRAPH_NODE_LABEL:-}" == smtp2graph_dev ]] || die 'SMTP2GRAPH_NODE_LABEL must be smtp2graph_dev.'
+SMTP2GRAPH_NODE_LABEL=smtp2graph_dev
 require_server_env_match development || die 'legacy migration requires host SERVER_ENV=dev.'
 
 base_root='/srv/smtp2graph'

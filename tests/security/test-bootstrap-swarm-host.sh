@@ -16,7 +16,6 @@ printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${storage_parent}/data" \
-  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$env_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 
@@ -85,7 +84,6 @@ printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   'SMTP2GRAPH_STORAGE_HOST_PATH=/' \
-  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$unsafe_env"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$unsafe_env" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted the storage root.\n' >&2
@@ -94,7 +92,7 @@ fi
 
 production_env="$tmp/production.env"
 sed -i 's/"encrypted":"false"/"encrypted":""/' "$fake_bin/docker"
-sed -e '/^SMTP_ALLOWED_SOURCE_CIDRS=8\.8\.8\.8\/32$/d' -e 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' -e 's/^SMTP2GRAPH_NODE_LABEL=smtp2graph_dev$/SMTP2GRAPH_NODE_LABEL=smtp2graph_prod/' "$env_file" >"$production_env"
+sed -e '/^SMTP_ALLOWED_SOURCE_CIDRS=8\.8\.8\.8\/32$/d' -e 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' "$env_file" >"$production_env"
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --apply >/dev/null 2>&1; then
   printf 'ERROR: production bootstrap unexpectedly accepted missing approval context.\n' >&2

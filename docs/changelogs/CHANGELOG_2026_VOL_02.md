@@ -246,3 +246,10 @@
     Verification: Shell/security regressions cover env-derived digest and label validation, repeated deploy submission, bootstrap label reconciliation, stack rendering, production guards and local `.env` fallback behavior.
     Risks: Development deploy requires an authorised host label and a valid ignored `.env`; a stale label or mutable digest fails closed. Do not parse encrypted SOPS material through the deployment environment parser.
     Rollback: Change the env contract and stack placement only together through a reviewed change; never bypass queue compatibility assessment for rollback.
+
+2026-08-07 — Task 5.4: derive Swarm placement label from environment
+    Context: The development and production environment names already determine their intended Swarm labels, while duplicating the label in each env file risks mismatched configuration.
+    Change: `deploy-orchestrator-swarm.sh` and `bootstrap-swarm-host.sh` now derive `smtp2graph_dev` or `smtp2graph_prod` exclusively from `DEPLOY_ENVIRONMENT`; the canonical stack still requires the derived label with value `true`. Removed the duplicate env contract/example input while preserving env-derived immutable image digest and local development `.env` fallback.
+    Verification: Shell and security regressions cover development and production derivation, stack rendering, bootstrap label reconciliation and immutable digest validation.
+    Risks: An incorrect `DEPLOY_ENVIRONMENT` selects the wrong label, but matching host `SERVER_ENV` guards fail closed before mutation.
+    Rollback: Restore an explicit label input only together with validation, env contract and stack documentation; do not bypass host environment matching.

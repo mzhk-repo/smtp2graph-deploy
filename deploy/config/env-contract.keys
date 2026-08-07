@@ -18,7 +18,6 @@ QUEUE_MAX_BYTES|required|public|1073741824
 QUEUE_REJECT_THRESHOLD_PERCENT|required|public|80
 SMTP2GRAPH_STORAGE_ROOT|required|public|/data
 SMTP2GRAPH_STORAGE_HOST_PATH|required|public|/srv/smtp2graph/dev/data
-SMTP2GRAPH_NODE_LABEL|required|public|smtp2graph_dev
 SMTP2GRAPH_IMAGE_DIGEST|required|public|ghcr.io/example/smtp2graph@sha256:REPLACE_WITH_TASK_5_3_DIGEST
 FAILED_PAYLOAD_RETENTION_DAYS|required|public|7
 LOG_RETENTION_DAYS|required|public|30

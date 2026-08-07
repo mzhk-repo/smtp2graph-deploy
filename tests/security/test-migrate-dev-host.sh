@@ -17,7 +17,6 @@ printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${target_root}/data" \
-  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SWARM_STACK_NAME=smtp2graph' >"$env_file"
 printf '%s\n' true >"$state/old-label"
 

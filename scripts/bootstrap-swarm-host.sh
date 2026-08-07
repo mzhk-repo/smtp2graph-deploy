@@ -54,15 +54,15 @@ while (($#)); do
 done
 
 load_deploy_env_file "$project_root" "$env_file" \
-  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP2GRAPH_NODE_LABEL SMTP_ALLOWED_SOURCE_CIDRS
+  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP_ALLOWED_SOURCE_CIDRS
 
 environment=${DEPLOY_ENVIRONMENT:-}
 network=${SWARM_OVERLAY_NETWORK:-}
 storage_root=${SMTP2GRAPH_STORAGE_HOST_PATH:-}
-node_label=${SMTP2GRAPH_NODE_LABEL:-}
-case "$environment:$node_label" in
-  development:smtp2graph_dev | production:smtp2graph_prod) ;;
-  *) die 'SMTP2GRAPH_NODE_LABEL must match DEPLOY_ENVIRONMENT.' ;;
+case "$environment" in
+  development) node_label=smtp2graph_dev ;;
+  production) node_label=smtp2graph_prod ;;
+  *) die 'DEPLOY_ENVIRONMENT must be development or production.' ;;
 esac
 node_label_value='true'
 

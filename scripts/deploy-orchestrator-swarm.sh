@@ -90,7 +90,6 @@ allowed_keys=(
   SWARM_STACK_NAME
   SWARM_OVERLAY_NETWORK
   SMTP2GRAPH_STORAGE_HOST_PATH
-  SMTP2GRAPH_NODE_LABEL
   SMTP2GRAPH_MODE
   GRAPH_AUTH_MODE
   SMTP_MAX_MESSAGE_BYTES
@@ -120,6 +119,10 @@ case "$environment" in
   development | production) ;;
   *) die 'DEPLOY_ENVIRONMENT must be development or production.' ;;
 esac
+case "$environment" in
+  development) SMTP2GRAPH_NODE_LABEL=smtp2graph_dev ;;
+  production) SMTP2GRAPH_NODE_LABEL=smtp2graph_prod ;;
+esac
 require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
 
 is_digest() {
@@ -137,10 +140,6 @@ for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK \
   is_name "${!key}" || die "${key} has an unsafe name."
 done
 is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
-case "$environment:$SMTP2GRAPH_NODE_LABEL" in
-  development:smtp2graph_dev | production:smtp2graph_prod) ;;
-  *) die 'SMTP2GRAPH_NODE_LABEL must match DEPLOY_ENVIRONMENT.' ;;
-esac
 [[ "$SMTP2GRAPH_STORAGE_HOST_PATH" = /* && "$SMTP2GRAPH_STORAGE_HOST_PATH" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /.'
 
 stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/stack.yml"}
@@ -153,6 +152,7 @@ for key in "${allowed_keys[@]}"; do
   [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME ]] && continue
   stack_env+=("${key}=${!key:-}")
 done
+stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")
 
 run_stack_config() {
   command -v docker >/dev/null || die 'docker is required.'

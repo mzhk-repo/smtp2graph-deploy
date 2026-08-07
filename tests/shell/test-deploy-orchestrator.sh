@@ -20,7 +20,6 @@ printf '%s\n' \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${tmp}/data" \
-  'SMTP2GRAPH_NODE_LABEL=smtp2graph_dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \
@@ -105,7 +104,7 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
 fi
 
 production_env="$tmp/production.env"
-sed -e 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' -e 's/^SMTP2GRAPH_NODE_LABEL=smtp2graph_dev$/SMTP2GRAPH_NODE_LABEL=smtp2graph_prod/' "$env_file" >"$production_env"
+sed 's/^DEPLOY_ENVIRONMENT=development$/DEPLOY_ENVIRONMENT=production/' "$env_file" >"$production_env"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
   printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
   exit 1
@@ -128,9 +127,10 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   exit 1
 fi
 
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --check >/dev/null 2>&1; then
-  printf 'ERROR: implicit local env fallback unexpectedly succeeded without a valid development .env.\n' >&2
-  exit 1
-fi
+fallback_root="$tmp/fallback-root"
+mkdir -p "$fallback_root"
+cp "$env_file" "$fallback_root/.env"
+resolved_fallback=$(bash -c '. "$1"; resolve_deploy_env_file "$2" ""' _ "$root/scripts/lib/read-deploy-env.sh" "$fallback_root")
+test "$resolved_fallback" = "$fallback_root/.env"
 
 printf 'PASS: Swarm orchestrator validates inputs and performs only explicit development operations.\n'

@@ -8,7 +8,7 @@
 
 - `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-verified` та independently reviewed release evidence.
 - Host має `SERVER_ENV=dev`, development storage root є здоровим, а configuration/host backup reference зафіксовано. Планові backups ніколи не містять live `queue/` або `failed/` payloads.
-- Authorized operator має local ignored `.env` з allowlisted development inputs, `SMTP2GRAPH_NODE_LABEL=smtp2graph_dev`, exact immutable `SMTP2GRAPH_IMAGE_DIGEST` і versioned Docker Secret names. `queue-compatibility.yml` є evidence/rollback metadata, а не джерелом deploy digest.
+- Authorized operator має local ignored `.env` з allowlisted development inputs, exact immutable `SMTP2GRAPH_IMAGE_DIGEST` і versioned Docker Secret names. Placement label деривується з `DEPLOY_ENVIRONMENT=development` як `smtp2graph_dev`; `queue-compatibility.yml` є evidence/rollback metadata, а не джерелом deploy digest.
 
 ### Run
 

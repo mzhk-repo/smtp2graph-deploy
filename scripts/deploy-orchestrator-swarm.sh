@@ -27,6 +27,7 @@ USAGE
 }
 
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+init_storage_script=${SMTP_INIT_STORAGE_SCRIPT:-"${project_root}/scripts/init-storage.sh"}
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
@@ -163,6 +164,11 @@ deploy_stack() {
   env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
 }
 
+initialize_storage() {
+  [[ "$init_storage_script" = /* && -x "$init_storage_script" && ! -L "$init_storage_script" ]] || die 'storage initializer must be an absolute executable non-symlink file.'
+  "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" --environment "$environment" --apply
+}
+
 queue_pair_is_approved() {
   local first=$1 second=$2
   awk -v first="$first" -v second="$second" '
@@ -200,6 +206,7 @@ case "$operation" in
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
     run_stack_config
     require_apply_authorization
+    initialize_storage
     deploy_stack
     log "PASS: ${environment} stack deploy submitted; run check-network-policy.sh after service convergence."
     ;;
@@ -217,6 +224,7 @@ case "$operation" in
     queue_pair_is_approved "$SMTP2GRAPH_IMAGE_DIGEST" "$rollback_image" || die 'rollback digest pair is absent from approved queue compatibility metadata.'
     run_stack_config
     require_apply_authorization
+    initialize_storage
     rollback_env=("${stack_env[@]}" "SMTP2GRAPH_IMAGE_DIGEST=${rollback_image}")
     env "${rollback_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
     log "PASS: explicit ${environment} rollback deploy submitted; verify queue and SMTP delivery before closing the change."

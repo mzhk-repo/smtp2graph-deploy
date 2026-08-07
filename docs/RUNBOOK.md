@@ -26,7 +26,7 @@
 ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
 ```
 
-Ця репетиція не створює Docker Secrets, не надсилає SMTP test message і не змінює queue. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
+Перед кожним stack submission orchestration ідемпотентно викликає `init-storage.sh` для валідованого storage root і його direct `queue`/`failed` children. Репетиція не створює Docker Secrets, не надсилає SMTP test message і не змінює queue payloads. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
 
 ### Verify and close
 

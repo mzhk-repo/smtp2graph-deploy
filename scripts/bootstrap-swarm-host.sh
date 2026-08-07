@@ -126,7 +126,6 @@ rendered_nft=''
 cleanup() { [[ -z "$rendered_nft" ]] || rm -f -- "$rendered_nft"; }
 trap cleanup EXIT
 
-prepare_storage_root
 if [[ "$apply" == true ]]; then
   [[ $(id -u) -eq 0 ]] || die '--apply requires a privileged operator for nftables and storage initialization.'
 fi

@@ -253,3 +253,10 @@
     Verification: Shell and security regressions cover development and production derivation, stack rendering, bootstrap label reconciliation and immutable digest validation.
     Risks: An incorrect `DEPLOY_ENVIRONMENT` selects the wrong label, but matching host `SERVER_ENV` guards fail closed before mutation.
     Rollback: Restore an explicit label input only together with validation, env contract and stack documentation; do not bypass host environment matching.
+
+2026-08-07 — Task 5.4: shared storage initialization before deploy
+    Context: First development bootstrap found a missing storage parent, while the existing initializer could only prepare children of an already existing root.
+    Change: Extended `init-storage.sh` to create a validated missing storage root under an existing non-symlink ancestor during explicit apply. Bootstrap and deploy/rollback orchestration now share the initializer, so stack submission occurs only after the reviewed root and direct `queue`/`failed` children converge.
+    Verification: Storage initialization, bootstrap and fake-Docker deploy regressions passed, along with `make validate` and `git diff --check`.
+    Risks: The nearest existing ancestor must be a non-symlink directory below `/`; non-empty incompatible queue/failed directories still fail closed and require migration review.
+    Rollback: Do not remove initialized storage paths automatically; restore prior permissions only after queue/recovery assessment.

@@ -49,15 +49,33 @@ while (($#)); do
 done
 
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die '--storage-root must be an absolute path other than /.'
-[[ -d "$storage_root" && ! -L "$storage_root" ]] || die '--storage-root must be an existing non-symlink directory.'
-for tool in find grep install realpath stat; do command -v "$tool" >/dev/null || die "$tool is required."; done
-resolved_storage_root=$(realpath -e -- "$storage_root") || die 'could not resolve --storage-root.'
-[[ "$resolved_storage_root" == "$storage_root" ]] || die '--storage-root must not contain symlink components.'
+for tool in dirname basename find grep install realpath stat; do command -v "$tool" >/dev/null || die "$tool is required."; done
 if [[ "$apply" == true ]]; then
   [[ "$environment" == development || "$environment" == production ]] || die '--apply requires --environment development or production.'
   require_server_env_match "$environment" || die 'host SERVER_ENV must match --environment.'
   [[ $(id -u) -eq 0 ]] || die '--apply requires a privileged operator to set the reviewed runtime owner.'
 fi
+
+prepare_storage_root() {
+  local parent leaf ancestor resolved_ancestor resolved_storage_root
+  parent=$(dirname "$storage_root")
+  leaf=$(basename "$storage_root")
+  [[ "$leaf" != . && "$leaf" != .. ]] || die '--storage-root has an unsafe final component.'
+  if [[ ! -e "$storage_root" ]]; then
+    [[ "$apply" == true ]] || die '--storage-root must be an existing non-symlink directory.'
+    ancestor=$parent
+    while [[ ! -e "$ancestor" ]]; do ancestor=$(dirname "$ancestor"); done
+    [[ -d "$ancestor" && ! -L "$ancestor" && "$ancestor" != / ]] || die '--storage-root requires an existing non-symlink ancestor below /. '
+    resolved_ancestor=$(realpath -e -- "$ancestor") || die 'could not resolve --storage-root ancestor.'
+    [[ "$resolved_ancestor" == "$ancestor" ]] || die '--storage-root ancestor must not contain symlink components.'
+    install -d -m 0750 -- "$storage_root"
+  fi
+  [[ -d "$storage_root" && ! -L "$storage_root" ]] || die '--storage-root must be an existing non-symlink directory.'
+  resolved_storage_root=$(realpath -e -- "$storage_root") || die 'could not resolve --storage-root.'
+  [[ "$resolved_storage_root" == "$storage_root" ]] || die '--storage-root must not contain symlink components.'
+}
+
+prepare_storage_root
 
 validate_existing_child() {
   local child=$1 path owner mode

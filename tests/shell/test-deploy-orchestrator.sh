@@ -65,6 +65,13 @@ case "${1:-} ${2:-}" in
 esac
 EOF
 chmod 700 "$fake_bin/docker"
+cat >"$fake_bin/init-storage" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'init-storage %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
+EOF
+chmod 700 "$fake_bin/init-storage"
+export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 rg -q '^stack config ' "$calls"
@@ -77,6 +84,7 @@ fi
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
 test "$(rg -c '^stack deploy ' "$calls")" -eq 2
+test "$(rg -c '^init-storage ' "$calls")" -eq 2
 if rg -q -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1

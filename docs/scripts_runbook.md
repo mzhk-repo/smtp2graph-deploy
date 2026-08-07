@@ -12,7 +12,7 @@
 
 - Category: 1b (dev/prod Swarm orchestration).
 - Inputs: development may use the repository-local ignored `.env`; production requires an explicit absolute `--env-file` (or `ORCHESTRATOR_ENV_FILE`). Both paths are strictly parsed without `source`, consuming only allowlisted public stack inputs, exact immutable image digest and versioned Docker Secret names, plus host `SERVER_ENV=dev|prod` from `/etc/environment`. `.env.dev.enc` remains a SOPS Secret-source input for reconciliation and is not parsed by deploy orchestration.
-- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` uses local `.env` fallback after `SERVER_ENV=dev` verification. Production requires `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` uses local `.env` fallback after `SERVER_ENV=dev` verification and invokes `init-storage.sh` before stack submission. Production requires `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation and initializes the reviewed storage boundary before submitting the stack.
 - Safety: only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
 - Check: `./tests/shell/test-deploy-orchestrator.sh`, `shellcheck scripts/deploy-orchestrator-swarm.sh`, `bash -n scripts/deploy-orchestrator-swarm.sh`.
@@ -40,7 +40,7 @@
 ## `init-storage.sh`
 
 - Category: 1b (dev/prod persistent-storage initialization).
-- Inputs: explicit canonical `--storage-root`; it must be an existing absolute non-symlink directory. Only its direct `queue` and `failed` children are in scope.
+- Inputs: explicit canonical `--storage-root`; it must be an absolute non-symlink directory, or have an existing non-symlink ancestor below `/` when `--apply` initializes it. Only its direct `queue` and `failed` children are in scope.
 - Side effects: default mode is validation-only. `--apply` requires `--environment development|production`, matching `SERVER_ENV`, a privileged operator, and creates/corrects only empty direct children to UID/GID `65532` and mode `0700`.
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.

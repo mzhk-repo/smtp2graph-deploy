@@ -10,9 +10,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    tmpfs:
-      - /runtime:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
-      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700
     volumes:
       - type: bind
         source: ${SMTP2GRAPH_STORAGE_HOST_PATH:?SMTP2GRAPH_STORAGE_HOST_PATH is required}
@@ -20,6 +17,16 @@ services:
         read_only: false
         bind:
           create_host_path: false
+      - type: tmpfs
+        target: /runtime
+        tmpfs:
+          size: 16777216
+          mode: 0700
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 16777216
+          mode: 0700
     environment:
       RUNTIME_CONFIG_DIR: /tmp/smtp2graph-runtime
       RUNTIME_TEMPLATE_FILE: /run/configs/gateway-config.yml.template

@@ -46,6 +46,7 @@ rg -q '^GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_th
 [[ $(find "$tmp/docker-secrets" -type f | wc -l) -eq 7 ]]
 rg -q '^synthetic-private-key-line-two$' "$tmp/docker-secrets"
 rg -q 'synthetic-password!' "$tmp/docker-secrets"
+rg -Fq $'gateway\tsynthetic-password!\tnoreply@example.invalid' "$tmp/docker-secrets"
 if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "${script}" --environment production --env-file "$encrypted" --mapping-file "$mapping" --apply >/dev/null 2>&1; then
   printf 'ERROR: production apply unexpectedly succeeded.\n' >&2
   exit 1

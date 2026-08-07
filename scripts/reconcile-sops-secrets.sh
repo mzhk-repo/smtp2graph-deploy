@@ -66,7 +66,7 @@ plain_env="$stage_dir/environment.env"
 [[ ! -e "$plain_env" ]] || die 'internal plaintext staging path already exists.'
 
 extract_secret() {
-  local key=$1 target=$2 raw_target raw_size first_byte last_byte
+  local key=$1 target=$2 raw_target raw_size first_byte last_byte decoded_target value
   raw_target="$target.raw"
   sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file" >"$raw_target" || die "could not extract encrypted value: $key."
   raw_size=$(stat -c '%s' "$raw_target") || die "could not inspect encrypted value: $key."
@@ -78,6 +78,12 @@ extract_secret() {
     rm -f -- "$raw_target"
   else
     mv "$raw_target" "$target"
+  fi
+  if [[ "$key" == SMTP_USERS_TSV ]]; then
+    decoded_target="$target.decoded"
+    value=$(cat "$target")
+    printf '%b' "$value" >"$decoded_target"
+    mv "$decoded_target" "$target"
   fi
   chmod 400 "$target"
   [[ -s "$target" ]] || die "encrypted value is empty: $key."

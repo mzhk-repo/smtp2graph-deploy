@@ -46,18 +46,18 @@ mapfile -t tasks < <(docker service ps "$service" --filter desired-state=running
 [[ ${#tasks[@]} -eq 1 ]] || die 'gateway must have exactly one desired running task.'
 [[ "${tasks[0]}" == Running*'|' ]] || die 'gateway desired task is not Running or reports an error.'
 
-secret_spec=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{.File.Mode}}{{"\n"}}{{end}}') || die 'could not inspect gateway Secret mount metadata.'
+secret_spec=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{printf "%#o" .File.Mode}}{{"\n"}}{{end}}') || die 'could not inspect gateway Secret mount metadata.'
 require_secret_mode() {
   local name=$1 mode=$2
   printf '%s\n' "$secret_spec" | rg -q "^${name} 65532 65532 ${mode}$" || die "required Secret mount mode is invalid: ${name}."
 }
-require_secret_mode graph-tenant-id 292
-require_secret_mode graph-client-id 292
-require_secret_mode graph-certificate-thumbprint 292
-require_secret_mode graph-credential 256
-require_secret_mode smtp-users 256
-require_secret_mode smtp-tls-cert 292
-require_secret_mode smtp-tls-key 256
+require_secret_mode graph-tenant-id 0444
+require_secret_mode graph-client-id 0444
+require_secret_mode graph-certificate-thumbprint 0444
+require_secret_mode graph-credential 0400
+require_secret_mode smtp-users 0400
+require_secret_mode smtp-tls-cert 0444
+require_secret_mode smtp-tls-key 0400
 
 # shellcheck disable=SC2016 # $1/$2 and $line expand inside the isolated Bash process.
 greeting=$(timeout 10 bash -c 'exec 3<>"/dev/tcp/$1/$2"; IFS= read -r line <&3; printf "%s" "$line"; exec 3>&- 3<&-' _ "$smtp_host" "$smtp_port") || die 'SMTP connection failed.'

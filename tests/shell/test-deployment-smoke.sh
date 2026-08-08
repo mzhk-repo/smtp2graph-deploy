@@ -15,9 +15,9 @@ case "${1:-} ${2:-}" in
   'service inspect')
     if [[ "$*" == *'.Spec.Mode.Replicated.Replicas'* ]]; then printf '%s\n' 1
     else printf '%s\n' \
-      'graph-tenant-id 65532 65532 292' 'graph-client-id 65532 65532 292' \
-      'graph-certificate-thumbprint 65532 65532 292' 'graph-credential 65532 65532 256' \
-      'smtp-users 65532 65532 256' 'smtp-tls-cert 65532 65532 292' 'smtp-tls-key 65532 65532 256'; fi
+      'graph-tenant-id 65532 65532 0444' 'graph-client-id 65532 65532 0444' \
+      'graph-certificate-thumbprint 65532 65532 0444' 'graph-credential 65532 65532 0400' \
+      'smtp-users 65532 65532 0400' 'smtp-tls-cert 65532 65532 0444' 'smtp-tls-key 65532 65532 0400'; fi
     ;;
   'service ps') printf '%s\n' 'Running 1 second ago|' ;;
   *) exit 1 ;;

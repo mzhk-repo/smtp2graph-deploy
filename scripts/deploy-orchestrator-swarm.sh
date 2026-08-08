@@ -161,7 +161,10 @@ for key in "${allowed_keys[@]}"; do
 done
 stack_env+=("SMTP_ALLOWED_SENDER_ADDRESSES=${SMTP_ALLOWED_SENDER_ADDRESSES}")
 stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")
-config_version=$(sha256sum "$project_root/scripts/entrypoint.sh" "$project_root/scripts/lib/render-config.sh" "$project_root/deploy/config/gateway-config.yml.template" | sha256sum | awk '{print substr($1, 1, 16)}')
+# Keep storage-policy changes in the declarative task revision.  The initializer
+# runs before submission, but its contract also controls the bind-mounted data
+# directory consumed by the gateway task.
+config_version=$(sha256sum "$project_root/scripts/entrypoint.sh" "$project_root/scripts/lib/render-config.sh" "$project_root/deploy/config/gateway-config.yml.template" "$project_root/scripts/init-storage.sh" | sha256sum | awk '{print substr($1, 1, 16)}')
 stack_env+=("SMTP2GRAPH_CONFIG_VERSION=${config_version}")
 
 run_stack_config() {

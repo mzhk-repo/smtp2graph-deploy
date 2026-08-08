@@ -69,6 +69,7 @@ case "${1:-} ${2:-}" in
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
     printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"
+    printf 'config-version=%s\n' "${SMTP2GRAPH_CONFIG_VERSION}" >>"${FAKE_DOCKER_CALLS}"
     exit 0
     ;;
   'stack deploy') exit 0 ;;
@@ -98,6 +99,13 @@ PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$s
 rg -q '^stack config ' "$calls"
 rg -q '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
 rg -q '^derived-sender=noreply@example.invalid$' "$calls"
+expected_config_version=$(sha256sum \
+  "$root/scripts/entrypoint.sh" \
+  "$root/scripts/lib/render-config.sh" \
+  "$root/deploy/config/gateway-config.yml.template" \
+  "$root/scripts/init-storage.sh" \
+  | sha256sum | awk '{print substr($1, 1, 16)}')
+rg -q "^config-version=${expected_config_version}$" "$calls"
 if rg -q '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
   exit 1

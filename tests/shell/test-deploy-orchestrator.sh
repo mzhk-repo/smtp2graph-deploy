@@ -27,7 +27,6 @@ printf '%s\n' \
   'SMTP_MAX_SESSIONS_PER_IP=5' \
   'SMTP_MESSAGES_PER_MINUTE=30' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' \
-  'SMTP_ALLOWED_SENDER_ADDRESSES=noreply@example.invalid' \
   'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
@@ -69,6 +68,7 @@ fi
 case "${1:-} ${2:-}" in
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
+    printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"
     exit 0
     ;;
   'stack deploy') exit 0 ;;
@@ -97,6 +97,7 @@ export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 rg -q '^stack config ' "$calls"
 rg -q '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
+rg -q '^derived-sender=noreply@example.invalid$' "$calls"
 if rg -q '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
   exit 1

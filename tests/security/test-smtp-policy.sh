@@ -61,7 +61,7 @@ grep -F -- "- 'noreply@example.invalid'" "${RUNTIME_DIR}/config.yml" >/dev/null 
 grep -F "username: 'grafana'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'SMTP user is missing from rendered configuration.'
 
 SMTP_ALLOWED_SOURCE_CIDRS='' expect_failure 'required non-secret runtime value is empty.' run_render
-SMTP_ALLOWED_SENDER_ADDRESSES='' expect_failure 'required non-secret runtime value is empty.' run_render
+SMTP_ALLOWED_SENDER_ADDRESSES='' run_render >/dev/null
 
 rm -f -- "${SECRETS_DIR}/smtp-users"
 expect_failure 'required Docker Secret file is unavailable.' run_render

@@ -99,7 +99,6 @@ allowed_keys=(
   SMTP_MAX_SESSIONS_PER_IP
   SMTP_MESSAGES_PER_MINUTE
   SMTP_ALLOWED_SOURCE_CIDRS
-  SMTP_ALLOWED_SENDER_ADDRESSES
   GRAPH_SENDER_MAILBOX
   SEND_RETRY_LIMIT
   SEND_RETRY_INTERVAL_MINUTES
@@ -119,6 +118,7 @@ load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" "${allowed_keys[@]}
 
 [[ -n "${TLS_SECRET_MAPPING_FILE:-}" ]] || die 'required deployment key is missing: TLS_SECRET_MAPPING_FILE.'
 load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
+SMTP_ALLOWED_SENDER_ADDRESSES=$GRAPH_SENDER_MAILBOX
 
 for key in "${allowed_keys[@]}"; do
   [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
@@ -159,6 +159,7 @@ for key in "${allowed_keys[@]}"; do
   [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME || "$key" == TLS_SECRET_MAPPING_FILE ]] && continue
   stack_env+=("${key}=${!key:-}")
 done
+stack_env+=("SMTP_ALLOWED_SENDER_ADDRESSES=${SMTP_ALLOWED_SENDER_ADDRESSES}")
 stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")
 config_version=$(sha256sum "$project_root/scripts/entrypoint.sh" "$project_root/scripts/lib/render-config.sh" "$project_root/deploy/config/gateway-config.yml.template" | sha256sum | awk '{print substr($1, 1, 16)}')
 stack_env+=("SMTP2GRAPH_CONFIG_VERSION=${config_version}")

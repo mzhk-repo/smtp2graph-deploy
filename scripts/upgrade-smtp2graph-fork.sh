@@ -138,8 +138,25 @@ for asset in "${patch_assets[@]}"; do
   git -C "$worktree" -c user.name='smtp2graph patch automation' -c user.email='noreply@invalid' commit -m "Gate B: apply ${asset%.patch}"
 done
 (cd "$worktree" && npm ci && npm run build && npx mocha 'test/00unit/**/*.spec.ts' && npm run test:receive -- --logging error)
-if [[ -n "$env_file" && -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then
-  (cd "$worktree" && DOTENV_CONFIG_PATH="$env_file" npm run test:send)
+read_dotenv_value() {
+  local file=$1 expected_key=$2 line key value found=''
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] || return 1
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    [[ "$key" == "$expected_key" ]] || continue
+    [[ -z "$found" ]] || return 1
+    if [[ "$value" =~ ^\"(.*)\"$ ]]; then value=${BASH_REMATCH[1]}; fi
+    found=$value
+  done <"$file"
+  [[ -n "$found" ]] || return 1
+  printf '%s\n' "$found"
+}
+if [[ -n "$env_file" && -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|GRAPH_SENDER_MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then
+  qualification_mailbox=$(read_dotenv_value "$env_file" GRAPH_SENDER_MAILBOX) || die 'M365 qualification requires one GRAPH_SENDER_MAILBOX in --env-file.'
+  (cd "$worktree" && MAILBOX="$qualification_mailbox" DOTENV_CONFIG_PATH="$env_file" npm run test:send)
   printf 'PASS: %s passed local and Microsoft 365 regressions.\n' "$branch"
 else
   printf 'PARTIAL: %s passed local regressions; Microsoft 365 suite was not explicitly requested with a complete --env-file.\n' "$branch"

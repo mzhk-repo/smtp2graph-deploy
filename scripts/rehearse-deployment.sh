@@ -99,13 +99,19 @@ allowed_keys=(
   DEPLOY_ENVIRONMENT SMTP2GRAPH_IMAGE_DIGEST SWARM_STACK_NAME SWARM_OVERLAY_NETWORK
   SMTP2GRAPH_STORAGE_HOST_PATH SMTP2GRAPH_MODE GRAPH_AUTH_MODE
   SMTP_MAX_MESSAGE_BYTES SMTP_MAX_SESSIONS_PER_IP SMTP_MESSAGES_PER_MINUTE
-  SMTP_ALLOWED_SOURCE_CIDRS SMTP_ALLOWED_SENDER_ADDRESSES GRAPH_SENDER_MAILBOX
+  SMTP_ALLOWED_SOURCE_CIDRS GRAPH_SENDER_MAILBOX
   SEND_RETRY_LIMIT SEND_RETRY_INTERVAL_MINUTES GRAPH_TENANT_ID_SECRET_NAME
   GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME
   SMTP_CREDENTIALS_SECRET_NAME TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME
-  NONPRODUCTION_RECIPIENT_ALLOWLIST
+  NONPRODUCTION_RECIPIENT_ALLOWLIST TLS_SECRET_MAPPING_FILE
 )
 load_deploy_env_file "$project_root" "$env_file" "${allowed_keys[@]}"
+secret_mapping_keys=(
+  GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME
+  GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME
+  TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME
+)
+load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
 [[ "${DEPLOY_ENVIRONMENT:-}" == development ]] || die 'Task 5.4 rehearsal is development-only.'
 require_server_env_match development || die 'host SERVER_ENV must be dev.'
 [[ "${SMTP2GRAPH_IMAGE_DIGEST:-}" == "$current_digest" ]] || die 'current digest must match SMTP2GRAPH_IMAGE_DIGEST in the env contract.'
@@ -159,6 +165,7 @@ chmod 700 "$stage_dir"
 rehearsal_id="task54-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 temporary_secret="smtp2graph_rehearsal_graph_cred_${rehearsal_id//[-:]/_}"
 temporary_env="$stage_dir/deployment.env"
+temporary_mapping="$stage_dir/secret-mapping.env"
 active_temporary_mapping=false
 evidence_file="$evidence_dir/${rehearsal_id}.txt"
 
@@ -179,11 +186,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-render_env() {
-  local image=$1 credential=$2 output=$3
-  awk -v image="$image" -v credential="$credential" '
-    /^SMTP2GRAPH_IMAGE_DIGEST=/ { print "SMTP2GRAPH_IMAGE_DIGEST=" image; next }
+render_mapping() {
+  local credential=$1
+  awk -v credential="$credential" '
     /^GRAPH_CREDENTIAL_SECRET_NAME=/ { print "GRAPH_CREDENTIAL_SECRET_NAME=" credential; next }
+    { print }
+  ' "$TLS_SECRET_MAPPING_FILE" >"$temporary_mapping"
+  chmod 600 "$temporary_mapping"
+}
+render_env() {
+  local image=$1 mapping=$2 output=$3
+  awk -v image="$image" -v mapping="$mapping" '
+    /^SMTP2GRAPH_IMAGE_DIGEST=/ { print "SMTP2GRAPH_IMAGE_DIGEST=" image; next }
+    /^TLS_SECRET_MAPPING_FILE=/ { print "TLS_SECRET_MAPPING_FILE=" mapping; next }
     { print }
   ' "$env_file" >"$output"
   chmod 600 "$output"
@@ -203,7 +218,8 @@ task_before=$(running_task_id)
 printf 'fresh-deploy-and-noop=passed\n' >>"$evidence_file"
 
 printf 'synthetic-invalid-credential-for-rehearsal\n' | docker secret create "$temporary_secret" - >/dev/null
-render_env "$current_digest" "$temporary_secret" "$temporary_env"
+render_mapping "$temporary_secret"
+render_env "$current_digest" "$temporary_mapping" "$temporary_env"
 "$orchestrator" --env-file "$temporary_env" --deploy --apply
 active_temporary_mapping=true
 smoke
@@ -212,13 +228,13 @@ node "$submit_helper" 127.0.0.1 2525 "$smtp_user" "$password_file" "$GRAPH_SENDE
 wait_for 'durable queued SMTP submission' 60 $((queue_before + 1))
 printf 'queued-before-upgrade=%s\n' "$((queue_before + 1))" >>"$evidence_file"
 
-render_env "$candidate_digest" "$temporary_secret" "$temporary_env"
+render_env "$candidate_digest" "$temporary_mapping" "$temporary_env"
 "$orchestrator" --env-file "$temporary_env" --deploy --apply
 smoke
 wait_for 'queue preservation after candidate upgrade' 30 $((queue_before + 1))
 printf 'candidate-upgrade=passed\n' >>"$evidence_file"
 
-render_env "$candidate_digest" "$GRAPH_CREDENTIAL_SECRET_NAME" "$temporary_env"
+render_env "$candidate_digest" "$TLS_SECRET_MAPPING_FILE" "$temporary_env"
 "$orchestrator" --env-file "$temporary_env" --rollback --image-digest "$current_digest" --queue-compatibility-confirmed --apply
 active_temporary_mapping=false
 smoke

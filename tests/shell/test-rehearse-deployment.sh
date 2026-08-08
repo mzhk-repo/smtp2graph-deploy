@@ -9,6 +9,7 @@ trap 'rm -rf -- "$tmp"; rm -f -- "$password_file"' EXIT
 fake_bin="$tmp/bin"
 storage="$tmp/data"
 env_file="$tmp/development.env"
+mapping_file="$tmp/secret-mapping.env"
 server_env="$tmp/server.environment"
 compatibility="$tmp/queue-compatibility.yml"
 evidence="$tmp/evidence"
@@ -32,18 +33,20 @@ printf '%s\n' \
   'SMTP_MAX_SESSIONS_PER_IP=5' \
   'SMTP_MESSAGES_PER_MINUTE=30' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' \
-  'SMTP_ALLOWED_SENDER_ADDRESSES=noreply@example.invalid' \
   'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
+  "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'NONPRODUCTION_RECIPIENT_ALLOWLIST=recipient@example.invalid' >"$env_file"
+printf '%s\n' \
   'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vtest' \
   'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vtest' \
   'GRAPH_CREDENTIAL_SECRET_NAME=smtp2graph_graph_credential_vtest' \
   'GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_vtest' \
   'SMTP_CREDENTIALS_SECRET_NAME=smtp2graph_smtp_users_vtest' \
   'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vtest' \
-  'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' \
-  'NONPRODUCTION_RECIPIENT_ALLOWLIST=recipient@example.invalid' >"$env_file"
+  'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$mapping_file"
+chmod 600 "$mapping_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env"
 cat >"$compatibility" <<EOF
 version: 1
@@ -90,17 +93,28 @@ cat >"$fake_bin/smoke" <<'EOF'
 set -euo pipefail
 printf 'PASS: fake smoke\n'
 EOF
+cat >"$fake_bin/sops" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+for argument in "$@"; do input=$argument; done
+cat "$input"
+EOF
+cat >"$fake_bin/init-storage" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
 cat >"$fake_bin/node" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 touch "${FAKE_QUEUE_DIR}/rehearsal.eml"
 printf 'PASS: fake SMTP submit\n'
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node"
+chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage"
 
 PATH="$fake_bin:$PATH" \
   FAKE_QUEUE_DIR="$storage/queue" FAKE_SECRET_STATE="$secret_state" \
   SMTP2GRAPH_SERVER_ENV_FILE="$server_env" SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility" \
+  SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage" \
   SMTP2GRAPH_SMOKE_SCRIPT="$fake_bin/smoke" SMTP2GRAPH_SMTP_SUBMIT_HELPER="$root/tests/acceptance/deployment/smtp-submit.js" \
   "$script" --env-file "$env_file" --current-digest "$current" --candidate-digest "$candidate" \
   --recipient recipient@example.invalid --smtp-user rehearsal-client --password-file "$password_file" \

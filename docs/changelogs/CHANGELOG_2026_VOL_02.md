@@ -295,3 +295,10 @@
     Verification: The isolated orchestrator regression covers a mapped reference overriding a stale encrypted value and rejects both missing mapping configuration and a mapping without a required reference.
     Risks: The mapping remains a host-side deployment artifact and must stay protected from non-owner reads; live development smoke remains a separate unaccepted task.
     Rollback: Restore the prior reviewed loader only with a rotation/recovery assessment; do not return to manual Secret-name copying or plaintext Secret values.
+
+2026-08-08 — Task 5.4: consolidate canonical sender address configuration
+    Context: The encrypted deployment contract repeated the single runtime sender as `GRAPH_SENDER_MAILBOX`, `SMTP_ALLOWED_SENDER_ADDRESSES` and M365 test-only `MAILBOX`, allowing policy drift that blocked gateway startup.
+    Change: `GRAPH_SENDER_MAILBOX` is now the sole runtime sender input; deploy and stack rendering derive the global SMTP sender allowlist from it. Removed the two deprecated encrypted aliases from development and production contracts. `SMTP_USERS_TSV` remains a separate Docker Secret because its per-user sender scope is an independent policy control. The fork qualification adapter supplies its legacy `MAILBOX` variable only in the test process. `.env.example` now documents the retained M365 recipient/denied-mailbox, ACME contact and SMTP-user roles.
+    Verification: Encrypted Dotenv contracts decrypt successfully without either deprecated key. Orchestrator, runtime policy, static stack, rehearsal, syntax, ShellCheck, Markdown/YAML/shell formatting and contract checks pass locally.
+    Risks: The already submitted development service still uses its previous immutable Config until a separately approved redeploy; production is not changed.
+    Rollback: Restore the reviewed encrypted aliases only if reverting to a prior control-plane revision after queue/recovery assessment; do not weaken per-user SMTP sender validation.

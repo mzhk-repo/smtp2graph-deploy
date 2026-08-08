@@ -34,6 +34,7 @@ if require_stack_control "$tmp/weakened.yml"; then
 fi
 
 mkdir -p "$tmp/storage"
+"$storage_init" --storage-root "$tmp/storage" | rg -q '^READY: storage root will be corrected to 65532:65532 mode 0700\.$'
 "$storage_init" --storage-root "$tmp/storage" | rg -q '^READY: queue will be initialized as 65532:65532 mode 0700\.$'
 if "$storage_init" --storage-root / >/dev/null 2>&1; then
   printf 'ERROR: storage initializer unexpectedly accepted /.\n' >&2

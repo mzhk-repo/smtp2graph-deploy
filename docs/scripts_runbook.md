@@ -40,8 +40,8 @@
 ## `init-storage.sh`
 
 - Category: 1b (dev/prod persistent-storage initialization).
-- Inputs: explicit canonical `--storage-root`; it must be an absolute non-symlink directory, or have an existing non-symlink ancestor below `/` when `--apply` initializes it. Only its direct `queue` and `failed` children are in scope.
-- Side effects: default mode is validation-only. `--apply` requires `--environment development|production`, matching `SERVER_ENV`, a privileged operator, and creates/corrects only empty direct children to UID/GID `65532` and mode `0700`.
+- Inputs: explicit canonical `--storage-root`; it must be an absolute non-symlink directory, or have an existing non-symlink ancestor below `/` when `--apply` initializes it. Only the validated root and its direct `queue` and `failed` children are in scope.
+- Side effects: default mode is validation-only. `--apply` requires `--environment development|production`, matching `SERVER_ENV`, a privileged operator, and corrects the root plus direct children to UID/GID `65532` and mode `0700` without recursive ownership changes. The runtime can then create its required direct `/data/temp` path.
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.

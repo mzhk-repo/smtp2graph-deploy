@@ -103,6 +103,9 @@ allowed_keys=(
   GRAPH_SENDER_MAILBOX
   SEND_RETRY_LIMIT
   SEND_RETRY_INTERVAL_MINUTES
+  TLS_SECRET_MAPPING_FILE
+)
+secret_mapping_keys=(
   GRAPH_TENANT_ID_SECRET_NAME
   GRAPH_CLIENT_ID_SECRET_NAME
   GRAPH_CREDENTIAL_SECRET_NAME
@@ -111,7 +114,11 @@ allowed_keys=(
   TLS_CERTIFICATE_SECRET_NAME
   TLS_PRIVATE_KEY_SECRET_NAME
 )
+allowed_keys+=("${secret_mapping_keys[@]}")
 load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" "${allowed_keys[@]}"
+
+[[ -n "${TLS_SECRET_MAPPING_FILE:-}" ]] || die 'required deployment key is missing: TLS_SECRET_MAPPING_FILE.'
+load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
 
 for key in "${allowed_keys[@]}"; do
   [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
@@ -136,10 +143,7 @@ is_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]
 }
 
-for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK \
-  GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME \
-  GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME \
-  TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME; do
+for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK "${secret_mapping_keys[@]}"; do
   is_name "${!key}" || die "${key} has an unsafe name."
 done
 is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
@@ -152,7 +156,7 @@ queue_compatibility_file=${SMTP_QUEUE_COMPATIBILITY_FILE:-"${project_root}/deplo
 
 stack_env=()
 for key in "${allowed_keys[@]}"; do
-  [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME ]] && continue
+  [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME || "$key" == TLS_SECRET_MAPPING_FILE ]] && continue
   stack_env+=("${key}=${!key:-}")
 done
 stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")

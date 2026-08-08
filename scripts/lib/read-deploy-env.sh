@@ -7,19 +7,30 @@ SOPS_DEPLOY_ENV_FILE=''
 prepare_sops_deploy_env() {
   local root=$1 requested=$2 server_env encrypted
   server_env=$(read_server_env) || return
-  if [[ -n "$requested" ]]; then encrypted=$requested
+  if [[ -n "$requested" ]]; then
+    encrypted=$requested
   else
     case "$server_env" in
       dev) encrypted="$root/env.dev.enc" ;;
       prod) encrypted="$root/env.prod.enc" ;;
     esac
   fi
-  [[ "$encrypted" = /* && -f "$encrypted" && ! -L "$encrypted" ]] || { printf 'ERROR: encrypted deploy env must be an absolute regular non-symlink file.\n' >&2; return 64; }
-  command -v sops >/dev/null || { printf 'ERROR: sops is required for deploy environment decryption.\n' >&2; return 69; }
+  [[ "$encrypted" = /* && -f "$encrypted" && ! -L "$encrypted" ]] || {
+    printf 'ERROR: encrypted deploy env must be an absolute regular non-symlink file.\n' >&2
+    return 64
+  }
+  command -v sops >/dev/null || {
+    printf 'ERROR: sops is required for deploy environment decryption.\n' >&2
+    return 69
+  }
   SOPS_DEPLOY_STAGE_DIR=$(mktemp -d /dev/shm/smtp2graph-deploy-env.XXXXXX) || return
   chmod 700 "$SOPS_DEPLOY_STAGE_DIR"
   SOPS_DEPLOY_ENV_FILE="$SOPS_DEPLOY_STAGE_DIR/environment.env"
-  sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || { rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"; SOPS_DEPLOY_STAGE_DIR=''; return 64; }
+  sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || {
+    rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+    SOPS_DEPLOY_STAGE_DIR=''
+    return 64
+  }
   chmod 600 "$SOPS_DEPLOY_ENV_FILE"
 }
 
@@ -81,6 +92,59 @@ load_deploy_env_file() {
     seen["$key"]=1
     printf -v "$key" '%s' "$value"
   done <"$file"
+}
+
+load_deploy_secret_mapping() {
+  local file=$1 line key value allowed item mode
+  declare -A seen=()
+  shift
+  [[ "$file" = /* && -f "$file" && ! -L "$file" ]] || {
+    printf 'ERROR: Secret mapping must be an absolute regular non-symlink file.\n' >&2
+    return 64
+  }
+  mode=$(stat -c '%a' "$file") || return
+  [[ "$mode" =~ ^[0-7]{3,4}$ && $((8#$mode & 077)) -eq 0 && $((8#$mode & 400)) -ne 0 ]] || {
+    printf 'ERROR: Secret mapping must be readable only by its owner.\n' >&2
+    return 64
+  }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Z][A-Z0-9_]*)=(.*)$ ]] || {
+      printf 'ERROR: invalid Secret mapping syntax.\n' >&2
+      return 64
+    }
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+      value=${BASH_REMATCH[1]}
+    fi
+    allowed=false
+    for item in "$@"; do [[ "$key" == "$item" ]] && {
+      allowed=true
+      break
+    }; done
+    "$allowed" || {
+      printf 'ERROR: unexpected Secret mapping key: %s.\n' "$key" >&2
+      return 64
+    }
+    [[ -v "seen[$key]" ]] && {
+      printf 'ERROR: duplicate Secret mapping key: %s.\n' "$key" >&2
+      return 64
+    }
+    [[ -n "$value" ]] || {
+      printf 'ERROR: Secret mapping value is empty: %s.\n' "$key" >&2
+      return 64
+    }
+    seen["$key"]=1
+    printf -v "$key" '%s' "$value"
+  done <"$file"
+  for item in "$@"; do
+    [[ -v "seen[$item]" ]] || {
+      printf 'ERROR: required Secret mapping key is missing: %s.\n' "$item" >&2
+      return 64
+    }
+  done
 }
 
 expected_server_env() {

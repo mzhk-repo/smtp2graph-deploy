@@ -260,3 +260,38 @@
     Verification: Storage initialization, bootstrap and fake-Docker deploy regressions passed, along with `make validate` and `git diff --check`.
     Risks: The nearest existing ancestor must be a non-symlink directory below `/`; non-empty incompatible queue/failed directories still fail closed and require migration review.
     Rollback: Do not remove initialized storage paths automatically; restore prior permissions only after queue/recovery assessment.
+
+2026-08-08 — Task 5.4: development host bootstrap and first deploy boundary
+    Context: The authorised development Swarm host had no initialized SMTP2Graph storage boundary, node label, encrypted overlay or nftables policy.
+    Change: Applied the reviewed development bootstrap through a privileged operator. The storage root and direct `queue`/`failed` directories now have the reviewed ownership and mode; the development Swarm boundary converged. The first stack submission created the service, but it did not pass runtime smoke.
+    Verification: Read-only stack render passed before apply. Bootstrap reported successful initialization. Service/task state and logs were inspected without reading Docker Secret payloads.
+    Risks: This is development-only evidence. The gateway was not accepted as healthy because smoke did not yet observe one `Running` task or SMTP `220`.
+    Rollback: Do not remove storage, overlay, nftables policy or labels automatically; assess queue/recovery state before any rollback action.
+
+2026-08-08 — Task 5.4: SOPS versioned Docker Secret reconciliation
+    Context: Initial deploy was refused because `.env` held placeholder Secret references and Docker Secrets did not exist.
+    Change: Reconciled encrypted development values into seven deterministic versioned Docker Secrets and atomically updated the root-only names-only mapping. Corrected `SMTP_USERS_TSV` Dotenv escape handling so `\t` and `\n` are decoded only for the SMTP users Secret, creating a new content-addressed `smtp-users` version.
+    Verification: SOPS reconciler regression passed. Docker Secret names and mapping updates were reported without exposing payloads. Placeholder `SMTP_USERS_TSV` was rejected before Docker mutation.
+    Risks: The encrypted deploy contract must consume generated mapping references automatically; manually copying `*_SECRET_NAME` values into encrypted env creates rotation drift risk.
+    Rollback: Retain existing immutable Secret versions. Do not delete a version until no reviewed stack references it and recovery impact is assessed.
+
+2026-08-08 — Task 5.4: Swarm immutable Config and tmpfs runtime remediation
+    Context: Runtime rollout exposed two Swarm compatibility gaps: fixed Config names cannot update immutable content, and shorthand Compose `tmpfs` entries were absent from the deployed service mount spec.
+    Change: Deploy orchestration now derives a content hash from reviewed runtime assets and uses it in explicit Swarm Config names. The stack uses explicit `type: tmpfs` mounts for `/runtime` and `/tmp`; live service inspection confirmed both mounts are present. The entrypoint creates its runtime configuration directory with mode `0700` before tmpfs verification.
+    Verification: Stack render, entrypoint regression and static stack checks passed. Live service inspection confirmed bind `/data` plus tmpfs `/runtime` and `/tmp` mounts.
+    Risks: The gateway still fails runtime validation when `SMTP_USERS_TSV` is malformed; successful mount creation alone is not Phase 5.4 smoke evidence.
+    Rollback: Prior immutable Config objects are retained by Swarm. Do not remove old Configs until the replacement service is healthy and no revision references them.
+
+2026-08-08 — Task 5.4: required SOPS-backed deploy loader completion
+    Context: Deploy now decrypts `env.dev.enc` or `env.prod.enc` only into `/dev/shm` and strict-parses the temporary Dotenv contract, but Secret name rotation still requires manual copying from the generated mapping into encrypted env.
+    Change: Marked completion of the SOPS-backed deploy loader as required before closing the development deployment iteration. The required design is: encrypted env provides secret values and public deployment inputs; `reconcile-sops-secrets.sh` atomically writes names-only mapping; deploy merges that mapping over decrypted public configuration and refuses missing or incomplete references.
+    Verification: Privileged SOPS-backed stack render succeeded after adding the immutable image digest and quoted-value normalization. Current loader cleanup uses temporary `/dev/shm` material and does not source decrypted files.
+    Risks: Until mapping merge is implemented and tested, secret rotation is operationally error-prone and deployment evidence remains incomplete. Current service smoke is still failing and must not be recorded as passed.
+    Rollback: Keep the encrypted env and names-only mapping separate; do not reintroduce plaintext secret values, shell sourcing or manually mutable Secret references into the deploy path.
+
+2026-08-08 — Task 5.4: SOPS-backed deploy loader merges immutable Secret mapping
+    Context: The deploy path decrypted public configuration but still accepted versioned Secret references from encrypted env, requiring manual copying after Secret rotation.
+    Change: The orchestrator now reads `TLS_SECRET_MAPPING_FILE` from the SOPS-decrypted configuration, requires a private names-only mapping with every Graph, SMTP and TLS Secret reference, and overlays those names onto the deployment inputs. Missing, duplicate, unknown, empty or incomplete mapping entries fail closed.
+    Verification: The isolated orchestrator regression covers a mapped reference overriding a stale encrypted value and rejects both missing mapping configuration and a mapping without a required reference.
+    Risks: The mapping remains a host-side deployment artifact and must stay protected from non-owner reads; live development smoke remains a separate unaccepted task.
+    Rollback: Restore the prior reviewed loader only with a rotation/recovery assessment; do not return to manual Secret-name copying or plaintext Secret values.

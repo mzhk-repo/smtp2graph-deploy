@@ -8,6 +8,7 @@ trap 'rm -rf -- "$tmp"' EXIT
 fake_bin="$tmp/bin"
 calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
+mapping_file="$tmp/secret-mapping.env"
 server_env_file="$tmp/server.environment"
 compatibility_file="$tmp/queue-compatibility.yml"
 mkdir -p "$fake_bin"
@@ -30,13 +31,23 @@ printf '%s\n' \
   'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
-  'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vtest' \
-  'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vtest' \
-  'GRAPH_CREDENTIAL_SECRET_NAME=smtp2graph_graph_credential_vtest' \
-  'GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_vtest' \
-  'SMTP_CREDENTIALS_SECRET_NAME=smtp2graph_smtp_users_vtest' \
-  'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vtest' \
-  'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$env_file"
+  "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'GRAPH_TENANT_ID_SECRET_NAME=stale_tenant_reference' \
+  'GRAPH_CLIENT_ID_SECRET_NAME=stale_client_reference' \
+  'GRAPH_CREDENTIAL_SECRET_NAME=stale_credential_reference' \
+  'GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=stale_thumbprint_reference' \
+  'SMTP_CREDENTIALS_SECRET_NAME=stale_smtp_reference' \
+  'TLS_CERTIFICATE_SECRET_NAME=stale_certificate_reference' \
+  'TLS_PRIVATE_KEY_SECRET_NAME=stale_key_reference' >"$env_file"
+printf '%s\n' \
+  'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vmapped' \
+  'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vmapped' \
+  'GRAPH_CREDENTIAL_SECRET_NAME=smtp2graph_graph_credential_vmapped' \
+  'GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_vmapped' \
+  'SMTP_CREDENTIALS_SECRET_NAME=smtp2graph_smtp_users_vmapped' \
+  'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vmapped' \
+  'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vmapped' >"$mapping_file"
+chmod 600 "$mapping_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 cat >"$compatibility_file" <<EOF
 version: 1
@@ -56,7 +67,10 @@ if [[ "${1:-} ${2:-}" == 'stack deploy' ]]; then
   printf 'digest=%s\n' "${SMTP2GRAPH_IMAGE_DIGEST}" >>"${FAKE_DOCKER_CALLS}"
 fi
 case "${1:-} ${2:-}" in
-  'stack config') exit 0 ;;
+  'stack config')
+    printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
+    exit 0
+    ;;
   'stack deploy') exit 0 ;;
   'info --format') printf '%s\n' true ;;
   info\ *) exit 0 ;;
@@ -65,6 +79,13 @@ case "${1:-} ${2:-}" in
 esac
 EOF
 chmod 700 "$fake_bin/docker"
+cat >"$fake_bin/sops" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+for argument in "$@"; do input=$argument; done
+cat "$input"
+EOF
+chmod 700 "$fake_bin/sops"
 cat >"$fake_bin/init-storage" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -75,6 +96,7 @@ export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 rg -q '^stack config ' "$calls"
+rg -q '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
 if rg -q '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
   exit 1
@@ -132,6 +154,23 @@ placeholder_env="$tmp/placeholder.env"
 sed 's#^SMTP2GRAPH_IMAGE_DIGEST=.*#SMTP2GRAPH_IMAGE_DIGEST=example.invalid/smtp2graph:latest#' "$env_file" >"$placeholder_env"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$placeholder_env" --check >/dev/null 2>&1; then
   printf 'ERROR: mutable image tag was unexpectedly accepted.\n' >&2
+  exit 1
+fi
+
+missing_mapping_env="$tmp/missing-mapping.env"
+sed '/^TLS_SECRET_MAPPING_FILE=/d' "$env_file" >"$missing_mapping_env"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$missing_mapping_env" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly accepted a missing Secret mapping reference.\n' >&2
+  exit 1
+fi
+
+incomplete_mapping="$tmp/incomplete-secret-mapping.env"
+sed '$d' "$mapping_file" >"$incomplete_mapping"
+chmod 600 "$incomplete_mapping"
+incomplete_mapping_env="$tmp/incomplete-mapping.env"
+sed "s#^TLS_SECRET_MAPPING_FILE=.*#TLS_SECRET_MAPPING_FILE=${incomplete_mapping}#" "$env_file" >"$incomplete_mapping_env"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$incomplete_mapping_env" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly accepted an incomplete Secret mapping.\n' >&2
   exit 1
 fi
 

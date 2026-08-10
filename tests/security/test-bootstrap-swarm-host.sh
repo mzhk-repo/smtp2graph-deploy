@@ -40,11 +40,32 @@ cat >"$fake_bin/nft" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"${FAKE_STATE}/nft.calls"
+case "${1:-} ${2:-}" in
+  '--check --file') exit 0 ;;
+  --file\ *) : >"${FAKE_STATE}/nft-policy" ;;
+  'list table')
+    test -f "${FAKE_STATE}/nft-policy" || exit 1
+    printf '%s\n' \
+      'table inet smtp2graph { set smtp2graph_smtp_clients {} }' \
+      'table inet smtp2graph_prod { set smtp2graph_prod_smtp_clients {} }'
+    ;;
+esac
+EOF
+cat >"$fake_bin/sops" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+for argument in "$@"; do input=$argument; done
+cat "$input"
 EOF
 cat >"$fake_bin/id" <<'EOF'
 #!/usr/bin/env bash
 [[ "${1:-}" == -u ]] && { printf '%s\n' 0; exit 0; }
 exec /usr/bin/id "$@"
+EOF
+cat >"$fake_bin/chown" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
 EOF
 cat >"$fake_bin/install" <<'EOF'
 #!/usr/bin/env bash
@@ -53,7 +74,7 @@ target=${!#}
 mkdir -p -- "$target"
 chmod 0700 -- "$target"
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/nft" "$fake_bin/id" "$fake_bin/install"
+chmod 700 "$fake_bin/docker" "$fake_bin/nft" "$fake_bin/sops" "$fake_bin/id" "$fake_bin/chown" "$fake_bin/install"
 
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted missing prerequisites.\n' >&2

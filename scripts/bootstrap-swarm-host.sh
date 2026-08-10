@@ -62,8 +62,16 @@ environment=${DEPLOY_ENVIRONMENT:-}
 network=${SWARM_OVERLAY_NETWORK:-}
 storage_root=${SMTP2GRAPH_STORAGE_HOST_PATH:-}
 case "$environment" in
-  development) node_label=smtp2graph_dev ;;
-  production) node_label=smtp2graph_prod ;;
+  development)
+    node_label=smtp2graph_dev
+    nft_table=smtp2graph
+    nft_set=smtp2graph_smtp_clients
+    ;;
+  production)
+    node_label=smtp2graph_prod
+    nft_table=smtp2graph_prod
+    nft_set=smtp2graph_prod_smtp_clients
+    ;;
   *) die 'DEPLOY_ENVIRONMENT must be development or production.' ;;
 esac
 node_label_value='true'
@@ -76,7 +84,7 @@ fi
 [[ "$network" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die 'SWARM_OVERLAY_NETWORK has an unsafe name.'
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /. '
 [[ -n "${SMTP_ALLOWED_SOURCE_CIDRS:-}" ]] || die 'SMTP_ALLOWED_SOURCE_CIDRS is required.'
-for tool in docker nft install realpath dirname basename mktemp; do
+for tool in docker nft install realpath dirname basename mktemp rg; do
   command -v "$tool" >/dev/null || die "$tool is required."
 done
 
@@ -149,6 +157,7 @@ rendered_nft=$(mktemp /dev/shm/smtp2graph-nft.XXXXXX)
 nft --check --file "$rendered_nft" >/dev/null
 if [[ "$apply" == true ]]; then
   nft --file "$rendered_nft"
+  nft list table inet "$nft_table" | rg -q "set ${nft_set}" || die 'applied nftables policy is not present after apply.'
 fi
 
 if [[ "$apply" == true ]]; then

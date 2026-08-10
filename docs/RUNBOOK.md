@@ -30,7 +30,7 @@
 
 ### Verify and close
 
-- Зберегти non-secret command output як operator evidence і виконати `scripts/check-network-policy.sh`.
+- Зберегти non-secret command output як operator evidence і виконати `scripts/check-network-policy.sh --network <effective-development-overlay> --stack-name smtp2graph`.
 - Не записувати Docker Secret content, SMTP passwords або message bodies у evidence.
 
 ### Deferred rollback і duplicate risk

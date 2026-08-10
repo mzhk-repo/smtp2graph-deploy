@@ -67,7 +67,7 @@
 ## `check-network-policy.sh`
 
 - Category: 1a (read-only non-production SMTP network-policy validation).
-- Inputs: `SWARM_OVERLAY_NETWORK` and reviewed `deploy/swarm/stack.yml`/nftables policy files.
+- Inputs: explicit safe `--network OVERLAY_NAME`, optional `--stack-name NAME`, and reviewed `deploy/swarm/stack.yml`/nftables policy files. It does not read `.env` or decrypt SOPS material.
 - Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. `0.0.0.0` listener output is not treated as public exposure by itself.
 
 ## `render-network-policy.sh`

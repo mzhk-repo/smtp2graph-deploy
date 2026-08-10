@@ -23,7 +23,7 @@
 |---|---|---|---|
 | TB-SWARM-001 | Canonical stack uses only Swarm-native deployment fields, one constrained replica, host publish, persistent `/data`, reviewed Config/Secret mounts, healthcheck and no privileged/host-network/socket escape. | `./tests/security/test-swarm-stack.sh` | Static dev/prod evidence; no Docker API is required for render. |
 | TB-SWARM-002 | Bootstrap rejects missing/unencrypted overlay, public CIDR, unsafe storage root and `SERVER_ENV` mismatch; explicit apply is idempotent for reviewed dev prerequisites. | `./tests/security/test-bootstrap-swarm-host.sh` | Fake Docker/nft unit boundary; no host state is mutated. |
-| TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --env-file <development-env>` | Requires approved development Swarm manager and a deployed Task 5.3 digest. |
+| TB-SWARM-003 | External overlay, service Secret target modes, listener and nftables boundary are present after deploy. | `./scripts/check-network-policy.sh --network <effective-development-overlay> --stack-name smtp2graph` | Requires approved development Swarm manager and a deployed Task 5.3 digest. |
 | TB-SWARM-004 | Legacy label/storage migration refuses a running gateway and symlinked paths; explicit dev apply converges on repeated execution. | `./tests/security/test-migrate-dev-host.sh` | Fake Docker and test-only `/tmp` root; no host state is mutated. |
 
 ## Task 4.2 — TLS, network і client credential boundary
@@ -32,7 +32,7 @@
 |---|---|---|---|
 | TB-TLS-001 | PEM cert covers `smtp-int.ldubgd.edu.ua`, is unexpired and matches a private key with mode 0400/0600. | `./tests/security/test-reconcile-tls-secret.sh` | Local synthetic certificate only; Cloudflare issuance is external non-production evidence. |
 | TB-NET-001 | Stack uses host publish, no routing mesh, TLS key 0400 and deny-by-default nftables policy. | `./tests/security/test-network-policy.sh` | Static IaC evidence. |
-| TB-NET-002 | Live overlay is encrypted and nftables policy loaded. | `SWARM_OVERLAY_NETWORK=<name> ./scripts/check-network-policy.sh` | Requires authorised Docker API on non-production deployment host. |
+| TB-NET-002 | Live overlay is encrypted and nftables policy loaded. | `./scripts/check-network-policy.sh --network <effective-overlay> --stack-name smtp2graph` | Requires authorised Docker API on non-production deployment host. |
 | TB-TLS-002 | Gateway advertises STARTTLS; SMTP AUTH before upgrade is rejected and authenticated SMTP after trusted TLS succeeds. | `openssl s_client -starttls smtp -connect <FQDN>:2525 -verify_hostname <FQDN>` plus non-production SMTP client test. | Requires deployed gateway, nftables policy and encrypted overlay. |
 
 ## Task 4.5 — Gate C Microsoft 365 authorization review

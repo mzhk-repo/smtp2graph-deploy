@@ -18,6 +18,8 @@ case "${1:-} ${2:-}" in
     printf '%s\n' '{"encrypted":""}'
     ;;
   'service inspect')
+    format=${!#}
+    [[ "$format" == *'{{"\n"}}'* ]] || exit 1
     printf '%s\n' 'smtp-tls-key 65532 65532 0400' 'smtp-tls-cert 65532 65532 0444'
     ;;
   *) exit 1 ;;

@@ -44,7 +44,7 @@ rg -q 'tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept' "$nft_file" || d
 rg -q 'tcp dport 2525 drop' "$nft_file" || die 'nftables deny rule is missing.'
 docker network inspect "$network" --format '{{json .Options}}' | rg -q '"encrypted":"(true)?"' || die 'Swarm overlay encryption is not enabled.'
 nft list ruleset | rg -q 'smtp2graph_smtp_clients' || die 'smtp2graph nftables policy is not loaded.'
-secret_spec=$(docker service inspect "${stack_name}_gateway" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{printf "%#o" .File.Mode}}{{"\\n"}}{{end}}') || die 'could not inspect gateway Secret mounts.'
+secret_spec=$(docker service inspect "${stack_name}_gateway" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{printf "%#o" .File.Mode}}{{"\n"}}{{end}}') || die 'could not inspect gateway Secret mounts.'
 printf '%s\n' "$secret_spec" | rg -q '^smtp-tls-key 65532 65532 0400$' || die 'TLS private key mount must use uid/gid 65532 and mode 0400.'
 printf '%s\n' "$secret_spec" | rg -q '^smtp-tls-cert 65532 65532 0444$' || die 'TLS certificate mount must use uid/gid 65532 and mode 0444.'
 ss -ltnH | rg -q '[:.]2525[[:space:]]' || die 'SMTP listener on port 2525 is unavailable.'

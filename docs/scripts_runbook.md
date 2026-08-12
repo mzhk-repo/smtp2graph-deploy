@@ -112,7 +112,7 @@
 
 - Category: 1a (non-production Task 6.1 gateway format submission).
 - Inputs: explicit owner-only development env file, SMTP username, owner-only password file, optional connect host/port. It strictly reads only `GRAPH_SENDER_MAILBOX`, `NONPRODUCTION_RECIPIENT_ALLOWLIST` and `SMTP_TLS_FQDN`; it does not source an environment file.
-- Side effects: sends six synthetic format messages through STARTTLS to the one allowlisted recipient: plain text, HTML/Unicode, recipient headers, Reply-To, attachment and inline attachment. It uses no Moodle profile.
+- Side effects: sends seven synthetic format messages through STARTTLS to the one allowlisted recipient: plain text, HTML/Unicode, To/CC headers, a separate BCC-envelope case, Reply-To, attachment and inline attachment. `--case bcc-envelope` sends only that outstanding case. It uses no Moodle profile.
 - Safety: certificate validation is enabled with `SMTP_TLS_FQDN`; the password is read only from its file and never placed in arguments or output. The runner rejects group/other-readable input files and does not persist message identifiers or content as evidence.
 - Check: `./tests/shell/test-integration-format-matrix.sh`.
 

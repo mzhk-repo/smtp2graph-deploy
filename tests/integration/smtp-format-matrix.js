@@ -5,7 +5,7 @@ const fs = require('fs');
 const net = require('net');
 const tls = require('tls');
 
-const [host, portRaw, tlsName, username, passwordFile, sender, recipient] = process.argv.slice(2);
+const [host, portRaw, tlsName, username, passwordFile, sender, recipient, selectedCase = ''] = process.argv.slice(2);
 const port = Number(portRaw);
 if (!host || !Number.isInteger(port) || !tlsName || !username || !passwordFile || !sender || !recipient) {
   console.error('Usage: smtp-format-matrix.js HOST PORT TLS_NAME USER PASSWORD_FILE SENDER RECIPIENT');
@@ -20,6 +20,7 @@ const cases = [
   ['plain-text', [`From: <${sender}>`, `To: <${recipient}>`, 'Subject: Task 6.1 plain text', 'Content-Type: text/plain; charset=utf-8', '', 'Synthetic plain-text format check.']],
   ['html-unicode', [`From: <${sender}>`, `To: <${recipient}>`, 'Subject: Task 6.1 HTML Unicode', 'Content-Type: text/html; charset=utf-8', '', '<p>SMTP2Graph format check — Привіт</p>']],
   ['recipient-headers', [`From: <${sender}>`, `To: <${recipient}>`, `Cc: <${recipient}>`, 'Subject: Task 6.1 recipient headers', 'Content-Type: text/plain; charset=utf-8', '', 'To and CC use the single approved recipient; BCC is envelope-only.']],
+  ['bcc-envelope', [`From: <${sender}>`, 'Subject: Task 6.1 BCC envelope', 'Content-Type: text/plain; charset=utf-8', '', 'Synthetic BCC-only envelope format check.']],
   ['reply-to', [`From: <${sender}>`, `To: <${recipient}>`, `Reply-To: <${sender}>`, 'Subject: Task 6.1 Reply-To', 'Content-Type: text/plain; charset=utf-8', '', 'Synthetic Reply-To format check.']],
   ['attachment', multipart('mixed', sender, recipient, 'Task 6.1 attachment', 'attachment; filename="format-check.txt"', 'aW50ZWdyYXRpb24gZm9ybWF0IGNoZWNrCg==')],
   ['inline-attachment', multipart('related', sender, recipient, 'Task 6.1 inline attachment', 'inline; filename="format-check.txt"', 'aW50ZWdyYXRpb24gZm9ybWF0IGNoZWNrCg==', true)],
@@ -87,5 +88,7 @@ function connectAndSubmit(name, lines, extraRecipients = []) {
 }
 
 (async () => {
-  for (const [name, lines, extraRecipients] of cases) await connectAndSubmit(name, lines, extraRecipients);
+  const selectedCases = selectedCase ? cases.filter(([name]) => name === selectedCase) : cases;
+  if (selectedCases.length !== (selectedCase ? 1 : cases.length)) throw new Error('unsupported format test case');
+  for (const [name, lines, extraRecipients] of selectedCases) await connectAndSubmit(name, lines, extraRecipients);
 })().catch(error => { console.error(`ERROR: ${error.message}`); process.exitCode = 1; });

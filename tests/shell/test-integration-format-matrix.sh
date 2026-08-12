@@ -22,6 +22,10 @@ if "$runner" --env-file "$env_file" --smtp-user invalid --password-file "$passwo
   printf 'ERROR: integration runner accepted an invalid SMTP port.\n' >&2
   exit 1
 fi
+if "$runner" --env-file "$env_file" --smtp-user invalid --password-file "$password_file" --case invalid >/dev/null 2>&1; then
+  printf 'ERROR: integration runner accepted an unsupported format case.\n' >&2
+  exit 1
+fi
 chmod 0644 "$env_file"
 if "$runner" --env-file "$env_file" --smtp-user invalid --password-file "$password_file" >/dev/null 2>&1; then
   printf 'ERROR: integration runner accepted an env file readable by group or other.\n' >&2

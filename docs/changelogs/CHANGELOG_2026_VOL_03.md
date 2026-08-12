@@ -36,3 +36,10 @@
     Verification: The local `.env` pairs were compared without printing values and were identical. Contract validation, shell syntax, the safe matrix input-boundary test, full shell suite, `make validate` and `git diff --check` passed. Live smoke passed on the authorised development manager; live delivery evidence is pending.
     Risks: No gateway health or message-delivery claim is made until the corrected smoke runs on the authorised manager. The temporary qualification adapter must not be repurposed as a deployment configuration path.
     Rollback: Restore the prior smoke implementation only if its dependency is guaranteed on every authorised manager. Reintroduce no legacy duplicate values into encrypted contracts; the qualifier adapter can be reverted independently.
+
+2026-08-12 — Task 6.1: gateway format delivery established before Moodle
+    Context: Moodle must remain the final client profile until the deployed gateway demonstrates delivery of varied MIME and header forms using only one approved sender and recipient.
+    Change: The development gateway accepted six STARTTLS submissions: plain text, HTML/Unicode, To/CC recipient headers, Reply-To, regular attachment and inline attachment. The test plan now records their receipt in the single allowlisted mailbox and keeps Moodle blocked pending a separate BCC-envelope case, which is necessary to preserve the one-recipient constraint without claiming invisible-recipient behavior from another format.
+    Verification: Read-only operator evidence confirms all six messages arrived. The gateway smoke passed immediately before submission; no credentials, message identifiers or message content were recorded.
+    Risks: SMTP acceptance and receipt do not yet establish Moodle client compatibility. BCC remains incomplete until its envelope-only case arrives, and Task 6.2 load/failure coverage remains pending.
+    Rollback: No deployment, Secret, queue or configuration mutation was performed. Stop further client onboarding if a subsequent format case fails.

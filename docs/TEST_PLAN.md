@@ -8,9 +8,9 @@ Task 6.1 uses only the approved non-production environment. All positive deliver
 
 | ID | Profile / format | Preconditions | Expected evidence | Status |
 |---|---|---|---|---|
-| TB-INT-001 | Gateway delivery: plain text and HTML/Unicode | Task 5.4 smoke passes; one sender and one recipient are configured. | SMTP acceptance and read-only recipient verification for both formats. | Pending |
-| TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Pending |
-| TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Blocked by TB-INT-001/002 |
+| TB-INT-001 | Gateway delivery: plain text and HTML/Unicode | Task 5.4 smoke passes; one sender and one recipient are configured. | SMTP acceptance and read-only recipient verification for both formats. | Passed 2026-08-12 |
+| TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Partial: To/CC, Reply-To and attachment cases passed 2026-08-12; BCC envelope case pending |
+| TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Blocked by TB-INT-002 BCC case |
 
 Before every Task 6.1 submission, run `tests/acceptance/deployment/smoke.sh`. Any failed submission or delivery check stops the matrix; it does not proceed to Moodle.
 
@@ -25,7 +25,15 @@ The gateway matrix command is:
   --smtp-port 2525
 ```
 
-The runner requires both files to be owner-only, validates the TLS certificate against `SMTP_TLS_FQDN`, and never prints the password, message content or recipient address. SMTP `250` confirms gateway acceptance only; each case needs a separate read-only verification in the one approved recipient mailbox before it becomes `Passed`.
+The runner requires both files to be owner-only, validates the TLS certificate against `SMTP_TLS_FQDN`, and never prints the password, message content or recipient address. SMTP `250` confirms gateway acceptance only; each case needs a separate read-only verification in the one approved recipient mailbox before it becomes `Passed`. With one recipient, BCC is a separate envelope-only message without a visible BCC header:
+
+```bash
+./tests/integration/run-gateway-format-matrix.sh \
+  --env-file /absolute/path/to/development.env \
+  --smtp-user SMTP_USERNAME \
+  --password-file /dev/shm/smtp2graph-task61-password \
+  --case bcc-envelope
+```
 
 ## Task 5.4 — Development staging single-release deploy і smoke rehearsal
 

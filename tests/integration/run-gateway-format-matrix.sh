@@ -10,6 +10,7 @@ smtp_user=''
 password_file=''
 smtp_host='127.0.0.1'
 smtp_port='2525'
+selected_case=''
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -17,7 +18,7 @@ die() {
 }
 
 usage() {
-  printf '%s\n' 'Usage: run-gateway-format-matrix.sh --env-file FILE --smtp-user USER --password-file FILE [--smtp-host HOST] [--smtp-port PORT]'
+  printf '%s\n' 'Usage: run-gateway-format-matrix.sh --env-file FILE --smtp-user USER --password-file FILE [--smtp-host HOST] [--smtp-port PORT] [--case NAME]'
 }
 
 while (($#)); do
@@ -42,6 +43,10 @@ while (($#)); do
       smtp_port=${2:-}
       shift 2
       ;;
+    --case)
+      selected_case=${2:-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -58,6 +63,7 @@ done
 [[ "$password_file" = /* && -f "$password_file" && ! -L "$password_file" ]] || die 'password file must be an absolute regular non-symlink file.'
 [[ "$smtp_host" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,253}$ ]] || die 'SMTP host is unsafe.'
 [[ "$smtp_port" =~ ^[0-9]{1,5}$ ]] && ((smtp_port >= 1 && smtp_port <= 65535)) || die 'SMTP port is invalid.'
+[[ -z "$selected_case" || "$selected_case" =~ ^[a-z0-9-]+$ ]] || die 'test case is unsafe.'
 [[ -x "$client" ]] || die 'SMTP format client is unavailable.'
 for tool in awk stat node; do command -v "$tool" >/dev/null || die "$tool is required."; done
 
@@ -90,4 +96,4 @@ tls_name=$(read_value SMTP_TLS_FQDN)
 [[ "$recipient" =~ ^[^[:space:]@]+@[^[:space:]@]+$ ]] || die 'non-production recipient is invalid.'
 [[ "$tls_name" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$ ]] || die 'SMTP TLS hostname is invalid.'
 
-node "$client" "$smtp_host" "$smtp_port" "$tls_name" "$smtp_user" "$password_file" "$sender" "$recipient"
+node "$client" "$smtp_host" "$smtp_port" "$tls_name" "$smtp_user" "$password_file" "$sender" "$recipient" "$selected_case"

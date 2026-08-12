@@ -35,6 +35,16 @@ The runner requires both files to be owner-only, validates the TLS certificate a
   --case bcc-envelope
 ```
 
+Moodle contract preflight uses the existing `moodle` record from `SMTP_USERS_TSV`, creates its password file only in `/dev/shm`, does not send a message, and validates that AUTH is denied before STARTTLS but accepted after trusted TLS:
+
+```bash
+./tests/integration/check-moodle-starttls-contract.sh \
+  --env-file /absolute/path/to/development.env \
+  --smtp-host 127.0.0.1
+```
+
+On the Moodle VM, do not copy `.env`. Use a temporary owner-only password file supplied through the approved client-configuration procedure, then run the check with `--smtp-host "${SMTP_TLS_FQDN}" --smtp-user moodle --password-file /dev/shm/smtp2graph-moodle-password`; this proves the approved source CIDR and client-to-gateway TLS path. Actual Moodle configuration and one controlled delivery remain the final TB-INT-003 evidence.
+
 ## Task 5.4 — Development staging single-release deploy і smoke rehearsal
 
 | ID | Контроль | Команда / evidence | Межа |

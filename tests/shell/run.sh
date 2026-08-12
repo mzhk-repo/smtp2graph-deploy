@@ -8,6 +8,7 @@ tests=(
   tests/shell/test-deployment-smoke.sh
   tests/shell/test-entrypoint.sh
   tests/shell/test-integration-format-matrix.sh
+  tests/shell/test-moodle-starttls-contract.sh
   tests/shell/test-purge-failed.sh
   tests/shell/test-render-config.sh
   tests/shell/test-rehearse-deployment.sh

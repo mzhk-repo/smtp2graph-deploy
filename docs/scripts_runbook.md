@@ -116,6 +116,14 @@
 - Safety: certificate validation is enabled with `SMTP_TLS_FQDN`; the password is read only from its file and never placed in arguments or output. The runner rejects group/other-readable input files and does not persist message identifiers or content as evidence.
 - Check: `./tests/shell/test-integration-format-matrix.sh`.
 
+## `tests/integration/check-moodle-starttls-contract.sh`
+
+- Category: 1a (Task 6.1 non-production Moodle SMTP preflight).
+- Inputs: explicit owner-only development env file and optional connect host/port. It strictly reads `SMTP_TLS_FQDN` and `SMTP_LISTEN_PORT`; by default it extracts the `moodle` record from `SMTP_USERS_TSV`, but an explicit owner-only `--password-file` can replace that source on the Moodle VM. It does not source an environment file.
+- Side effects: when it extracts the password, it writes only to a mode-`0600` temporary file below a mode-`0700` directory in `/dev/shm`, then removes it through an exit trap. It submits no SMTP message.
+- Safety: verifies trusted TLS against `SMTP_TLS_FQDN`, asserts AUTH is denied before STARTTLS and succeeds after STARTTLS, and never prints credentials or SMTP commands. Do not copy `.env` to Moodle; run there with an approved temporary password file and the gateway FQDN to establish the actual client-network path.
+- Check: `./tests/shell/test-moodle-starttls-contract.sh`.
+
 ## `purge-failed.sh`
 
 - Category: 2 (autonomous failed-payload retention maintenance).

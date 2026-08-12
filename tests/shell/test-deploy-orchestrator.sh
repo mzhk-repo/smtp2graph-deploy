@@ -103,8 +103,8 @@ expected_config_version=$(sha256sum \
   "$root/scripts/entrypoint.sh" \
   "$root/scripts/lib/render-config.sh" \
   "$root/deploy/config/gateway-config.yml.template" \
-  "$root/scripts/init-storage.sh" \
-  | sha256sum | awk '{print substr($1, 1, 16)}')
+  "$root/scripts/init-storage.sh" |
+  sha256sum | awk '{print substr($1, 1, 16)}')
 rg -q "^config-version=${expected_config_version}$" "$calls"
 if rg -q '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2

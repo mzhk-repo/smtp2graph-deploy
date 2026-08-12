@@ -14,6 +14,19 @@ Task 6.1 uses only the approved non-production environment. All positive deliver
 
 Before every Task 6.1 submission, run `tests/acceptance/deployment/smoke.sh`. Any failed submission or delivery check stops the matrix; it does not proceed to Moodle.
 
+The gateway matrix command is:
+
+```bash
+./tests/integration/run-gateway-format-matrix.sh \
+  --env-file /absolute/path/to/development.env \
+  --smtp-user SMTP_USERNAME \
+  --password-file /dev/shm/smtp2graph-task61-password \
+  --smtp-host 127.0.0.1 \
+  --smtp-port 2525
+```
+
+The runner requires both files to be owner-only, validates the TLS certificate against `SMTP_TLS_FQDN`, and never prints the password, message content or recipient address. SMTP `250` confirms gateway acceptance only; each case needs a separate read-only verification in the one approved recipient mailbox before it becomes `Passed`.
+
 ## Task 5.4 — Development staging single-release deploy і smoke rehearsal
 
 | ID | Контроль | Команда / evidence | Межа |

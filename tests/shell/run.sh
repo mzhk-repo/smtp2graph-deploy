@@ -7,6 +7,7 @@ tests=(
   tests/shell/test-deploy-orchestrator.sh
   tests/shell/test-deployment-smoke.sh
   tests/shell/test-entrypoint.sh
+  tests/shell/test-integration-format-matrix.sh
   tests/shell/test-purge-failed.sh
   tests/shell/test-render-config.sh
   tests/shell/test-rehearse-deployment.sh

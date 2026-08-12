@@ -29,3 +29,10 @@
     Verification: Operator evidence recorded successful bootstrap, no-op redeploy with unchanged desired task ID, repeated smoke (`Running`, SMTP `220`, reviewed Secret mount modes) and live encrypted-overlay/nftables policy verification. Local bootstrap, network-policy, smoke, orchestrator, stack and container-hardening regressions, `make validate` and `git diff --check` passed without Secret payloads or message data.
     Risks: The prior unencrypted overlay remains retained pending separate recovery assessment. One release cannot establish queue compatibility, upgrade or rollback safety.
     Rollback: Do not delete networks, Configs or Secrets and do not force a service update. Upgrade or rollback requires a second independently reviewed queue-compatible release and explicit queue assessment.
+
+2026-08-12 — Task 6.1: canonical qualification inputs and delivery-first client order
+    Context: The live smoke checker depended on `rg`, which was unavailable on the development manager, and the ignored environment duplicated four Graph credential values under legacy fork-test names.
+    Change: Smoke now uses an exact-line `grep` check available on the target host. The control-plane contract retains only canonical `GRAPH_*` credential keys; the isolated fork qualifier derives its legacy aliases only in a mode-0600 temporary file under `/dev/shm`. Task 6.1 records a one-sender/one-recipient, gateway-format-first matrix; Moodle remains blocked until the prior format cases pass.
+    Verification: The local `.env` pairs were compared without printing values and were identical. Shell, contract and documentation checks remain required; live smoke and delivery evidence are pending.
+    Risks: No gateway health or message-delivery claim is made until the corrected smoke runs on the authorised manager. The temporary qualification adapter must not be repurposed as a deployment configuration path.
+    Rollback: Restore the prior smoke implementation only if its dependency is guaranteed on every authorised manager. Reintroduce no legacy duplicate values into encrypted contracts; the qualifier adapter can be reverted independently.

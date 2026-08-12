@@ -105,6 +105,9 @@ fi
 worktree=$(mktemp -d "${TMPDIR:-/tmp}/smtp2graph-upgrade.XXXXXX")
 cleanup() {
   status=$?
+  if [[ -n "${qualification_env:-}" && -f "${qualification_env}" ]]; then
+    rm -f -- "${qualification_env}"
+  fi
   if ((status == 0)); then
     if [[ -n "${target_branch:-}" && -d "${worktree:-}" ]]; then
       target_commit=$(git -C "$worktree" rev-parse HEAD)
@@ -154,9 +157,36 @@ read_dotenv_value() {
   [[ -n "$found" ]] || return 1
   printf '%s\n' "$found"
 }
-if [[ -n "$env_file" && -f "$env_file" ]] && rg -q '^(CLIENTID|CLIENTSECRET|CLIENTTENANT|GRAPH_SENDER_MAILBOX|ADDITIONALRECIPIENT|DENIED_MAILBOX|AZURE_CERT_THUMBPRINT|AZURE_CERT_PRIVATE_KEY_PATH)=' "$env_file"; then
+create_qualification_env() {
+  local source_file=$1 output_file=$2 key value
+  declare -A values=()
+
+  for key in GRAPH_TENANT_ID GRAPH_CLIENT_ID GRAPH_CLIENT_SECRET GRAPH_CERTIFICATE_THUMBPRINT \
+    GRAPH_SENDER_MAILBOX ADDITIONALRECIPIENT DENIED_MAILBOX AZURE_CERT_PRIVATE_KEY_PATH; do
+    value=$(read_dotenv_value "$source_file" "$key") || die "M365 qualification requires one ${key} in --env-file."
+    values["$key"]=$value
+  done
+
+  umask 077
+  : >"$output_file"
+  printf '%s=%s\n' \
+    "CLIENTTENANT" "${values[GRAPH_TENANT_ID]}" \
+    "CLIENTID" "${values[GRAPH_CLIENT_ID]}" \
+    "CLIENTSECRET" "${values[GRAPH_CLIENT_SECRET]}" \
+    "AZURE_CERT_THUMBPRINT" "${values[GRAPH_CERTIFICATE_THUMBPRINT]}" \
+    "MAILBOX" "${values[GRAPH_SENDER_MAILBOX]}" \
+    "ADDITIONALRECIPIENT" "${values[ADDITIONALRECIPIENT]}" \
+    "DENIED_MAILBOX" "${values[DENIED_MAILBOX]}" \
+    "AZURE_CERT_PRIVATE_KEY_PATH" "${values[AZURE_CERT_PRIVATE_KEY_PATH]}" >"$output_file"
+  chmod 0600 "$output_file"
+}
+if [[ -n "$env_file" && -f "$env_file" ]] && grep -q '^GRAPH_TENANT_ID=' "$env_file"; then
   qualification_mailbox=$(read_dotenv_value "$env_file" GRAPH_SENDER_MAILBOX) || die 'M365 qualification requires one GRAPH_SENDER_MAILBOX in --env-file.'
-  (cd "$worktree" && MAILBOX="$qualification_mailbox" DOTENV_CONFIG_PATH="$env_file" npm run test:send)
+  qualification_env=$(mktemp /dev/shm/smtp2graph-qualification.XXXXXX)
+  create_qualification_env "$env_file" "$qualification_env"
+  (cd "$worktree" && MAILBOX="$qualification_mailbox" DOTENV_CONFIG_PATH="$qualification_env" npm run test:send)
+  rm -f -- "$qualification_env"
+  qualification_env=''
   printf 'PASS: %s passed local and Microsoft 365 regressions.\n' "$branch"
 else
   printf 'PARTIAL: %s passed local regressions; Microsoft 365 suite was not explicitly requested with a complete --env-file.\n' "$branch"

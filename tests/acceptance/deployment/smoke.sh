@@ -49,7 +49,7 @@ mapfile -t tasks < <(docker service ps "$service" --filter desired-state=running
 secret_spec=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{printf "%#o" .File.Mode}}{{"\n"}}{{end}}') || die 'could not inspect gateway Secret mount metadata.'
 require_secret_mode() {
   local name=$1 mode=$2
-  printf '%s\n' "$secret_spec" | rg -q "^${name} 65532 65532 ${mode}$" || die "required Secret mount mode is invalid: ${name}."
+  printf '%s\n' "$secret_spec" | grep -Fqx -- "${name} 65532 65532 ${mode}" || die "required Secret mount mode is invalid: ${name}."
 }
 require_secret_mode graph-tenant-id 0444
 require_secret_mode graph-client-id 0444

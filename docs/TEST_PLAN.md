@@ -1,5 +1,19 @@
 # План тестування
 
+## Task 6.1 — Integration та client compatibility suite
+
+### Scope and execution order
+
+Task 6.1 uses only the approved non-production environment. All positive delivery cases use one canonical `GRAPH_SENDER_MAILBOX` and one `NONPRODUCTION_RECIPIENT_ALLOWLIST` recipient; credentials, message bodies and message identifiers are never retained as evidence. Moodle is the final client profile and must not be tested until the gateway has delivered the non-Moodle format matrix below successfully.
+
+| ID | Profile / format | Preconditions | Expected evidence | Status |
+|---|---|---|---|---|
+| TB-INT-001 | Gateway delivery: plain text and HTML/Unicode | Task 5.4 smoke passes; one sender and one recipient are configured. | SMTP acceptance and read-only recipient verification for both formats. | Pending |
+| TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Pending |
+| TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Blocked by TB-INT-001/002 |
+
+Before every Task 6.1 submission, run `tests/acceptance/deployment/smoke.sh`. Any failed submission or delivery check stops the matrix; it does not proceed to Moodle.
+
 ## Task 5.4 — Development staging single-release deploy і smoke rehearsal
 
 | ID | Контроль | Команда / evidence | Межа |

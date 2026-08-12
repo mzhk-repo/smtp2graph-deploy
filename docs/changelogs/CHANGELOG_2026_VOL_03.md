@@ -43,3 +43,10 @@
     Verification: Read-only operator evidence confirms all six messages arrived. The gateway smoke passed immediately before submission; no credentials, message identifiers or message content were recorded.
     Risks: SMTP acceptance and receipt do not yet establish Moodle client compatibility. BCC remains incomplete until its envelope-only case arrives, and Task 6.2 load/failure coverage remains pending.
     Rollback: No deployment, Secret, queue or configuration mutation was performed. Stop further client onboarding if a subsequent format case fails.
+
+2026-08-12 — Task 6.1: BCC-envelope delivery verified
+    Context: The one-sender/one-recipient gateway-format matrix required a separate BCC-envelope case before Moodle could be tested, because the initial six messages did not independently prove invisible-recipient handling.
+    Change: Submitted the dedicated STARTTLS BCC-envelope message under the same canonical sender and recipient boundary.
+    Verification: Gateway acceptance succeeded and read-only recipient evidence confirms delivery without displaying recipients in the received message. The plain text, HTML/Unicode, To/CC, Reply-To and regular/inline attachment cases were already delivered successfully.
+    Risks: This establishes gateway format delivery only; Moodle STARTTLS, hostname validation and AUTH-before-TLS denial remain separate Task 6.1 evidence. Task 6.2 load/failure coverage remains pending.
+    Rollback: No deployment, Secret, queue or configuration mutation was performed. Stop client onboarding if the subsequent Moodle compatibility check fails.

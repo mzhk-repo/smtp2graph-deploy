@@ -9,8 +9,8 @@ Task 6.1 uses only the approved non-production environment. All positive deliver
 | ID | Profile / format | Preconditions | Expected evidence | Status |
 |---|---|---|---|---|
 | TB-INT-001 | Gateway delivery: plain text and HTML/Unicode | Task 5.4 smoke passes; one sender and one recipient are configured. | SMTP acceptance and read-only recipient verification for both formats. | Passed 2026-08-12 |
-| TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Partial: To/CC, Reply-To and attachment cases passed 2026-08-12; BCC envelope case pending |
-| TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Blocked by TB-INT-002 BCC case |
+| TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Passed 2026-08-12; BCC envelope arrived without exposing recipients |
+| TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Ready |
 
 Before every Task 6.1 submission, run `tests/acceptance/deployment/smoke.sh`. Any failed submission or delivery check stops the matrix; it does not proceed to Moodle.
 

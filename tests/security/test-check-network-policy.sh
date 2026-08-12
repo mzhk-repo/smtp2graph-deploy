@@ -29,7 +29,7 @@ cat >"$fake_bin/nft" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${1:-}" == list && "${2:-}" == ruleset ]] || exit 1
-printf '%s\n' 'table inet smtp2graph { set smtp2graph_smtp_clients {} }'
+printf '%s\n' 'table inet smtp2graph { iifname "lo" tcp dport 2525 accept; set smtp2graph_smtp_clients {} }'
 EOF
 cat >"$fake_bin/ss" <<'EOF'
 #!/usr/bin/env bash

@@ -3,6 +3,7 @@ destroy table inet smtp2graph
 table inet smtp2graph {
   chain input {
     type filter hook input priority filter; policy accept;
+    iifname "lo" tcp dport 2525 accept
     tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept
     tcp dport 2525 drop
   }

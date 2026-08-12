@@ -40,6 +40,7 @@ docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denie
 [[ -f "$stack_file" && -f "$nft_file" ]] || die 'policy files are unavailable.'
 rg -q 'mode: host' "$stack_file" || die 'SMTP publish mode must be host.'
 ! rg -q 'mode: ingress' "$stack_file" || die 'SMTP routing mesh publish is forbidden.'
+rg -q 'iifname "lo" tcp dport 2525 accept' "$nft_file" || die 'development loopback smoke rule is missing.'
 rg -q 'tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept' "$nft_file" || die 'nftables allowlist rule is missing.'
 rg -q 'tcp dport 2525 drop' "$nft_file" || die 'nftables deny rule is missing.'
 docker network inspect "$network" --format '{{json .Options}}' | rg -q '"encrypted":"(true)?"' || die 'Swarm overlay encryption is not enabled.'

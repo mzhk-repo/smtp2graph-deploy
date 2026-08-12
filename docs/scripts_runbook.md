@@ -15,6 +15,16 @@
 - Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` uses local `.env` fallback after `SERVER_ENV=dev` verification and invokes `init-storage.sh` before stack submission. Production requires `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Rollback also requires queue-compatibility confirmation and initializes the reviewed storage boundary before submitting the stack.
 - Safety: missing, incomplete, duplicate, unsafe or owner-readable-by-group/other Secret mappings fail closed. Only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
+- Manual development deploy: run only on the authorised privileged development Swarm manager, after successful host bootstrap. If the approved age identity is private to the operator account, pass only its path into the privileged process; do not copy the identity to `/root`, relax its permissions or print its contents:
+  ```bash
+  cd /opt/smtp2graph-deploy
+  sudo sh -c '
+    export SOPS_AGE_KEY_FILE=/home/pinokew/.config/sops/age/keys.txt
+    exec ./scripts/deploy-orchestrator-swarm.sh \
+      --env-file /opt/smtp2graph-deploy/env.dev.enc \
+      --deploy --apply
+  '
+  ```
 - Check: `./tests/shell/test-deploy-orchestrator.sh`, `shellcheck scripts/deploy-orchestrator-swarm.sh`, `bash -n scripts/deploy-orchestrator-swarm.sh`.
 - Rollback: first assess queue compatibility, then select an explicit previously approved digest. Verify service state, live network policy and synthetic SMTP delivery before closing the rollback change.
 
@@ -52,6 +62,16 @@
 - Inputs: strict-parsed development `.env` or explicit production env-file з `DEPLOY_ENVIRONMENT=development|production`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`; node label деривується з environment.
 - Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_dev=true` або `smtp2graph_prod=true`, storage root/direct children та atomically applies rendered nftables table. Production additionally needs `--approval-context`.
 - Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup. It relies only on base host tools, including `grep`, rather than requiring `rg`.
+- Manual development apply: run only on the authorised privileged development Swarm manager. The root process must be able to decrypt the selected SOPS file; where the approved age identity is stored in the operator's mode-`0600` key file, use its path only as follows. Do not copy the identity to `/root`, alter its permissions or include key material in a command, log or environment file:
+  ```bash
+  cd /opt/smtp2graph-deploy
+  sudo sh -c '
+    export SOPS_AGE_KEY_FILE=/home/pinokew/.config/sops/age/keys.txt
+    exec ./scripts/bootstrap-swarm-host.sh \
+      --env-file /opt/smtp2graph-deploy/env.dev.enc \
+      --apply
+  '
+  ```
 - Check: `./tests/security/test-bootstrap-swarm-host.sh`.
 
 ## `reconcile-tls-secret.sh`

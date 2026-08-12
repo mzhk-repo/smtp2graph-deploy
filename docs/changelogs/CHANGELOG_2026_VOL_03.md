@@ -50,3 +50,17 @@
     Verification: Gateway acceptance succeeded and read-only recipient evidence confirms delivery without displaying recipients in the received message. The plain text, HTML/Unicode, To/CC, Reply-To and regular/inline attachment cases were already delivered successfully.
     Risks: This establishes gateway format delivery only; Moodle STARTTLS, hostname validation and AUTH-before-TLS denial remain separate Task 6.1 evidence. Task 6.2 load/failure coverage remains pending.
     Rollback: No deployment, Secret, queue or configuration mutation was performed. Stop client onboarding if the subsequent Moodle compatibility check fails.
+
+2026-08-12 — Task 6.1: Moodle gateway-side STARTTLS contract verified
+    Context: After completion of the one-sender/one-recipient gateway-format matrix, Moodle required proof that the deployed SMTP listener enforces its required STARTTLS authentication boundary.
+    Change: Ran the Moodle preflight using the existing canonical environment contract and `moodle` SMTP user. The check uses the TLS hostname, creates no mail message and stages any password material only in `/dev/shm`.
+    Verification: Trusted TLS hostname validation passed; SMTP AUTH before STARTTLS was denied; the same user authenticated successfully after STARTTLS. No password, message content or recipient data was emitted.
+    Risks: The check ran from the gateway host. Moodle VM source-CIDR reachability, actual client configuration and controlled delivery remain required for TB-INT-003.
+    Rollback: No deployment, Secret, queue, Moodle configuration or message state was changed.
+
+2026-08-12 — Task 6.1: gateway hostname resolution and Matomo test order
+    Context: Before configuring the next same-host client, the gateway hostname must resolve to the intended private address and the client sequence must not skip directly to the separately hosted Moodle VM.
+    Change: Verified that `/etc/hosts` and NSS resolution map the configured `SMTP_TLS_FQDN` to `10.138.131.45`. Task 6.1 now schedules Matomo on the gateway host as the next profile; Moodle follows after Matomo and retains its separate VM-path requirements.
+    Verification: Read-only host checks confirmed the mapping. A sandboxed TLS socket check was blocked by local execution policy before connection, so the documented OpenSSL preflight remains required on the authorised host.
+    Risks: Name resolution alone does not establish listener reachability or certificate validity. Matomo configuration and controlled delivery remain pending.
+    Rollback: No host, DNS, deployment, Secret, queue or client configuration was changed.

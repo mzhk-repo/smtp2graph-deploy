@@ -84,7 +84,7 @@ fi
 [[ "$network" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die 'SWARM_OVERLAY_NETWORK has an unsafe name.'
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /. '
 [[ -n "${SMTP_ALLOWED_SOURCE_CIDRS:-}" ]] || die 'SMTP_ALLOWED_SOURCE_CIDRS is required.'
-for tool in docker nft install realpath dirname basename mktemp rg; do
+for tool in docker nft install realpath dirname basename mktemp grep; do
   command -v "$tool" >/dev/null || die "$tool is required."
 done
 
@@ -157,7 +157,7 @@ rendered_nft=$(mktemp /dev/shm/smtp2graph-nft.XXXXXX)
 nft --check --file "$rendered_nft" >/dev/null
 if [[ "$apply" == true ]]; then
   nft --file "$rendered_nft"
-  nft list table inet "$nft_table" | rg -q "set ${nft_set}" || die 'applied nftables policy is not present after apply.'
+  nft list table inet "$nft_table" | grep -Fq -- "set ${nft_set}" || die 'applied nftables policy is not present after apply.'
 fi
 
 if [[ "$apply" == true ]]; then

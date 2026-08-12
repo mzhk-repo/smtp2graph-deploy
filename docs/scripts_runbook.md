@@ -51,7 +51,7 @@
 - Category: 1b (dev/prod Swarm host bootstrap).
 - Inputs: strict-parsed development `.env` or explicit production env-file з `DEPLOY_ENVIRONMENT=development|production`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`; node label деривується з environment.
 - Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_dev=true` або `smtp2graph_prod=true`, storage root/direct children та atomically applies rendered nftables table. Production additionally needs `--approval-context`.
-- Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup.
+- Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup. It relies only on base host tools, including `grep`, rather than requiring `rg`.
 - Check: `./tests/security/test-bootstrap-swarm-host.sh`.
 
 ## `reconcile-tls-secret.sh`
@@ -68,7 +68,7 @@
 
 - Category: 1a (read-only non-production SMTP network-policy validation).
 - Inputs: explicit safe `--network OVERLAY_NAME`, optional `--stack-name NAME`, and reviewed `deploy/swarm/stack.yml`/nftables policy files. It does not read `.env` or decrypt SOPS material.
-- Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. `0.0.0.0` listener output is not treated as public exposure by itself.
+- Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. It relies on base host `grep`, not `rg`. `0.0.0.0` listener output is not treated as public exposure by itself.
 
 ## `render-network-policy.sh`
 

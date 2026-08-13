@@ -844,6 +844,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 
 ### Task 6.1 — Integration та client compatibility suite
 
+- **Status:** Completed for the accepted development integration scope; full five-profile roadmap acceptance remains gated on the explicitly deferred Moodle VM and remaining client-profile evidence.
 - **Priority:** Must
 - **Goal:** перевірити Grafana, Moodle, DSpace, Koha й Matomo profiles.
 - **Depends on:** Phase 5.

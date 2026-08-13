@@ -4,7 +4,7 @@
 
 ### Scope and execution order
 
-Task 6.1 uses only the approved non-production environment. All positive delivery cases use one canonical `GRAPH_SENDER_MAILBOX` and one `NONPRODUCTION_RECIPIENT_ALLOWLIST` recipient; credentials, message bodies and message identifiers are never retained as evidence. The next client profile is Matomo on the gateway host; Moodle remains after Matomo because it requires a separate VM network-path and client-configuration check.
+Task 6.1 development integration scope is complete for the gateway format matrix, Grafana and the gateway-side Moodle STARTTLS contract. All positive delivery cases use the canonical `GRAPH_SENDER_MAILBOX`; approved non-production recipients may be selected from the configured test allowlist. Credentials, message bodies and message identifiers are never retained as evidence. Real Moodle VM delivery and remaining client profiles are explicitly deferred evidence, not silently treated as passed.
 
 | ID | Profile / format | Preconditions | Expected evidence | Status |
 |---|---|---|---|---|
@@ -12,6 +12,9 @@ Task 6.1 uses only the approved non-production environment. All positive deliver
 | TB-INT-002 | Gateway delivery: To/CC/BCC, Reply-To, attachment and inline attachment | TB-INT-001 passes; same sender and recipient policy remains in force. | SMTP acceptance and read-only recipient verification of each supported format. | Passed 2026-08-12; BCC envelope arrived without exposing recipients |
 | TB-INT-003 | Moodle STARTTLS, hostname validation and AUTH-before-TLS denial | TB-INT-001 and TB-INT-002 pass; real Moodle profile and its approved source CIDR are available. | Moodle SMTP response capture and read-only recipient verification. | Partial: gateway-side TLS hostname validation, AUTH-before-TLS denial and post-TLS AUTH passed 2026-08-12; Moodle VM path and controlled delivery pending |
 | TB-INT-004 | Matomo SMTP client profile on gateway host | TB-INT-001 and TB-INT-002 pass; Matomo configuration is available; the shared host resolves `smtp-int.ldubgd.edu.ua` to `10.138.131.45`. | Matomo SMTP response/log evidence and read-only recipient verification of one controlled message. | Ready |
+| TB-INT-005 | Grafana Alerting SMTP client profile | Gateway STARTTLS, encrypted overlay alias and Grafana source policy are applied; Grafana service is attached to the gateway overlay. | Grafana test notification accepted by the gateway and delivered to the configured non-production recipient. | Passed 2026-08-13 |
+
+Task 6.1 status: **Completed for the accepted development integration scope**. TB-INT-003 real Moodle VM delivery and TB-INT-004 Matomo delivery remain separate follow-up evidence items; they do not invalidate the completed gateway/Grafana integration milestone but must remain closed before claiming the full five-profile roadmap acceptance.
 
 Before every Task 6.1 submission, run `tests/acceptance/deployment/smoke.sh`. Any failed submission or delivery check stops the matrix; it does not proceed to the next client profile.
 

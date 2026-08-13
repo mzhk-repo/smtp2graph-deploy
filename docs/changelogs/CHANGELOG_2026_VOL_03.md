@@ -64,3 +64,10 @@
     Verification: Read-only host checks confirmed the mapping. A sandboxed TLS socket check was blocked by local execution policy before connection, so the documented OpenSSL preflight remains required on the authorised host.
     Risks: Name resolution alone does not establish listener reachability or certificate validity. Matomo configuration and controlled delivery remain pending.
     Rollback: No host, DNS, deployment, Secret, queue or client configuration was changed.
+
+2026-08-13 — Task 6.1: Grafana integration scope completed
+    Context: Grafana Alerting could resolve the gateway only after it joined the actual encrypted Swarm overlay; the live gateway also required the overlay source CIDR and nftables/UFW precedence correction.
+    Change: Grafana test notification delivery through STARTTLS to `smtp-int.pinokew.buzz:2525` was completed using the shared encrypted overlay and the canonical SMTP sender policy. The development integration scope for the gateway format matrix and Grafana client profile is now accepted.
+    Verification: Grafana test notification was accepted and delivered to the configured non-production recipient. Live evidence confirmed the gateway alias on `smtp2graph_internal_enc`, source policy for the overlay CIDR, and the loaded nftables policy. No credentials, message bodies or message identifiers were recorded.
+    Risks: Real Moodle VM delivery and remaining Matomo/client-profile evidence remain deferred follow-up items; this does not establish Task 6.2 load/failure/retention evidence or production readiness.
+    Rollback: No production change was made. Revert the reviewed development overlay/DNS/policy changes only through declarative stack and bootstrap automation after assessing active SMTP sessions and queue state.

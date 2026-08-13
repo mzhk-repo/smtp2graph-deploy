@@ -42,6 +42,7 @@ if command -v docker >/dev/null; then
     SEND_RETRY_LIMIT=1 \
     SEND_RETRY_INTERVAL_MINUTES=1 \
     SWARM_OVERLAY_NETWORK=smtp2graph_internal \
+    SMTP_TLS_FQDN=smtp-int.example.invalid \
     GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vtest \
     GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vtest \
     GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_vtest \

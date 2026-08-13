@@ -33,6 +33,7 @@ printf '%s\n' \
   'SMTP_MAX_SESSIONS_PER_IP=5' \
   'SMTP_MESSAGES_PER_MINUTE=30' \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' \
+  'SMTP_TLS_FQDN=smtp-int.example.invalid' \
   'GRAPH_SENDER_MAILBOX=noreply@example.invalid' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \

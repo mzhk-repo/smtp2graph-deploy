@@ -12,6 +12,7 @@ if rg -q 'mode: ingress' "$stack"; then
 fi
 rg -q 'target: 2525' "$stack"
 rg -q 'mode: 0400' "$stack"
+rg -q 'type filter hook input priority filter - 1; policy accept;' "$nft"
 rg -q 'iifname "lo" tcp dport 2525 accept' "$nft"
 rg -q 'tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept' "$nft"
 rg -q 'tcp dport 2525 drop' "$nft"

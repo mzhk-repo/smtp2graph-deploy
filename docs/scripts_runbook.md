@@ -61,7 +61,7 @@
 - Category: 1b (dev/prod Swarm host bootstrap).
 - Inputs: strict-parsed development `.env` or explicit production env-file з `DEPLOY_ENVIRONMENT=development|production`, `SWARM_OVERLAY_NETWORK`, `SMTP2GRAPH_STORAGE_HOST_PATH`, private/approved `SMTP_ALLOWED_SOURCE_CIDRS` і matching host `SERVER_ENV`; node label деривується з environment.
 - Side effects: default/`--check` є read-only. Explicit `--apply` вимагає Swarm manager і privileged operator, створює лише missing encrypted overlay, current-node label `smtp2graph_dev=true` або `smtp2graph_prod=true`, storage root/direct children та atomically applies rendered nftables table. Production additionally needs `--approval-context`.
-- Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup. It relies only on base host tools, including `grep`, rather than requiring `rg`.
+- Safety: відмовляється від production, public CIDR, unsafe network name, non-manager Docker access, unencrypted existing overlay, symlinked/root storage path і не робить stack deploy, Secret reconciliation чи cleanup. The reviewed SMTP nftables chain runs immediately before UFW's filter-priority INPUT chain, so only its explicit loopback/source-CIDR accept rules can precede the host default drop. It relies only on base host tools, including `grep`, rather than requiring `rg`.
 - Manual development apply: run only on the authorised privileged development Swarm manager. The root process must be able to decrypt the selected SOPS file; where the approved age identity is stored in the operator's mode-`0600` key file, use its path only as follows. Do not copy the identity to `/root`, alter its permissions or include key material in a command, log or environment file:
   ```bash
   cd /opt/smtp2graph-deploy
@@ -89,6 +89,12 @@
 - Category: 1a (read-only non-production SMTP network-policy validation).
 - Inputs: explicit safe `--network OVERLAY_NAME`, optional `--stack-name NAME`, and reviewed `deploy/swarm/stack.yml`/nftables policy files. It does not read `.env` or decrypt SOPS material.
 - Safety: validates host publish mode, no routing mesh, encrypted overlay and loaded nftables allowlist/deny rule; it fails closed when Docker API access is unavailable. It relies on base host `grep`, not `rg`. `0.0.0.0` listener output is not treated as public exposure by itself.
+  ```bash
+  cd /opt/smtp2graph-deploy
+    sudo ./scripts/check-network-policy.sh \
+      --network smtp2graph_internal \
+      --stack-name smtp2graph
+  ```
 
 ## `render-network-policy.sh`
 

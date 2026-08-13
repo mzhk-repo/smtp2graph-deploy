@@ -2,7 +2,9 @@ destroy table inet smtp2graph
 
 table inet smtp2graph {
   chain input {
-    type filter hook input priority filter; policy accept;
+    # Evaluate before UFW's filter-priority INPUT chain so reviewed SMTP
+    # allowlist traffic is not dropped by the host default policy first.
+    type filter hook input priority filter - 1; policy accept;
     iifname "lo" tcp dport 2525 accept
     tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept
     tcp dport 2525 drop

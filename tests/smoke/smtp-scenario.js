@@ -2,6 +2,7 @@
 'use strict';
 
 const fs = require('fs');
+const net = require('net');
 const tls = require('tls');
 
 const [host, port, scenario, fixture] = process.argv.slice(2);
@@ -12,7 +13,7 @@ if (!host || !port || !scenario || !fixture || !username || !password) {
   process.exit(64);
 }
 
-const socket = tls.connect({host, port: Number(port), rejectUnauthorized: false});
+let socket = net.connect({host, port: Number(port)});
 let buffer = '';
 let waiting;
 
@@ -35,6 +36,38 @@ function authLine() {
   return Buffer.from(`\u0000${username}\u0000${password}`).toString('base64');
 }
 
+function attachSocket(candidate) {
+  candidate.on('data', chunk => {
+    buffer += chunk.toString('utf8');
+    const lines = buffer.split('\r\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.length && waiting && /^[0-9]{3} /.test(line)) {
+        const current = waiting;
+        waiting = undefined;
+        current.resolve(line);
+      }
+    }
+  });
+
+  candidate.on('error', error => {
+    if (waiting) waiting.reject(error);
+    else process.exitCode = 1;
+  });
+}
+
+function upgradeToStartTls() {
+  return new Promise((resolve, reject) => {
+    const upgraded = tls.connect({socket, rejectUnauthorized: false});
+    upgraded.once('secureConnect', () => {
+      socket = upgraded;
+      attachSocket(socket);
+      resolve();
+    });
+    upgraded.once('error', reject);
+  });
+}
+
 function messageForScenario() {
   if (scenario !== 'oversize') {
     return fs.readFileSync(fixture, 'utf8').replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
@@ -42,27 +75,14 @@ function messageForScenario() {
   return `Subject: Oversize synthetic test\r\n\r\n${'A'.repeat(26 * 1024 * 1024)}`;
 }
 
-socket.on('data', chunk => {
-  buffer += chunk.toString('utf8');
-  const lines = buffer.split('\r\n');
-  buffer = lines.pop();
-  for (const line of lines) {
-    if (line.length && waiting && /^[0-9]{3} /.test(line)) {
-      const current = waiting;
-      waiting = undefined;
-      current.resolve(line);
-    }
-  }
-});
-
-socket.on('error', error => {
-  if (waiting) waiting.reject(error);
-  else process.exitCode = 1;
-});
+attachSocket(socket);
 
 (async () => {
   try {
     expectCode(await nextResponse(), '220');
+    expectCode(await command('EHLO local-mvp-test.invalid'), '250');
+    expectCode(await command('STARTTLS'), '220');
+    await upgradeToStartTls();
     expectCode(await command('EHLO local-mvp-test.invalid'), '250');
 
     if (scenario === 'unauthenticated') {
@@ -76,7 +96,7 @@ socket.on('error', error => {
     expectCode(await command(`AUTH PLAIN ${authLine()}`), '235');
     const sender = scenario === 'denied-sender' ? 'outside@example.invalid' : 'noreply@example.invalid';
     const mailResponse = await command(`MAIL FROM:<${sender}>`);
-    if (scenario === 'denied-sender') {
+    if (scenario === 'denied-sender' || scenario === 'rate-limited' || scenario === 'capacity-rejected') {
       if (mailResponse.startsWith('250')) throw new Error(`Denied sender was accepted: ${mailResponse}`);
       console.log(JSON.stringify({scenario, rejected: true, response: mailResponse}));
       socket.end();

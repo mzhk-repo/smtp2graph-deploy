@@ -88,6 +88,8 @@ const server = https.createServer({
           return sendJson(response, 500, {error: {code: 'InternalServerError'}});
         case 'access-denied':
           return sendJson(response, 403, {error: {code: 'ErrorAccessDenied'}});
+        case 'unauthorized':
+          return sendJson(response, 401, {error: {code: 'InvalidAuthenticationToken'}});
         case 'timeout':
           return sendJson(response, 408, {error: {code: 'RequestTimeout'}});
         default:

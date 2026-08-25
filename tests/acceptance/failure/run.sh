@@ -14,16 +14,34 @@ usage() {
 environment=''
 while (($#)); do
   case "$1" in
-    --environment) environment=${2:?}; shift 2 ;;
-    --image) image_ref=${2:?}; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) usage; exit 64 ;;
+    --environment)
+      environment=${2:?}
+      shift 2
+      ;;
+    --image)
+      image_ref=${2:?}
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 64
+      ;;
   esac
 done
 
-[[ "${environment}" == staging ]] || { usage; exit 64; }
-printf '%s\n' "${image_ref}" | grep -Eq '^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$' \
-  || { printf 'ERROR: image must be a lowercase digest-pinned OCI reference.\n' >&2; exit 64; }
+[[ "${environment}" == staging ]] || {
+  usage
+  exit 64
+}
+printf '%s\n' "${image_ref}" | grep -Eq '^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$' ||
+  {
+    printf 'ERROR: image must be a lowercase digest-pinned OCI reference.\n' >&2
+    exit 64
+  }
 
 "${project_root}/tests/shell/test-purge-failed.sh"
 "${project_root}/tests/security/test-purge-failed.sh"

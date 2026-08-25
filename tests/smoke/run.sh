@@ -39,7 +39,7 @@ while (($#)); do
       test_image_override=${2:?}
       shift 2
       ;;
-    -h|--help)
+    -h | --help)
       usage
       exit 0
       ;;
@@ -51,12 +51,12 @@ while (($#)); do
 done
 
 case "${suite}" in
-  mvp|task62) ;;
+  mvp | task62) ;;
   *) die 'suite must be mvp or task62' ;;
 esac
 if [[ -n "${test_image_override}" ]]; then
-  printf '%s\n' "${test_image_override}" | grep -Eq '^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$' \
-    || die 'image must be a lowercase digest-pinned OCI reference'
+  printf '%s\n' "${test_image_override}" | grep -Eq '^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$' ||
+    die 'image must be a lowercase digest-pinned OCI reference'
 fi
 
 compose() {

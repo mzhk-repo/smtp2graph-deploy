@@ -6,9 +6,9 @@
 
 ### Preconditions
 
-- `deploy/config/queue-compatibility.yml` містить один exact digest зі status `development-smoke-verified` та independently reviewed release evidence.
+- Exact immutable digest має reviewed build-plane release evidence: Trivy result або exception, CycloneDX SBOM, checksums та OCI metadata.
 - Host має `SERVER_ENV=dev`, development storage root є здоровим, а configuration/host backup reference зафіксовано. Планові backups ніколи не містять live `queue/` або `failed/` payloads.
-- Authorized operator має local ignored `.env` з allowlisted development inputs, exact immutable `SMTP2GRAPH_IMAGE_DIGEST` і versioned Docker Secret names. Placement label деривується з `DEPLOY_ENVIRONMENT=development` як `smtp2graph_dev`; `queue-compatibility.yml` є evidence/rollback metadata, а не джерелом deploy digest.
+- Authorized operator має local ignored `.env` з allowlisted development inputs, exact immutable `SMTP2GRAPH_IMAGE_DIGEST` і versioned Docker Secret names. Placement label деривується з `DEPLOY_ENVIRONMENT=development` як `smtp2graph_dev`; digest є єдиним image input для deploy.
 
 ### Run
 
@@ -35,4 +35,4 @@
 
 ### Deferred rollback і duplicate risk
 
-Live rollback rehearsal відкладено до появи другого independently reviewed fork release і declared queue-compatible pair. До того моменту не використовувати rollback command для цього single-release deployment. ADR-0008 залишається чинним: під час майбутнього rollback/recovery модель delivery є At-Least-Once, тому можливий duplicate є прийнятнішим за silent loss.
+Live rollback rehearsal відкладено до появи другого independently reviewed fork release. До того моменту не використовувати rollback command для цього single-release deployment. Для будь-якого rollback оператор фіксує review exact digest pair у non-secret evidence та лише тоді передає `--queue-compatibility-confirmed`. ADR-0008 залишається чинним: під час майбутнього rollback/recovery модель delivery є At-Least-Once, тому можливий duplicate є прийнятнішим за silent loss.

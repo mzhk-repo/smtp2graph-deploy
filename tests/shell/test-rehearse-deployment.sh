@@ -11,7 +11,6 @@ storage="$tmp/data"
 env_file="$tmp/development.env"
 mapping_file="$tmp/secret-mapping.env"
 server_env="$tmp/server.environment"
-compatibility="$tmp/queue-compatibility.yml"
 evidence="$tmp/evidence"
 secret_state="$tmp/secret-state"
 mkdir -p "$fake_bin" "$storage/queue" "$evidence"
@@ -49,18 +48,6 @@ printf '%s\n' \
   'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$mapping_file"
 chmod 600 "$mapping_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env"
-cat >"$compatibility" <<EOF
-version: 1
-approved_images:
-  - digest: "${current}"
-    release_evidence: "https://example.invalid/releases/current"
-  - digest: "${candidate}"
-    release_evidence: "https://example.invalid/releases/candidate"
-compatible_pairs:
-  - current: "${current}"
-    candidate: "${candidate}"
-EOF
-
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -114,7 +101,7 @@ chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops"
 
 PATH="$fake_bin:$PATH" \
   FAKE_QUEUE_DIR="$storage/queue" FAKE_SECRET_STATE="$secret_state" \
-  SMTP2GRAPH_SERVER_ENV_FILE="$server_env" SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility" \
+  SMTP2GRAPH_SERVER_ENV_FILE="$server_env" \
   SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage" \
   SMTP2GRAPH_SMOKE_SCRIPT="$fake_bin/smoke" SMTP2GRAPH_SMTP_SUBMIT_HELPER="$root/tests/acceptance/deployment/smtp-submit.js" \
   "$script" --env-file "$env_file" --current-digest "$current" --candidate-digest "$candidate" \
@@ -126,7 +113,7 @@ test ! -e "$storage/queue/rehearsal.eml"
 test "$(find "$evidence" -type f | wc -l)" -eq 1
 rg -q '^rollback-and-queue-drain=passed$' "$evidence"/*
 
-if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility" \
+if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" \
   "$script" --env-file "$env_file" --current-digest "$current" --candidate-digest "$candidate" \
   --recipient outsider@example.invalid --smtp-user rehearsal-client --password-file "$password_file" \
   --backup-reference backup-20260803 --evidence-dir "$evidence" --apply >/dev/null 2>&1; then
@@ -135,7 +122,7 @@ if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" SMTP_QUEUE_CO
 fi
 
 chmod 644 "$password_file"
-if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility" \
+if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" \
   "$script" --env-file "$env_file" --current-digest "$current" --candidate-digest "$candidate" \
   --recipient recipient@example.invalid --smtp-user rehearsal-client --password-file "$password_file" \
   --backup-reference backup-20260803 --evidence-dir "$evidence" --apply >/dev/null 2>&1; then

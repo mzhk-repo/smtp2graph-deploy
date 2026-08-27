@@ -10,7 +10,6 @@ calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
 mapping_file="$tmp/secret-mapping.env"
 server_env_file="$tmp/server.environment"
-compatibility_file="$tmp/queue-compatibility.yml"
 mkdir -p "$fake_bin"
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -49,16 +48,6 @@ printf '%s\n' \
   'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vmapped' >"$mapping_file"
 chmod 600 "$mapping_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
-cat >"$compatibility_file" <<EOF
-version: 1
-approved_images:
-  - digest: "${valid_digest}"
-compatible_pairs:
-  - current: "${valid_digest}"
-    candidate: "${rollback_digest}"
-EOF
-export SMTP_QUEUE_COMPATIBILITY_FILE="$compatibility_file"
-
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -138,10 +127,8 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
 fi
 
 unknown_digest='example.invalid/smtp2graph@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null 2>&1; then
-  printf 'ERROR: rollback unexpectedly accepted an unknown queue compatibility pair.\n' >&2
-  exit 1
-fi
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null
+rg -q "^digest=${unknown_digest}$" "$calls"
 
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"

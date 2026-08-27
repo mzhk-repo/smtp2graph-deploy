@@ -817,7 +817,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Depends on:** Tasks 5.1–5.3.
 - **Definition of Ready:** development staging host backup reference; один Task 5.3 immutable digest із independently reviewed release evidence; matching development env contract.
 - **Implementation Steps:** fresh deploy; read-only smoke; no-op redeploy; повторний smoke; зібрати non-secret evidence. Upgrade, queue migration і rollback rehearsal виконуються лише після появи другого independently reviewed queue-compatible fork release.
-- **Files / Directories:** `tests/acceptance/deployment/`, `deploy/config/queue-compatibility.yml`, `docs/RUNBOOK.md`.
+- **Files / Directories:** `tests/acceptance/deployment/`, `docs/RUNBOOK.md`.
 - **Artifacts:** development single-release deployment evidence.
 - **Acceptance Criteria:** fresh deploy і no-op repeat успішні; один desired task `Running`; SMTP повертає `220`; Secret mount modes відповідають stack contract; rollback procedure документована як deferred, але не є умовою Phase 5 Quality Gate.
 - **Validation Commands:**

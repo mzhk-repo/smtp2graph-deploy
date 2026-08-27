@@ -122,29 +122,6 @@ IFS=',' read -r -a recipient_list <<<"${NONPRODUCTION_RECIPIENT_ALLOWLIST:-}"
 for allowed in "${recipient_list[@]}"; do [[ "${allowed,,}" == "$recipient_lc" ]] && recipient_allowed=true; done
 [[ "$recipient_allowed" == true ]] || die 'recipient is absent from NONPRODUCTION_RECIPIENT_ALLOWLIST.'
 
-compatibility_file=${SMTP_QUEUE_COMPATIBILITY_FILE:-"${project_root}/deploy/config/queue-compatibility.yml"}
-[[ "$compatibility_file" = /* && -f "$compatibility_file" && ! -L "$compatibility_file" ]] || die 'queue compatibility metadata is unavailable.'
-image_is_approved() {
-  local digest=$1
-  awk -v digest="$digest" '
-    function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^"|"$/, "", line); return line }
-    /^[[:space:]]*-[[:space:]]*digest:/ { image=value($0); next }
-    /^[[:space:]]*release_evidence:/ { if (image == digest && value($0) != "") found=1 }
-    END { exit(found ? 0 : 1) }
-  ' "$compatibility_file"
-}
-pair_is_approved() {
-  awk -v current="$current_digest" -v candidate="$candidate_digest" '
-    function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^"|"$/, "", line); return line }
-    /^[[:space:]]*-[[:space:]]*current:/ { first=value($0); second=""; next }
-    /^[[:space:]]*candidate:/ { second=value($0); if (first == current && second == candidate) found=1 }
-    END { exit(found ? 0 : 1) }
-  ' "$compatibility_file"
-}
-image_is_approved "$current_digest" || die 'current digest lacks approved Task 5.3 release evidence metadata.'
-image_is_approved "$candidate_digest" || die 'candidate digest lacks approved Task 5.3 release evidence metadata.'
-pair_is_approved || die 'current/candidate pair lacks approved queue compatibility metadata.'
-
 storage_root=$SMTP2GRAPH_STORAGE_HOST_PATH
 [[ "$storage_root" = /* && "$storage_root" != / && -d "$storage_root" && ! -L "$storage_root" ]] || die 'storage root is unsafe or unavailable.'
 [[ -d "$storage_root/queue" && ! -L "$storage_root/queue" ]] || die 'queue directory is unsafe or unavailable.'

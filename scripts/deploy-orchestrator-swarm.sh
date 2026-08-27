@@ -152,9 +152,6 @@ is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an 
 
 stack_file=${SMTP_STACK_FILE:-"${project_root}/deploy/swarm/stack.yml"}
 [[ "$stack_file" = /* && -f "$stack_file" && ! -L "$stack_file" ]] || die 'stack file must be an absolute regular non-symlink file.'
-queue_compatibility_file=${SMTP_QUEUE_COMPATIBILITY_FILE:-"${project_root}/deploy/config/queue-compatibility.yml"}
-[[ "$queue_compatibility_file" = /* && -f "$queue_compatibility_file" && ! -L "$queue_compatibility_file" ]] || die 'queue compatibility file must be an absolute regular non-symlink file.'
-
 stack_env=()
 for key in "${allowed_keys[@]}"; do
   [[ "$key" == DEPLOY_ENVIRONMENT || "$key" == SWARM_STACK_NAME || "$key" == TLS_SECRET_MAPPING_FILE ]] && continue
@@ -180,19 +177,6 @@ deploy_stack() {
 initialize_storage() {
   [[ "$init_storage_script" = /* && -x "$init_storage_script" && ! -L "$init_storage_script" ]] || die 'storage initializer must be an absolute executable non-symlink file.'
   "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" --environment "$environment" --apply
-}
-
-queue_pair_is_approved() {
-  local first=$1 second=$2
-  awk -v first="$first" -v second="$second" '
-    function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^"|"$/, "", line); return line }
-    /^[[:space:]]*-[[:space:]]*current:/ { current=value($0); candidate=""; next }
-    /^[[:space:]]*candidate:/ {
-      candidate=value($0)
-      if ((current == first && candidate == second) || (current == second && candidate == first)) found=1
-    }
-    END { exit(found ? 0 : 1) }
-  ' "$queue_compatibility_file"
 }
 
 require_apply_authorization() {
@@ -234,7 +218,6 @@ case "$operation" in
     [[ -n "$rollback_image" ]] || die '--rollback requires --image-digest.'
     is_digest "$rollback_image" || die '--image-digest must be an immutable sha256 digest.'
     [[ "$queue_compatibility_confirmed" == true ]] || die '--rollback requires --queue-compatibility-confirmed.'
-    queue_pair_is_approved "$SMTP2GRAPH_IMAGE_DIGEST" "$rollback_image" || die 'rollback digest pair is absent from approved queue compatibility metadata.'
     run_stack_config
     require_apply_authorization
     initialize_storage

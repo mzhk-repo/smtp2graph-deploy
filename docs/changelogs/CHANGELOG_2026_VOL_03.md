@@ -71,3 +71,10 @@
     Verification: Grafana test notification was accepted and delivered to the configured non-production recipient. Live evidence confirmed the gateway alias on `smtp2graph_internal_enc`, source policy for the overlay CIDR, and the loaded nftables policy. No credentials, message bodies or message identifiers were recorded.
     Risks: Real Moodle VM delivery and remaining Matomo/client-profile evidence remain deferred follow-up items; this does not establish Task 6.2 load/failure/retention evidence or production readiness.
     Rollback: No production change was made. Revert the reviewed development overlay/DNS/policy changes only through declarative stack and bootstrap automation after assessing active SMTP sessions and queue state.
+
+2026-08-27 — Release policy: digest-only deployment input
+    Context: The same release digest and evidence references were maintained in both encrypted deployment contracts and `deploy/config/queue-compatibility.yml`, although normal deployment already consumed only the immutable digest from the environment contract.
+    Change: Removed `queue-compatibility.yml` and its mandatory script parsing. `SMTP2GRAPH_IMAGE_DIGEST` is now the only deployment image input; immutable Trivy, CycloneDX, checksum and OCI evidence remains in the build-plane release. ADR-0009 records the policy. Upgrade, rollback and recovery still require an operator-reviewed immutable digest pair, preserved queue state and explicit `--queue-compatibility-confirmed`.
+    Verification: Shell syntax, deploy-orchestrator and two-digest rehearsal regressions passed. The tests prove normal deploy works without release metadata and rollback still requires explicit operator confirmation.
+    Risks: The local machine-readable allowlist is removed, so operator evidence must record the reviewed release artifacts and compatibility assessment before rollback. Automatic rollback remains disabled.
+    Rollback: Restore the reviewed metadata policy only with a superseding ADR and matching script/test changes. Never downgrade a live gateway without queue assessment, an explicit digest and post-change smoke/synthetic verification.

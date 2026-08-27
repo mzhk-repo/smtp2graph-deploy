@@ -78,3 +78,10 @@
     Verification: Shell syntax, deploy-orchestrator and two-digest rehearsal regressions passed. The tests prove normal deploy works without release metadata and rollback still requires explicit operator confirmation.
     Risks: The local machine-readable allowlist is removed, so operator evidence must record the reviewed release artifacts and compatibility assessment before rollback. Automatic rollback remains disabled.
     Rollback: Restore the reviewed metadata policy only with a superseding ADR and matching script/test changes. Never downgrade a live gateway without queue assessment, an explicit digest and post-change smoke/synthetic verification.
+
+2026-08-27 — Fork release build: Dockerfile compiles its runtime bundle
+    Context: The tag release workflow invoked Docker build from a clean Git checkout while the Dockerfile expected a pre-existing ignored `dist/server.js`, causing the image build to fail before any registry push.
+    Change: Added patch asset `013-dockerfile-build-stage.patch`. The Dockerfile now builds `dist/server.js` in an isolated Node builder stage and copies only the resulting bundle into the runtime image.
+    Verification: All assets `001` through `013` replay cleanly from `v1.1.5`; `git apply --check` and `git diff --check` passed. Docker daemon validation remains required on the authorised build runner.
+    Risks: The builder stage runs `npm ci` during image build, so dependency installation remains a required deterministic build input.
+    Rollback: Remove asset `013` only with its manifest entry after confirming the replacement Docker build contract creates the required runtime bundle.

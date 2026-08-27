@@ -53,4 +53,10 @@ if grep -Fq 'chown -R' "$storage_init"; then
   printf 'ERROR: storage initializer must not perform a recursive ownership change.\n' >&2
   exit 1
 fi
+server_env_file="$tmp/server.environment"
+printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
+rm -f "$tmp/storage/queue/existing-message.eml"
+SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$storage_init" --storage-root "$tmp/storage" --environment development --apply >/dev/null
+test -d "$tmp/storage/queue"
+test -d "$tmp/storage/failed"
 printf 'PASS: container hardening and storage initialization policies fail closed.\n'

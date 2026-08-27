@@ -39,6 +39,8 @@ on:
 
 permissions:
   contents: write
+  packages: write
+  pull-requests: read
 
 jobs:
   main-ci:

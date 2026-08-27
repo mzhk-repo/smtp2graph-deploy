@@ -125,7 +125,7 @@ chown "$runtime_uid:$runtime_gid" -- "$storage_root" 2>/dev/null || true
 chmod 0700 -- "$storage_root" 2>/dev/null || true
 for child in queue failed; do
   if [[ ! -e "$storage_root/$child" ]]; then
-    mkdir -p -- "$storage_root/$child"
+    mkdir -p -- "$storage_root/$child" 2>/dev/null || true
   fi
   chown "$runtime_uid:$runtime_gid" -- "$storage_root/$child" 2>/dev/null || true
   chmod 0700 -- "$storage_root/$child" 2>/dev/null || true

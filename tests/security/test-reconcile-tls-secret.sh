@@ -14,7 +14,7 @@ chmod 600 "$key" "$cert"
 : >"$mapping"
 chmod 600 "$mapping"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
-SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --certificate-file "$cert" --key-file "$key" --mapping-file "$mapping" | rg -q '^TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_v'
+SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --certificate-file "$cert" --key-file "$key" --mapping-file "$mapping" | grep -Eq '^TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_v'
 chmod 644 "$key"
 if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --certificate-file "$cert" --key-file "$key" --mapping-file "$mapping" >/dev/null 2>&1; then
   printf 'ERROR: writable/private-key mode validation unexpectedly succeeded.\n' >&2

@@ -9,18 +9,19 @@ trap 'rm -rf -- "$tmp"' EXIT
 
 require_stack_control() {
   local file=$1
-  rg -q '^    user: "65532:65532"$' "$file" || return 1
-  rg -q '^    read_only: true$' "$file" || return 1
-  rg -q '^    cap_drop:$' "$file" || return 1
-  rg -q '^      - ALL$' "$file" || return 1
-  rg -q '^    security_opt:$' "$file" || return 1
-  rg -q '^      - no-new-privileges:true$' "$file" || return 1
-  rg -q '^          pids: 64$' "$file" || return 1
-  rg -q '^      - /runtime:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700$' "$file" || return 1
-  rg -q '^      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532,mode=0700$' "$file" || return 1
-  rg -q '^          cpus: "1.00"$' "$file" || return 1
-  rg -q '^          memory: 512M$' "$file" || return 1
-  if rg -q 'privileged:[[:space:]]*true|/var/run/docker.sock|network_mode:[[:space:]]*host|pid:[[:space:]]*host' "$file"; then
+  grep -Eq '^    user: "65532:65532"$' "$file" || return 1
+  grep -Eq '^    read_only: true$' "$file" || return 1
+  grep -Eq '^    cap_drop:$' "$file" || return 1
+  grep -Eq '^      - ALL$' "$file" || return 1
+  grep -Eq '^    security_opt:$' "$file" || return 1
+  grep -Eq '^      - no-new-privileges:true$' "$file" || return 1
+  grep -Eq '^          pids: 64$' "$file" || return 1
+  grep -Eq '^      - type: tmpfs$' "$file" || return 1
+  grep -Eq '^        target: /runtime$' "$file" || return 1
+  grep -Eq '^        target: /tmp$' "$file" || return 1
+  grep -Eq '^          cpus: "1.00"$' "$file" || return 1
+  grep -Eq '^          memory: 512M$' "$file" || return 1
+  if grep -Eq 'privileged:[[:space:]]*true|/var/run/docker.sock|network_mode:[[:space:]]*host|pid:[[:space:]]*host' "$file"; then
     return 1
   fi
 }
@@ -34,8 +35,9 @@ if require_stack_control "$tmp/weakened.yml"; then
 fi
 
 mkdir -p "$tmp/storage"
-"$storage_init" --storage-root "$tmp/storage" | rg -q '^READY: storage root will be corrected to 65532:65532 mode 0700\.$'
-"$storage_init" --storage-root "$tmp/storage" | rg -q '^READY: queue will be initialized as 65532:65532 mode 0700\.$'
+storage_out=$("$storage_init" --storage-root "$tmp/storage")
+printf '%s\n' "$storage_out" | grep -Eq '^READY: storage root will be corrected to 65532:65532 mode 0700\.$'
+printf '%s\n' "$storage_out" | grep -Eq '^READY: queue will be initialized as 65532:65532 mode 0700\.$'
 if "$storage_init" --storage-root / >/dev/null 2>&1; then
   printf 'ERROR: storage initializer unexpectedly accepted /.\n' >&2
   exit 1
@@ -46,8 +48,8 @@ if "$storage_init" --storage-root "$tmp/storage" >/dev/null 2>&1; then
   printf 'ERROR: storage initializer unexpectedly accepted a non-empty incompatible queue.\n' >&2
   exit 1
 fi
-rg -q 'never recursively changes ownership' "$storage_init"
-if rg -q 'chown -R' "$storage_init"; then
+grep -Fq 'never recursively changes ownership' "$storage_init"
+if grep -Fq 'chown -R' "$storage_init"; then
   printf 'ERROR: storage initializer must not perform a recursive ownership change.\n' >&2
   exit 1
 fi

@@ -86,17 +86,17 @@ chmod 700 "$fake_bin/init-storage"
 export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
-rg -q '^stack config ' "$calls"
-rg -q '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
-rg -q '^derived-sender=noreply@example.invalid$' "$calls"
+grep -Eq '^stack config ' "$calls"
+grep -Eq '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
+grep -Eq '^derived-sender=noreply@example.invalid$' "$calls"
 expected_config_version=$(sha256sum \
   "$root/scripts/entrypoint.sh" \
   "$root/scripts/lib/render-config.sh" \
   "$root/deploy/config/gateway-config.yml.template" \
   "$root/scripts/init-storage.sh" |
   sha256sum | awk '{print substr($1, 1, 16)}')
-rg -q "^config-version=${expected_config_version}$" "$calls"
-if rg -q '^stack deploy ' "$calls"; then
+grep -Eq "^config-version=${expected_config_version}$" "$calls"
+if grep -Eq '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
   exit 1
 fi
@@ -104,22 +104,22 @@ fi
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-test "$(rg -c '^stack deploy ' "$calls")" -eq 2
-test "$(rg -c '^init-storage ' "$calls")" -eq 2
-if rg -q -- '--prune' "$calls"; then
+test "$(grep -c '^stack deploy ' "$calls")" -eq 2
+test "$(grep -c '^init-storage ' "$calls")" -eq 2
+if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1
 fi
 
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --status >/dev/null
-rg -q '^service inspect smtp2graph_gateway$' "$calls"
-rg -q '^service ps smtp2graph_gateway --no-trunc$' "$calls"
+grep -Eq '^service inspect smtp2graph_gateway$' "$calls"
+grep -Eq '^service ps smtp2graph_gateway --no-trunc$' "$calls"
 
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
-rg -q '^stack deploy ' "$calls"
-rg -q "^digest=${rollback_digest}$" "$calls"
+grep -Eq '^stack deploy ' "$calls"
+grep -Eq "^digest=${rollback_digest}$" "$calls"
 
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
   printf 'ERROR: rollback unexpectedly skipped queue compatibility confirmation.\n' >&2
@@ -128,7 +128,7 @@ fi
 
 unknown_digest='example.invalid/smtp2graph@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null
-rg -q "^digest=${unknown_digest}$" "$calls"
+grep -Eq "^digest=${unknown_digest}$" "$calls"
 
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
@@ -140,7 +140,7 @@ fi
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
-rg -q '^stack deploy ' "$calls"
+grep -Eq '^stack deploy ' "$calls"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly accepted SERVER_ENV mismatch.\n' >&2

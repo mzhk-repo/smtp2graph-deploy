@@ -87,7 +87,7 @@ done
 [[ "$(stat -c '%a' "$evidence_dir")" =~ ^[67]00$ ]] || die '--evidence-dir must not be group/world readable.'
 [[ "$smtp_user" =~ ^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$ ]] || die '--smtp-user is unsafe.'
 [[ "$recipient" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]] || die '--recipient is invalid.'
-for tool in docker node awk find stat mktemp date rg; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in docker node awk find stat mktemp date grep; do command -v "$tool" >/dev/null || die "$tool is required."; done
 [[ -x "$orchestrator" && -x "$smoke_script" && -f "$submit_helper" ]] || die 'required rehearsal helper is unavailable.'
 
 is_digest() { [[ "$1" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; }

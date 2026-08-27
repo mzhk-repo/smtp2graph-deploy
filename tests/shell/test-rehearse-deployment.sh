@@ -111,7 +111,7 @@ PATH="$fake_bin:$PATH" \
 test ! -e "$secret_state"
 test ! -e "$storage/queue/rehearsal.eml"
 test "$(find "$evidence" -type f | wc -l)" -eq 1
-rg -q '^rollback-and-queue-drain=passed$' "$evidence"/*
+grep -Eq '^rollback-and-queue-drain=passed$' "$evidence"/*
 
 if PATH="$fake_bin:$PATH" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" \
   "$script" --env-file "$env_file" --current-digest "$current" --candidate-digest "$candidate" \

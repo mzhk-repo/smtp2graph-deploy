@@ -127,3 +127,10 @@
     Verification: Local execution of `zricethezav/gitleaks:v8.30.1` verified 110 commits with zero leaks detected and exit code 0. `make validate` passed.
     Risks: Allowlisted historical commits will not trigger alerts; new leaks in subsequent commits remain fully scanned.
     Rollback: Revert `.gitleaks.toml` commit allowlist additions.
+
+2026-08-27 — Orchestration: support already decrypted environment files in deploy orchestrator
+    Context: CI/CD deployment failed with `sops metadata not found` because `prepare_sops_deploy_env` unconditionally ran `sops --decrypt` on `/tmp/env.decrypted`, which had already been decrypted by the CI pipeline.
+    Change: Updated `prepare_sops_deploy_env` in `scripts/lib/read-deploy-env.sh` to detect whether the target file contains SOPS metadata before invoking decryption, safely copying plaintext files to the temporary staging path. Replaced `rg` calls across tests and rehearsal scripts with POSIX `grep`.
+    Verification: Executed all 20 unit and security test suites locally and verified `make validate` passes.
+    Risks: Plaintext staging files must remain strictly confined to `/dev/shm` with `0600` permissions.
+    Rollback: Revert changes in `scripts/lib/read-deploy-env.sh`.

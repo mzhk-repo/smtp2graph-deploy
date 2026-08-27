@@ -19,18 +19,28 @@ prepare_sops_deploy_env() {
     printf 'ERROR: encrypted deploy env must be an absolute regular non-symlink file.\n' >&2
     return 64
   }
-  command -v sops >/dev/null || {
-    printf 'ERROR: sops is required for deploy environment decryption.\n' >&2
-    return 69
-  }
   SOPS_DEPLOY_STAGE_DIR=$(mktemp -d /dev/shm/smtp2graph-deploy-env.XXXXXX) || return
   chmod 700 "$SOPS_DEPLOY_STAGE_DIR"
   SOPS_DEPLOY_ENV_FILE="$SOPS_DEPLOY_STAGE_DIR/environment.env"
-  sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || {
-    rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
-    SOPS_DEPLOY_STAGE_DIR=''
-    return 64
-  }
+  if grep -q '^sops_version=' "$encrypted" || grep -q 'ENC\[AES256_GCM' "$encrypted"; then
+    command -v sops >/dev/null || {
+      printf 'ERROR: sops is required for deploy environment decryption.\n' >&2
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 69
+    }
+    sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || {
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 64
+    }
+  else
+    cp "$encrypted" "$SOPS_DEPLOY_ENV_FILE" || {
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 64
+    }
+  fi
   chmod 600 "$SOPS_DEPLOY_ENV_FILE"
 }
 

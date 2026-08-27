@@ -27,7 +27,7 @@ sops --encrypt --input-type dotenv --output-type dotenv --age "$recipient" "$pla
 : >"$mapping"
 chmod 600 "$mapping"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
-SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping" | rg -q '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
+SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping" | grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -42,11 +42,11 @@ esac
 EOF
 chmod 700 "$fake_bin/docker"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping" --apply >/dev/null
-rg -q '^GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_v' "$mapping"
+grep -Eq '^GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME=smtp2graph_graph_certificate_thumbprint_v' "$mapping"
 [[ $(find "$tmp/docker-secrets" -type f | wc -l) -eq 7 ]]
-rg -q '^synthetic-private-key-line-two$' "$tmp/docker-secrets"
-rg -q 'synthetic-password!' "$tmp/docker-secrets"
-rg -Fq $'gateway\tsynthetic-password!\tnoreply@example.invalid' "$tmp/docker-secrets"
+grep -Eq '^synthetic-private-key-line-two$' "$tmp/docker-secrets"/*
+grep -Eq 'synthetic-password!' "$tmp/docker-secrets"/*
+grep -Fq $'gateway\tsynthetic-password!\tnoreply@example.invalid' "$tmp/docker-secrets"/*
 if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "${script}" --environment production --env-file "$encrypted" --mapping-file "$mapping" --apply >/dev/null 2>&1; then
   printf 'ERROR: production apply unexpectedly succeeded.\n' >&2
   exit 1

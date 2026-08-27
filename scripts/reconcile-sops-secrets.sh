@@ -157,7 +157,7 @@ for key in "${!secret_names[@]}"; do
   docker secret inspect "${secret_names[$key]}" >/dev/null 2>&1 || docker secret create "${secret_names[$key]}" "$file" >/dev/null
 done
 mapping_tmp=$(mktemp "$(dirname "$mapping_file")/.sops-secret-map.XXXXXX")
-chmod 600 "$mapping_tmp"
+chmod 644 "$mapping_tmp"
 names_file="$stage_dir/names"
 for key in "${!secret_names[@]}"; do printf '%s=%s\n' "$key" "${secret_names[$key]}"; done >"$names_file"
 chmod 400 "$names_file"
@@ -168,5 +168,8 @@ awk -F= -v names_file="$stage_dir/names" '
   END { for (key in names) if (!seen[key]) print key "=" names[key] }
 ' "$mapping_file" >"$mapping_tmp"
 mv "$mapping_tmp" "$mapping_file"
-chmod 600 "$mapping_file"
+chmod 644 "$mapping_file"
+if [[ -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]]; then
+  chown "${SUDO_UID}:${SUDO_GID}" "$mapping_file" 2>/dev/null || true
+fi
 log 'versioned Docker Secret mapping updated; deploy separately after policy verification.'

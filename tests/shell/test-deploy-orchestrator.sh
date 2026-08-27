@@ -171,6 +171,19 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   exit 1
 fi
 
+chmod 644 "$mapping_file"
+if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly rejected a 0644 Secret mapping.\n' >&2
+  exit 1
+fi
+
+chmod 666 "$mapping_file"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly accepted a world-writable Secret mapping.\n' >&2
+  exit 1
+fi
+chmod 600 "$mapping_file"
+
 fallback_root="$tmp/fallback-root"
 mkdir -p "$fallback_root"
 cp "$env_file" "$fallback_root/.env"

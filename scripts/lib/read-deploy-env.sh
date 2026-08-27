@@ -112,9 +112,13 @@ load_deploy_secret_mapping() {
     printf 'ERROR: Secret mapping must be an absolute regular non-symlink file.\n' >&2
     return 64
   }
+  [[ -r "$file" ]] || {
+    printf 'ERROR: Secret mapping file is not readable: %s.\n' "$file" >&2
+    return 64
+  }
   mode=$(stat -c '%a' "$file") || return
-  [[ "$mode" =~ ^[0-7]{3,4}$ && $((8#$mode & 077)) -eq 0 && $((8#$mode & 400)) -ne 0 ]] || {
-    printf 'ERROR: Secret mapping must be readable only by its owner.\n' >&2
+  [[ "$mode" =~ ^[0-7]{3,4}$ && $((8#$mode & 022)) -eq 0 && $((8#$mode & 400)) -ne 0 ]] || {
+    printf 'ERROR: Secret mapping must not be group/world-writable and must be readable.\n' >&2
     return 64
   }
   while IFS= read -r line || [[ -n "$line" ]]; do

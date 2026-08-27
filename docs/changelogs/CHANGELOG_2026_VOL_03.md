@@ -128,9 +128,9 @@
     Risks: Allowlisted historical commits will not trigger alerts; new leaks in subsequent commits remain fully scanned.
     Rollback: Revert `.gitleaks.toml` commit allowlist additions.
 
-2026-08-27 — Orchestration: support already decrypted environment files in deploy orchestrator
-    Context: CI/CD deployment failed with `sops metadata not found` because `prepare_sops_deploy_env` unconditionally ran `sops --decrypt` on `/tmp/env.decrypted`, which had already been decrypted by the CI pipeline.
-    Change: Updated `prepare_sops_deploy_env` in `scripts/lib/read-deploy-env.sh` to detect whether the target file contains SOPS metadata before invoking decryption, safely copying plaintext files to the temporary staging path. Replaced `rg` calls across tests and rehearsal scripts with POSIX `grep`.
+2026-08-27 — Orchestration: support already decrypted environment files and readable Secret mappings
+    Context: CI/CD deployment failed with `sops metadata not found` and `Permission denied` on `/srv/smtp2graph/dev/smtp2graph.env` because `prepare_sops_deploy_env` unconditionally ran `sops --decrypt` on plaintext files and `load_deploy_secret_mapping` required owner-only mode `0600` even when created by root during secret reconciliation.
+    Change: Updated `prepare_sops_deploy_env` in `scripts/lib/read-deploy-env.sh` to detect SOPS metadata before invoking decryption. Updated `load_deploy_secret_mapping` to permit non-group/world-writable readable mapping files (e.g. `0644`/`0640`/`0600`) and reject world/group-writable files. Updated `reconcile-sops-secrets.sh` and `reconcile-tls-secret.sh` to write mapping files with mode `0644` and preserve calling user ownership when executed via `sudo`. Replaced `rg` calls with POSIX `grep`.
     Verification: Executed all 20 unit and security test suites locally and verified `make validate` passes.
-    Risks: Plaintext staging files must remain strictly confined to `/dev/shm` with `0600` permissions.
-    Rollback: Revert changes in `scripts/lib/read-deploy-env.sh`.
+    Risks: Secret mapping files contain Docker Secret names only; actual secret payloads remain in Docker Secrets and encrypted SOPS files.
+    Rollback: Revert changes in `scripts/lib/read-deploy-env.sh`, `scripts/reconcile-sops-secrets.sh`, and `scripts/reconcile-tls-secret.sh`.

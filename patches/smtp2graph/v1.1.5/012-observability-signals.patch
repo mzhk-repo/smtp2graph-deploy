@@ -723,7 +723,7 @@ index 45e33d8..95e3bec 100644
  
  if(process.argv.includes('-v') || process.argv.includes('--version')) // We're asked for our version?
      console.log(`SMTP2Graph v${VERSION}`);
-@@ -12,16 +13,17 @@ else
+@@ -12,16 +13,20 @@ else
          try {
              Config.validate();
          } catch(error) {
@@ -740,8 +740,11 @@ index 45e33d8..95e3bec 100644
 -            await server.listen();
 -        } catch(error) {
 -            log('error', `Failed to start SMTP server. ${String(error)}`, {error});
++            let ready = false;
++            const observabilityServer = new ObservabilityServer(()=>ready);
++            await observabilityServer.listen();
 +            await server.listen();
-+            await new ObservabilityServer(()=>true).listen();
++            ready = true;
 +        } catch(error) {
 +            log('error', 'gateway_start_failed', {error});
              process.exit(1);

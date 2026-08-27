@@ -20,6 +20,8 @@
 
 ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
 
+./tests/observability/test-signals.sh --environment development
+
 ./scripts/deploy-orchestrator-swarm.sh \
   --deploy --apply
 
@@ -27,6 +29,8 @@
 ```
 
 Перед кожним stack submission orchestration ідемпотентно викликає `init-storage.sh` для валідованого storage root і його direct `queue`/`failed` children. Репетиція не створює Docker Secrets, не надсилає SMTP test message і не змінює queue payloads. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
+
+Observability endpoints (`/livez`, `/readyz`, `/metrics`) слухають лише на encrypted overlay port `9464` і не мають host-published port. VictoriaMetrics scraper має бути приєднаний до цього overlay та імпортувати `deploy/monitoring/smtp2graph-scrape.yml`; без цього metrics endpoint існує, але не є dashboard/alert signal. Docker `local` logging driver обмежує host logs розміром і кількістю файлів; central logging owner окремо підтверджує 30-day time retention.
 
 ### Verify and close
 

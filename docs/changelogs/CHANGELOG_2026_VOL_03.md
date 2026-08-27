@@ -134,3 +134,10 @@
     Verification: Executed all 20 unit and security test suites locally and verified `make validate` passes.
     Risks: Secret mapping files contain Docker Secret names only; actual secret payloads remain in Docker Secrets and encrypted SOPS files. If created by an unprivileged user, ownership will match that user until root runs bootstrap.
     Rollback: Revert changes in `scripts/lib/read-deploy-env.sh`, `scripts/reconcile-sops-secrets.sh`, `scripts/reconcile-tls-secret.sh`, and `scripts/init-storage.sh`.
+
+2026-08-27 — Task 7.1: control-plane observability wiring
+    Context: The deployed gateway image contained health, Prometheus metrics and JSON logging code, but the control-plane template did not enable the listener; live `/livez`, `/readyz` and `/metrics` therefore refused connections.
+    Change: Rendered the observability listener on internal encrypted-overlay port `9464`, changed the Swarm healthcheck to `/readyz`, added bounded Docker local logging, a VictoriaMetrics scrape fragment and a read-only live signal verifier. Port `9464` is not host-published.
+    Verification: Template/stack and entrypoint regressions validate the rendered observability contract; the live verifier checks liveness/readiness, process/auth/delivery/queue/storage metrics and current JSON log shape without outputting payloads.
+    Risks: VictoriaMetrics is not currently attached to the gateway overlay, and Docker file-count rotation does not prove 30-day time retention. Those external monitoring/logging integrations remain required before Task 7.1 acceptance.
+    Rollback: Revert the template, stack, monitoring fragment and verifier together. Retain an SMTP TCP healthcheck only as an emergency diagnostic; do not publish port `9464` on the host.

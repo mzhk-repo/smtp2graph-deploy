@@ -13,6 +13,10 @@ storage:
   rootPath: __SMTP2GRAPH_STORAGE_ROOT__
   maxBytes: __QUEUE_MAX_BYTES__
   rejectThresholdPercent: __QUEUE_REJECT_THRESHOLD_PERCENT__
+observability:
+  # This listener is reachable only through the encrypted Swarm overlay.
+  listenAddress: '0.0.0.0'
+  port: 9464
 receive:
   port: __SMTP_LISTEN_PORT__
   listenAddress: __SMTP_BIND_ADDRESS__

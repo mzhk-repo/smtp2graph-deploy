@@ -13,7 +13,11 @@ grep -Eq '^      restart_policy:$' "$stack"
 grep -Eq '^      update_config:$' "$stack"
 grep -Eq '^      rollback_config:$' "$stack"
 grep -Eq '^    healthcheck:$' "$stack"
-grep -Fq 'connect(2525' "$stack"
+grep -Fq '127.0.0.1:9464/readyz' "$stack"
+grep -Eq '^    logging:$' "$stack"
+grep -Eq '^      driver: local$' "$stack"
+grep -Eq '^        max-size: "10m"$' "$stack"
+grep -Eq '^        max-file: "30"$' "$stack"
 grep -Eq '^    configs:$' "$stack"
 grep -Eq '^  gateway_entrypoint:$' "$stack"
 grep -Eq '^    external: true$' "$stack"
@@ -21,6 +25,10 @@ grep -Eq '^        mode: host$' "$stack"
 grep -Eq '^      SMTP_BIND_ADDRESS: 0.0.0.0$' "$stack"
 grep -Eq '^      QUEUE_MAX_BYTES: "1073741824"$' "$stack"
 grep -Eq '^      QUEUE_REJECT_THRESHOLD_PERCENT: "80"$' "$stack"
+if grep -Eq 'target: 9464|published: 9464' "$stack"; then
+  printf 'ERROR: observability endpoint must not be host-published.\n' >&2
+  exit 1
+fi
 if grep -Eq '^    build:|^    restart:|privileged:[[:space:]]*true|/var/run/docker.sock|network_mode:[[:space:]]*host|pid:[[:space:]]*host' "$stack"; then
   printf 'ERROR: stack contains a forbidden Compose or privilege field.\n' >&2
   exit 1

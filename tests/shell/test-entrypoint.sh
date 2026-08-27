@@ -73,6 +73,8 @@ grep -A 2 '^  rateLimit:$' "${RUNTIME_DIR}/config.yml" | grep -F 'limit: 30' >/d
 grep -F "rootPath: '/data'" "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'persistent storage root is missing from rendered configuration.'
 grep -F 'maxBytes: 1073741824' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue capacity is missing from rendered configuration.'
 grep -F 'rejectThresholdPercent: 80' "${RUNTIME_DIR}/config.yml" >/dev/null || fail 'queue rejection threshold is missing from rendered configuration.'
+grep -A 3 '^observability:$' "${RUNTIME_DIR}/config.yml" | grep -F "listenAddress: '0.0.0.0'" >/dev/null || fail 'observability listener is not internal-overlay ready.'
+grep -A 3 '^observability:$' "${RUNTIME_DIR}/config.yml" | grep -F 'port: 9464' >/dev/null || fail 'observability port is missing from rendered configuration.'
 grep -F 'synthetic-client-secret-for-test-only' "${RUNTIME_DIR}/config.yml" >/dev/null && fail 'certificate render unexpectedly contains client secret.'
 
 GRAPH_AUTH_MODE=client-secret run_render >/dev/null

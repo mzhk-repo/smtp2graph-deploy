@@ -8,6 +8,14 @@
 - Safety: development rejects production context. Production rejects missing or malformed tag, approval context or SHA before invoking the orchestrator.
 - Check: `bash -n scripts/ci-deploy-swarm.sh`, `./tests/shell/test-ci-deploy-swarm.sh`.
 
+## `tests/observability/test-signals.sh`
+
+- Category: 1a (read-only deployed observability verification).
+- Inputs: optional safe stack name and explicit `--environment development|production`.
+- Side effects: none. The check reads Swarm service metadata, probes the gateway's loopback-only observability listener from inside its running container, and inspects current logs in memory without printing metric or log payloads.
+- Safety: requires exactly one running gateway container; refuses a missing readiness healthcheck, unbounded Docker logging policy, unavailable metrics, or sensitive/high-cardinality metric fields. It does not submit SMTP mail, read Docker Secrets, or change runtime state.
+- Check: `./tests/observability/test-signals.sh --environment development` after declarative deploy.
+
 ## `deploy-orchestrator-swarm.sh`
 
 - Category: 1b (dev/prod Swarm orchestration).

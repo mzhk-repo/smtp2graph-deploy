@@ -72,6 +72,27 @@
     Risks: Real Moodle VM delivery and remaining Matomo/client-profile evidence remain deferred follow-up items; this does not establish Task 6.2 load/failure/retention evidence or production readiness.
     Rollback: No production change was made. Revert the reviewed development overlay/DNS/policy changes only through declarative stack and bootstrap automation after assessing active SMTP sessions and queue state.
 
+2026-08-25 — Task 6.2: failure durability and SMTP smoke tests enhancement
+    Context: Smoke tests needed to qualify STARTTLS support and verify the Task 6.2 durability requirements under simulated failures.
+    Change: Enhanced the SMTP smoke test suite to validate STARTTLS and added a failure durability suite under `tests/acceptance/failure/run.sh`. Tests verify Graph mock responses for Access Denied, 5xx server errors, 401 unauthorized, and Retry-After, as well as rate limits and storage capacity rejection.
+    Verification: Executed the test suites locally; confirmed proper queuing, retries, and failed-payload retention moves to `/data/failed` without exposing secrets.
+    Risks: Durability behavior is qualified against a synthetic Graph mock, which might differ from real Microsoft 365 throttling patterns.
+    Rollback: Revert changes in `compose.test.yaml` and `tests/smoke/` test assets.
+
+2026-08-25 — Task 6.2: observability metrics and structured logging
+    Context: SMTPServer required structured logging and real-time observability metrics to monitor active sessions, queue size, and Graph delivery outcomes.
+    Change: Added patch `012-observability-signals.patch` implementing an HTTP `ObservabilityServer` that exposes health (`/livez`, `/readyz`) and Prometheus metrics (`/metrics`). Standardized gateway stdout/stderr logs into structured key-value formats.
+    Verification: Confirmed health checks and metrics output match the Prometheus v0.0.4 spec and track SMTP/Graph delivery attempts.
+    Risks: Log parsers monitoring stdout/stderr must adapt to the new JSON-based logging format.
+    Rollback: Remove patch `012-observability-signals.patch` and restore prior logging behavior.
+
+2026-08-27 — Task 6.2: observability server gateway integration
+    Context: The HTTP observability server needed to be initialized during gateway startup and correctly report readiness only after SMTPServer begins listening.
+    Change: Integrated `ObservabilityServer` startup in the main entry point, setting the readiness callback to evaluate when SMTP listener startup completes.
+    Verification: Confirmed gateway container reports `ready` on `/readyz` only after SMTP port binding succeeds.
+    Risks: A port conflict on the observability address will crash the gateway startup.
+    Rollback: Revert the startup initialization block in `src/index.ts`.
+
 2026-08-27 — Release policy: digest-only deployment input
     Context: The same release digest and evidence references were maintained in both encrypted deployment contracts and `deploy/config/queue-compatibility.yml`, although normal deployment already consumed only the immutable digest from the environment contract.
     Change: Removed `queue-compatibility.yml` and its mandatory script parsing. `SMTP2GRAPH_IMAGE_DIGEST` is now the only deployment image input; immutable Trivy, CycloneDX, checksum and OCI evidence remains in the build-plane release. ADR-0009 records the policy. Upgrade, rollback and recovery still require an operator-reviewed immutable digest pair, preserved queue state and explicit `--queue-compatibility-confirmed`.
@@ -85,3 +106,24 @@
     Verification: All assets `001` through `013` replay cleanly from `v1.1.5`; `git apply --check` and `git diff --check` passed. Docker daemon validation remains required on the authorised build runner.
     Risks: The builder stage runs `npm ci` during image build, so dependency installation remains a required deterministic build input.
     Rollback: Remove asset `013` only with its manifest entry after confirming the replacement Docker build contract creates the required runtime bundle.
+
+2026-08-27 — Development environment: SOPS configuration updates
+    Context: Encrypted development and production environment files needed to align with the latest SMTP_TLS_FQDN and other variable updates.
+    Change: Decrypted, updated, and re-encrypted `env.dev.enc` and `env.prod.enc` using SOPS to contain updated hostname configurations.
+    Verification: Environment validation scripts run successfully against the decrypted variables.
+    Risks: Unreviewed secret changes could disrupt dev stack orchestration or authentication.
+    Rollback: Restore previous encrypted environment files from Git history.
+
+2026-08-27 — CI/CD: branch-based deployment automation and permission hardening
+    Context: The deployment pipeline required automated execution on push events to `main` and `dev` branches, as well as production release tags, with appropriate GitHub Actions permissions.
+    Change: Updated `.github/workflows/deploy-image.yml` to trigger on push to `main` (runs CI), `dev` (deploys to dev environment via `scripts/ci-deploy-swarm.sh`), and `v*.*.*` tags (deploys to production). Explicitly granted `contents: write`, `packages: write`, and `pull-requests: read` permissions.
+    Verification: Shell validation of the CI deployment script passed; GitHub Actions syntax validation succeeded.
+    Risks: Automatic deployment on branch push could deploy untested changes if dev branch commits are not carefully reviewed.
+    Rollback: Revert trigger rules and permissions in `.github/workflows/deploy-image.yml`.
+
+2026-08-27 — Security scanning: Gitleaks allowlist for historical CI release patch commits
+    Context: CI secret scanning via Gitleaks failed on historical commits `948d058` and `afcceb4` containing deleted synthetic fixture references in `011-ci-release-pipeline.patch`.
+    Change: Updated `.gitleaks.toml` allowlist to include commits `948d0589fcfc1adeddaa1a93a9dd5794aeee8395` and `afcceb4e21145393b5582283e19e8d07e2ed4c04`.
+    Verification: Local execution of `zricethezav/gitleaks:v8.30.1` verified 110 commits with zero leaks detected and exit code 0. `make validate` passed.
+    Risks: Allowlisted historical commits will not trigger alerts; new leaks in subsequent commits remain fully scanned.
+    Rollback: Revert `.gitleaks.toml` commit allowlist additions.

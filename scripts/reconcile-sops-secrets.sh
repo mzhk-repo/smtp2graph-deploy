@@ -22,6 +22,9 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
+# shellcheck source=scripts/lib/render-config.sh
+# shellcheck disable=SC1091
+. "${project_root}/scripts/lib/render-config.sh"
 
 env_file='' mapping_file='' environment='' apply=false approval_context=''
 while (($#)); do
@@ -84,7 +87,7 @@ extract_source_value() {
   awk -v key="$key" '
     $0 ~ ("^" key "=") {
       if (found++) exit 64
-      print substr($0, length(key) + 2)
+      printf "%s", substr($0, length(key) + 2)
     }
     END { if (!found) exit 65 }
   ' "$env_file"
@@ -139,6 +142,9 @@ extract_secret GRAPH_CLIENT_ID "$stage_dir/graph-client-id"
 extract_secret SMTP_USERS_TSV "$stage_dir/smtp-users"
 extract_secret TLS_CERTIFICATE_PEM "$stage_dir/smtp-tls-cert"
 extract_secret TLS_PRIVATE_KEY_PEM "$stage_dir/smtp-tls-key"
+graph_sender_mailbox=$(extract_metadata GRAPH_SENDER_MAILBOX)
+global_sender=$(normalize_email "$graph_sender_mailbox") || die 'GRAPH_SENDER_MAILBOX is invalid.'
+render_smtp_users "$stage_dir/smtp-users" "$global_sender" >/dev/null || die 'SMTP_USERS_TSV does not satisfy the runtime SMTP policy.'
 case "$graph_auth_mode" in
   certificate)
     extract_secret GRAPH_CERT_PRIVATE_KEY_PEM "$stage_dir/graph-credential"

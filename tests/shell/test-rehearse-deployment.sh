@@ -41,7 +41,7 @@ printf '%s\n' \
   'GRAPH_CLIENT_ID="11111111-1111-1111-1111-111111111111"' \
   'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
   'GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key"' \
-  'SMTP_USERS_TSV="gateway\\tsynthetic-password\\tnoreply@example.invalid"' \
+  'SMTP_USERS_TSV="gateway\tsynthetic-password\tnoreply@example.invalid"' \
   'TLS_CERTIFICATE_PEM="synthetic-certificate"' \
   'TLS_PRIVATE_KEY_PEM="synthetic-tls-key"' \
   'NONPRODUCTION_RECIPIENT_ALLOWLIST=recipient@example.invalid' >"$env_file"

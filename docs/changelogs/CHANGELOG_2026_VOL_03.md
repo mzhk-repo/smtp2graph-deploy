@@ -169,3 +169,10 @@
     Verification: Fake-Docker deploy regression makes the mapping directory read-only, rotates `SMTP_USERS_TSV` and confirms that both replacement Secret references reach rendered stack submissions.
     Risks: A CI-only mapping update is intentionally ephemeral; the next normal deploy reconciles the selected environment again. No Secret payload is written outside Docker Secrets or `/dev/shm`.
     Rollback: Restore an explicit reviewed persistent mapping only after queue/recovery assessment. Do not grant CI write access to `/srv` solely to persist Secret names.
+
+2026-08-29 — Task 5.2: reject malformed SMTP user Secret before Swarm submission
+    Context: Development gateway tasks exited before listener startup because the mounted `SMTP_USERS_TSV` Secret did not contain the required three-field tab-separated record. The readiness healthcheck could not run because the entrypoint failed first.
+    Change: SOPS/CI Secret reconciliation now validates `SMTP_USERS_TSV` with the same runtime parser and canonical `GRAPH_SENDER_MAILBOX` allowlist before creating Secrets or submitting the stack.
+    Verification: Security regression rejects a malformed space-separated SMTP user record without printing credentials; live Swarm logs identified the existing deployed failure as `malformed SMTP users record at line 1`.
+    Risks: The currently deployed malformed Secret remains active until its encrypted source is corrected and a normal deploy succeeds. The `/readyz` healthcheck is intentionally unchanged because it already measures post-listener readiness.
+    Rollback: Correct the encrypted `SMTP_USERS_TSV` source to `username<TAB>password<TAB>sender@example.invalid` (use `\t` escapes in quoted Dotenv values), then redeploy; do not manually edit Docker Secret payloads.

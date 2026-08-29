@@ -22,6 +22,7 @@ GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key-line-one\nsynthetic-private-ke
 SMTP_USERS_TSV="gateway\tsynthetic-password!\tnoreply@example.invalid"
 TLS_CERTIFICATE_PEM="synthetic-certificate-line-one\nsynthetic-certificate-line-two"
 TLS_PRIVATE_KEY_PEM="synthetic-tls-key-line-one\nsynthetic-tls-key-line-two"
+GRAPH_SENDER_MAILBOX="noreply@example.invalid"
 EOF
 chmod 600 "$plain"
 sops --encrypt --input-type dotenv --output-type dotenv --age "$recipient" "$plain" >"$encrypted"
@@ -56,6 +57,16 @@ fi
 chmod 640 "$plain"
 if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping" >/dev/null 2>&1; then
   printf 'ERROR: reconciler unexpectedly accepted group-readable plaintext input.\n' >&2
+  exit 1
+fi
+invalid_plain="$tmp/invalid-smtp-users.env"
+awk '
+  /^SMTP_USERS_TSV=/ { print "SMTP_USERS_TSV=\"gateway synthetic-password noreply@example.invalid\""; next }
+  { print }
+' "$plain" >"$invalid_plain"
+chmod 600 "$invalid_plain"
+if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$invalid_plain" --mapping-file "$mapping" >/dev/null 2>&1; then
+  printf 'ERROR: reconciler unexpectedly accepted malformed SMTP user input.\n' >&2
   exit 1
 fi
 printf 'PASS: SOPS secret reconciler handles encrypted and owner-only CI plaintext inputs with deterministic names and dev/prod guards.\n'

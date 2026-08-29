@@ -23,11 +23,13 @@ SMTP_USERS_TSV="gateway\tsynthetic-password!\tnoreply@example.invalid"
 TLS_CERTIFICATE_PEM="synthetic-certificate-line-one\nsynthetic-certificate-line-two"
 TLS_PRIVATE_KEY_PEM="synthetic-tls-key-line-one\nsynthetic-tls-key-line-two"
 EOF
+chmod 600 "$plain"
 sops --encrypt --input-type dotenv --output-type dotenv --age "$recipient" "$plain" >"$encrypted"
 : >"$mapping"
 chmod 600 "$mapping"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping" | grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
+SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping" | grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -51,4 +53,9 @@ if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "${script}" --environment produ
   printf 'ERROR: production apply unexpectedly succeeded.\n' >&2
   exit 1
 fi
-printf 'PASS: SOPS secret reconciler uses encrypted inputs, deterministic names and dev/prod guards.\n'
+chmod 640 "$plain"
+if SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping" >/dev/null 2>&1; then
+  printf 'ERROR: reconciler unexpectedly accepted group-readable plaintext input.\n' >&2
+  exit 1
+fi
+printf 'PASS: SOPS secret reconciler handles encrypted and owner-only CI plaintext inputs with deterministic names and dev/prod guards.\n'

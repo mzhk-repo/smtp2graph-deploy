@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Category 1b: reconcile versioned Docker Secrets from an encrypted SOPS environment file.
+# Category 1b: reconcile versioned Docker Secrets from a SOPS or owner-only CI environment file.
 set -euo pipefail
 
 die() {
@@ -11,9 +11,10 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/reconcile-sops-secrets.sh --env-file FILE --mapping-file FILE [--environment development|production] [--approval-context ID] [--apply]
 
-Validates an encrypted SOPS Dotenv environment file. With --apply, plaintext is
-decrypted only under /dev/shm and materialized as deterministic versioned Docker
-Secrets. The mapping file contains names only and is updated atomically.
+Validates a SOPS-encrypted Dotenv environment file or an owner-only plaintext
+Dotenv file prepared by the CI deployer. With --apply, values are materialized
+as deterministic versioned Docker Secrets. The mapping file contains names only
+and is updated atomically.
 USAGE
 }
 
@@ -55,7 +56,16 @@ done
 
 [[ "$env_file" = /* && -f "$env_file" && ! -L "$env_file" ]] || die '--env-file must be an absolute regular non-symlink file.'
 [[ "$mapping_file" = /* && -f "$mapping_file" && ! -L "$mapping_file" ]] || die '--mapping-file must be an existing regular non-symlink file.'
-for tool in dd grep sops sha256sum mktemp stat tail awk install; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in dd grep sha256sum mktemp stat tail awk install; do command -v "$tool" >/dev/null || die "$tool is required."; done
+
+source_is_sops=false
+if grep -q '^sops_version=' "$env_file" || grep -q 'ENC\[AES256_GCM' "$env_file"; then
+  source_is_sops=true
+  command -v sops >/dev/null || die 'sops is required for encrypted environment input.'
+else
+  env_mode=$(stat -c '%a' "$env_file") || die 'could not inspect plaintext environment file permissions.'
+  [[ "$env_mode" =~ ^[0-7]{3,4}$ && $((8#$env_mode & 077)) -eq 0 ]] || die 'plaintext environment file must be owner-only.'
+fi
 
 stage_dir=''
 cleanup() { [[ -z "$stage_dir" ]] || rm -rf -- "$stage_dir"; }
@@ -65,12 +75,27 @@ chmod 700 "$stage_dir"
 plain_env="$stage_dir/environment.env"
 [[ ! -e "$plain_env" ]] || die 'internal plaintext staging path already exists.'
 
+extract_source_value() {
+  local key=$1
+  if [[ "$source_is_sops" == true ]]; then
+    sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file"
+    return
+  fi
+  awk -v key="$key" '
+    $0 ~ ("^" key "=") {
+      if (found++) exit 64
+      print substr($0, length(key) + 2)
+    }
+    END { if (!found) exit 65 }
+  ' "$env_file"
+}
+
 extract_secret() {
   local key=$1 target=$2 raw_target raw_size first_byte last_byte decoded_target value
   raw_target="$target.raw"
-  sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file" >"$raw_target" || die "could not extract encrypted value: $key."
-  raw_size=$(stat -c '%s' "$raw_target") || die "could not inspect encrypted value: $key."
-  [[ "$raw_size" -gt 0 ]] || die "encrypted value is empty: $key."
+  extract_source_value "$key" >"$raw_target" || die "could not extract environment value: $key."
+  raw_size=$(stat -c '%s' "$raw_target") || die "could not inspect environment value: $key."
+  [[ "$raw_size" -gt 0 ]] || die "environment value is empty: $key."
   first_byte=$(dd if="$raw_target" bs=1 count=1 status=none)
   last_byte=$(tail -c 1 "$raw_target")
   if [[ "$raw_size" -ge 2 && "$first_byte" == '"' && "$last_byte" == '"' ]]; then
@@ -86,17 +111,17 @@ extract_secret() {
     mv "$decoded_target" "$target"
   fi
   chmod 400 "$target"
-  [[ -s "$target" ]] || die "encrypted value is empty: $key."
-  ! grep -q '^REPLACE_WITH_' "$target" || die "required encrypted value is still a placeholder: $key."
+  [[ -s "$target" ]] || die "environment value is empty: $key."
+  ! grep -q '^REPLACE_WITH_' "$target" || die "required environment value is still a placeholder: $key."
 }
 extract_metadata() {
   local key=$1 value
-  value=$(sops --decrypt --input-type dotenv --extract "[\"$key\"]" --output-type binary "$env_file") || die "could not extract encrypted value: $key."
+  value=$(extract_source_value "$key") || die "could not extract environment value: $key."
   if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]]; then
     value=${value:1:${#value}-2}
   fi
-  [[ -n "$value" ]] || die "encrypted value is empty: $key."
-  [[ "$value" != REPLACE_WITH_* ]] || die "required encrypted value is still a placeholder: $key."
+  [[ -n "$value" ]] || die "environment value is empty: $key."
+  [[ "$value" != REPLACE_WITH_* ]] || die "required environment value is still a placeholder: $key."
   printf '%s\n' "$value"
 }
 declared_environment=$(extract_metadata DEPLOY_ENVIRONMENT)

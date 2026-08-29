@@ -40,8 +40,8 @@
 ## `reconcile-sops-secrets.sh`
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).
-- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS and an existing absolute `--mapping-file`. It extracts only the required encrypted Graph, SMTP and TLS values; values are never logged or sourced by a shell.
-- Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. It decrypts only into a mode-`0700` directory under `/dev/shm`, creates missing immutable Docker Secrets and atomically updates the names-only mapping file.
+- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS, or an owner-only plaintext file supplied by the CI deployer after its controlled decryption, and an existing absolute `--mapping-file`. It extracts only the required Graph, SMTP and TLS values; values are never logged or sourced by a shell. Group- or world-readable plaintext input is rejected.
+- Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. SOPS values are decrypted only into a mode-`0700` directory under `/dev/shm`; owner-only CI plaintext is staged only there before creating missing immutable Docker Secrets and atomically updating the names-only mapping file.
 - Rotation: update the encrypted value, run validation, apply to create the new content-addressed Secret, deploy through the future approved Task 5.2 orchestration, complete smoke verification, then remove the prior Secret only by an explicitly approved cleanup operation.
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.

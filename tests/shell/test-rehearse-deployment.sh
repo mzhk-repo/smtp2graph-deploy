@@ -45,6 +45,7 @@ printf '%s\n' \
   'TLS_CERTIFICATE_PEM="synthetic-certificate"' \
   'TLS_PRIVATE_KEY_PEM="synthetic-tls-key"' \
   'NONPRODUCTION_RECIPIENT_ALLOWLIST=recipient@example.invalid' >"$env_file"
+chmod 600 "$env_file"
 printf '%s\n' \
   'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vtest' \
   'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vtest' \

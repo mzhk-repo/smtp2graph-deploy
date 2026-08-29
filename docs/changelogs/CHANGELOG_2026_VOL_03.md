@@ -155,3 +155,10 @@
     Verification: Fake-Docker regression rotates `SMTP_USERS_TSV` between two deploys and proves the mapping and rendered Secret reference change without `docker service update --force` or `--prune`.
     Risks: Reconciliation creates retained immutable Secret versions before stack submission; if submission fails, the mapping can reference the new version while the running task remains on the old one until a successful retry. No payload data is changed.
     Rollback: Restore an explicit previously reviewed names-only mapping only after queue/recovery assessment, then redeploy declaratively. Do not manually edit Docker Secret payloads, force-update the service or remove prior Secret versions before verified cutover.
+
+2026-08-29 — Task 5.2: CI plaintext deploy-contract reconciliation compatibility
+    Context: Shared CI provides the orchestration adapter with an already decrypted temporary Dotenv contract. The newly coupled reconciliation step incorrectly treated that owner-only file as SOPS ciphertext and failed with `sops metadata not found` before stack submission.
+    Change: The reconciler now detects SOPS metadata and uses SOPS only for encrypted input. For a CI-prepared plaintext contract it strictly extracts required keys without `source`, requires owner-only file mode and stages only derived Secret payload files in `/dev/shm`.
+    Verification: Security regression covers both encrypted and owner-only plaintext contracts, and rejects group-readable plaintext input.
+    Risks: CI remains responsible for supplying the temporary plaintext file with mode `0600` or stricter and removing it after deployment; the reconciler never logs values.
+    Rollback: Restore the prior encrypted-only behavior only if the CI deployer is changed to pass SOPS ciphertext directly and its integration test is updated together.

@@ -45,6 +45,7 @@ printf '%s\n' \
   'SMTP_CREDENTIALS_SECRET_NAME=stale_smtp_reference' \
   'TLS_CERTIFICATE_SECRET_NAME=stale_certificate_reference' \
   'TLS_PRIVATE_KEY_SECRET_NAME=stale_key_reference' >"$env_file"
+chmod 600 "$env_file"
 printf '%s\n' \
   'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vmapped' \
   'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vmapped' \
@@ -166,6 +167,7 @@ grep -Eq "^digest=${unknown_digest}$" "$calls"
 
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
+chmod 600 "$production_env"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
   printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
   exit 1

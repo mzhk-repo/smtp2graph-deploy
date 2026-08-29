@@ -197,7 +197,7 @@ printf 'fresh-deploy-and-noop=passed\n' >>"$evidence_file"
 printf 'synthetic-invalid-credential-for-rehearsal\n' | docker secret create "$temporary_secret" - >/dev/null
 render_mapping "$temporary_secret"
 render_env "$current_digest" "$temporary_mapping" "$temporary_env"
-"$orchestrator" --env-file "$temporary_env" --deploy --apply
+"$orchestrator" --env-file "$temporary_env" --deploy --apply --secret-mapping-already-reconciled
 active_temporary_mapping=true
 smoke
 queue_before=$(queue_count)
@@ -206,7 +206,7 @@ wait_for 'durable queued SMTP submission' 60 $((queue_before + 1))
 printf 'queued-before-upgrade=%s\n' "$((queue_before + 1))" >>"$evidence_file"
 
 render_env "$candidate_digest" "$temporary_mapping" "$temporary_env"
-"$orchestrator" --env-file "$temporary_env" --deploy --apply
+"$orchestrator" --env-file "$temporary_env" --deploy --apply --secret-mapping-already-reconciled
 smoke
 wait_for 'queue preservation after candidate upgrade' 30 $((queue_before + 1))
 printf 'candidate-upgrade=passed\n' >>"$evidence_file"

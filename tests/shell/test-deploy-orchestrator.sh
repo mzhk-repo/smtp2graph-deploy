@@ -10,7 +10,7 @@ calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
 mapping_file="$tmp/secret-mapping.env"
 server_env_file="$tmp/server.environment"
-mkdir -p "$fake_bin"
+mkdir -p "$fake_bin" "$tmp/docker-secrets"
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -31,6 +31,13 @@ printf '%s\n' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
   "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'GRAPH_TENANT_ID="00000000-0000-0000-0000-000000000000"' \
+  'GRAPH_CLIENT_ID="11111111-1111-1111-1111-111111111111"' \
+  'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
+  'GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key"' \
+  'SMTP_USERS_TSV="gateway\\tsynthetic-password\\tnoreply@example.invalid"' \
+  'TLS_CERTIFICATE_PEM="synthetic-certificate"' \
+  'TLS_PRIVATE_KEY_PEM="synthetic-tls-key"' \
   'GRAPH_TENANT_ID_SECRET_NAME=stale_tenant_reference' \
   'GRAPH_CLIENT_ID_SECRET_NAME=stale_client_reference' \
   'GRAPH_CREDENTIAL_SECRET_NAME=stale_credential_reference' \
@@ -56,6 +63,8 @@ if [[ "${1:-} ${2:-}" == 'stack deploy' ]]; then
   printf 'digest=%s\n' "${SMTP2GRAPH_IMAGE_DIGEST}" >>"${FAKE_DOCKER_CALLS}"
 fi
 case "${1:-} ${2:-}" in
+  'secret inspect') test -f "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
+  'secret create') cp "$4" "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
     printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"
@@ -73,8 +82,26 @@ chmod 700 "$fake_bin/docker"
 cat >"$fake_bin/sops" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-for argument in "$@"; do input=$argument; done
-cat "$input"
+input='' extract=''
+while (($#)); do
+  case "$1" in
+    --extract)
+      extract=${2:-}
+      shift 2
+      ;;
+    *)
+      input=$1
+      shift
+      ;;
+  esac
+done
+if [[ -z "$extract" ]]; then
+  cat "$input"
+  exit 0
+fi
+key=${extract#*\"}
+key=${key%%\"*}
+awk -v key="$key" '$0 ~ ("^" key "=") { print substr($0, length(key) + 2); exit }' "$input"
 EOF
 chmod 700 "$fake_bin/sops"
 cat >"$fake_bin/init-storage" <<'EOF'
@@ -102,8 +129,15 @@ if grep -Eq '^stack deploy ' "$calls"; then
 fi
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+first_smtp_secret=$(awk -F= '$1 == "SMTP_CREDENTIALS_SECRET_NAME" { print $2 }' "$mapping_file")
+[[ "$first_smtp_secret" != smtp2graph_smtp_users_vmapped ]]
+grep -Eq "^mapped-secret=${first_smtp_secret}$" "$calls"
+sed -i 's/synthetic-password/synthetic-password-rotated/' "$env_file"
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+second_smtp_secret=$(awk -F= '$1 == "SMTP_CREDENTIALS_SECRET_NAME" { print $2 }' "$mapping_file")
+[[ "$second_smtp_secret" != "$first_smtp_secret" ]]
+grep -Eq "^mapped-secret=${second_smtp_secret}$" "$calls"
 test "$(grep -c '^stack deploy ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
 if grep -Fq -- '--prune' "$calls"; then
@@ -139,8 +173,12 @@ fi
 
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
 grep -Eq '^stack deploy ' "$calls"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
+  printf 'ERROR: production deploy unexpectedly skipped SOPS Secret reconciliation.\n' >&2
+  exit 1
+fi
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly accepted SERVER_ENV mismatch.\n' >&2

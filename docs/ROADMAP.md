@@ -164,7 +164,7 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 - Non-root container або formal blocker/exception до Gate D; no privileged/socket/host networking.
 - Secure CI/CD, protected production approval, secret/dependency/image/IaC scans і SBOM.
 - Integration, security, failure, rollback і cold recovery tests.
-- Structured privacy-safe logs, health, queue/disk/expiry/failure monitoring і independent synthetic alert.
+- Structured privacy-safe logs, health, queue/disk/TLS-certificate-expiry/failure monitoring і independent synthetic alert.
 - `README.md`, `docs/AI_CONTEXT.md`, ADR, test plan, runbook, client onboarding і script runbook у відповідні фази.
 
 ## Should Have
@@ -919,7 +919,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** виявляти failure без журналювання sensitive content.
 - **Depends on:** Phase 6.
 - **Definition of Ready:** available gateway signals і privacy fields підтверджені.
-- **Implementation Steps:** liveness/readiness; correlation ID; structured metadata; log rotation 30 днів; metrics for process, queue, disk, failures, latency/retries, credential/cert expiry.
+- **Implementation Steps:** liveness/readiness; correlation ID; structured metadata; bounded Docker log rotation by size/file count; metrics for process, queue, disk, failures, latency/retries and TLS certificate expiry.
 - **Files / Directories:** `deploy/monitoring/`, `deploy/config/`, `tests/observability/`.
 - **Artifacts:** data dictionary і dashboard.
 - **Acceptance Criteria:** body/attachment/token/password/reset URL не логуються; queue/disk thresholds видимі; restart і auth failures distinguishable.
@@ -937,10 +937,10 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** сповіщати про end-to-end failure через незалежний канал.
 - **Depends on:** Task 7.1.
 - **Definition of Ready:** test recipient, interval, ownership і external notification channel погоджені.
-- **Implementation Steps:** VictoriaMetrics scrape/rules; Grafana dashboard; alerts на process, failure rate, queue 60/80%, disk і expiry; для Entra client secret та SMTP TLS certificate створити warning alert за 30 днів до expiry і critical alert за 7 днів; synthetic delivery з контрольованим marker/receipt; anti-loop policy.
+- **Implementation Steps:** VictoriaMetrics scrape/rules; Grafana dashboard; alerts на process, failure rate, queue 60/80%, disk і TLS certificate expiry; synthetic delivery з контрольованим marker/receipt; anti-loop policy.
 - **Files / Directories:** `deploy/monitoring/`, `tests/smoke/synthetic-*`, `docs/RUNBOOK.md`.
 - **Artifacts:** alert catalog із severity/owner/action.
-- **Acceptance Criteria:** simulated outage produces independent alert; Entra secret і TLS certificate з контрольованим expiry `30` та `7` днів активують відповідно warning і critical alert із owner/action; recovery closes alert; synthetic traffic rate-limited і не містить secrets.
+- **Acceptance Criteria:** simulated outage produces independent alert; recovery closes alert; synthetic traffic rate-limited і не містить secrets.
 - **Validation Commands:**
   ```bash
   ./tests/observability/test-alerts.sh --environment staging

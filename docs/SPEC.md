@@ -390,7 +390,7 @@ flowchart LR
 ### Операційні системи
 
 - CI/CD перевіряє і deploy-ить immutable artifacts.
-- Monitoring контролює process health, queue, expiry та synthetic delivery.
+- Monitoring контролює process health, queue, TLS certificate expiry та synthetic delivery.
 - Backup захищає configuration та recovery material, але не створює mail archive.
 
 ## Критичний flow
@@ -426,7 +426,7 @@ sequenceDiagram
 - Graph 401/403: configuration/security failure, alert, без нескінченних retries.
 - Graph 429/5xx/network timeout: bounded retry with backoff.
 - Queue threshold: alert до exhaustion; reject, якщо durable acceptance неможливий.
-- Expired credential/certificate: alert до expiry та fail closed.
+- Expired TLS certificate: alert до expiry та fail closed.
 
 ---
 
@@ -569,8 +569,7 @@ erDiagram
 
 - Successful queue item: видаляється після confirmed acceptance.
 - Failed payload: не більше 7 днів (підтверджено).
-- Operational logs: 30 днів (підтверджено).
-- Security/audit metadata: 30 днів.
+- Operational and security/audit logs: bounded by Docker `local` driver (`30` files × `10 MiB`); no time-based retention SLA.
 
 ## Backup relevance
 
@@ -943,7 +942,7 @@ ADR не створюються для легко зворотних парам�
 - State: bounded persistent queue та restricted logs.
 - Initial resources: 0.5 CPU і 256 MiB RAM, з подальшим tuning.
 - Availability: single instance із tested recovery, без active-active.
-- Monitoring: process, queue, disk, expiry, failure rate та independent synthetic delivery.
+- Monitoring: process, queue, disk, TLS certificate expiry, failure rate та independent synthetic delivery.
 
 ---
 

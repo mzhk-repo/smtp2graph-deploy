@@ -28,9 +28,9 @@
 ./tests/acceptance/deployment/smoke.sh --stack-name smtp2graph
 ```
 
-Перед кожним stack submission orchestration ідемпотентно викликає `init-storage.sh` для валідованого storage root і його direct `queue`/`failed` children. Репетиція не створює Docker Secrets, не надсилає SMTP test message і не змінює queue payloads. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
+Перед кожним normal stack submission orchestration content-addressably reconciles runtime Docker Secrets із вибраного SOPS contract, атомарно оновлює names-only mapping та ідемпотентно викликає `init-storage.sh` для валідованого storage root і його direct `queue`/`failed` children. Зміна Secret content змінює task template і створює replacement task; без зміни content повторний deploy лишається no-op для task. Репетиція не надсилає SMTP test message і не змінює queue payloads. Вона підтверджує fresh deploy, no-op redeploy та read-only runtime health contract одного release.
 
-Observability endpoints (`/livez`, `/readyz`, `/metrics`) слухають лише на encrypted overlay port `9464` і не мають host-published port. VictoriaMetrics scraper має бути приєднаний до цього overlay та імпортувати `deploy/monitoring/smtp2graph-scrape.yml`; без цього metrics endpoint існує, але не є dashboard/alert signal. Docker `local` logging driver обмежує host logs розміром і кількістю файлів; central logging owner окремо підтверджує 30-day time retention.
+Observability endpoints (`/livez`, `/readyz`, `/metrics`) слухають лише на encrypted overlay port `9464` і не мають host-published port. VictoriaMetrics scraper має бути приєднаний до цього overlay та імпортувати `deploy/monitoring/smtp2graph-scrape.yml` у Task 7.2; до того metrics endpoint є read-only health/diagnostic signal, а не dashboard/alert signal. Docker `local` logging driver є прийнятою retention policy: не більше 30 файлів по 10 MiB, без time-based retention SLA.
 
 ### Verify and close
 

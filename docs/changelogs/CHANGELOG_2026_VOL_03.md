@@ -141,3 +141,17 @@
     Verification: Template/stack and entrypoint regressions validate the rendered observability contract; the live verifier checks liveness/readiness, process/auth/delivery/queue/storage metrics and current JSON log shape without outputting payloads.
     Risks: VictoriaMetrics is not currently attached to the gateway overlay, and Docker file-count rotation does not prove 30-day time retention. Those external monitoring/logging integrations remain required before Task 7.1 acceptance.
     Rollback: Revert the template, stack, monitoring fragment and verifier together. Retain an SMTP TCP healthcheck only as an emergency diagnostic; do not publish port `9464` on the host.
+
+2026-08-27 — Task 7.1: live acceptance and observability scope decision
+    Context: A post-redeploy read-only signal check passed for health endpoints, bounded metrics and structured logs. The prior roadmap still required time-based logging retention and Entra credential-expiry signals that are not needed for this deployment.
+    Change: Accepted Task 7.1 control-plane scope with Docker `local` retention limited to 30 files × 10 MiB. VictoriaMetrics overlay attachment is deferred to Task 7.2. Entra credential-expiry metric/alert is removed from scope; TLS certificate-expiry alert remains in Task 7.2.
+    Verification: `./tests/observability/test-signals.sh --environment development` passed against the redeployed development stack.
+    Risks: Metrics are not yet scraped into VictoriaMetrics/Grafana, so no dashboard or alert exists until Task 7.2. Size/file-count retention may cover less or more than 30 days depending on traffic.
+    Rollback: Restore an explicit reviewed time-based retention or Entra expiry requirement only through a SPEC/roadmap change; do not publish the metrics port.
+
+2026-08-29 — Task 5.2: secret-content-aware declarative redeploy
+    Context: Editing a SOPS-encrypted `env.*.enc` file followed by normal Swarm deployment could retain the previous names-only Docker Secret mapping, leaving the task template unchanged and the gateway running with stale mounted secrets.
+    Change: Normal `--deploy --apply` now reconciles content-addressed Docker Secrets from the selected SOPS contract, atomically reloads the mapping and revalidates the rendered stack before submission. Changed secret content produces a new immutable Secret name and therefore a normal Swarm replacement task; unchanged content remains a no-op task deploy.
+    Verification: Fake-Docker regression rotates `SMTP_USERS_TSV` between two deploys and proves the mapping and rendered Secret reference change without `docker service update --force` or `--prune`.
+    Risks: Reconciliation creates retained immutable Secret versions before stack submission; if submission fails, the mapping can reference the new version while the running task remains on the old one until a successful retry. No payload data is changed.
+    Rollback: Restore an explicit previously reviewed names-only mapping only after queue/recovery assessment, then redeploy declaratively. Do not manually edit Docker Secret payloads, force-update the service or remove prior Secret versions before verified cutover.

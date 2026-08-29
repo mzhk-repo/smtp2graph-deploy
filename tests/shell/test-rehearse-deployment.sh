@@ -37,6 +37,13 @@ printf '%s\n' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
   "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'GRAPH_TENANT_ID="00000000-0000-0000-0000-000000000000"' \
+  'GRAPH_CLIENT_ID="11111111-1111-1111-1111-111111111111"' \
+  'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
+  'GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key"' \
+  'SMTP_USERS_TSV="gateway\\tsynthetic-password\\tnoreply@example.invalid"' \
+  'TLS_CERTIFICATE_PEM="synthetic-certificate"' \
+  'TLS_PRIVATE_KEY_PEM="synthetic-tls-key"' \
   'NONPRODUCTION_RECIPIENT_ALLOWLIST=recipient@example.invalid' >"$env_file"
 printf '%s\n' \
   'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vtest' \
@@ -84,8 +91,26 @@ EOF
 cat >"$fake_bin/sops" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-for argument in "$@"; do input=$argument; done
-cat "$input"
+input='' extract=''
+while (($#)); do
+  case "$1" in
+    --extract)
+      extract=${2:-}
+      shift 2
+      ;;
+    *)
+      input=$1
+      shift
+      ;;
+  esac
+done
+if [[ -z "$extract" ]]; then
+  cat "$input"
+  exit 0
+fi
+key=${extract#*\"}
+key=${key%%\"*}
+awk -v key="$key" '$0 ~ ("^" key "=") { print substr($0, length(key) + 2); exit }' "$input"
 EOF
 cat >"$fake_bin/init-storage" <<'EOF'
 #!/usr/bin/env bash

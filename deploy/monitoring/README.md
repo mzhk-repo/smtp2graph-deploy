@@ -10,9 +10,8 @@ uses the stack service DNS name `smtp2graph_gateway`; adjust it only if the
 reviewed `SWARM_STACK_NAME` changes.
 
 The gateway's Docker `local` logging driver bounds on-host logs to 30 rotated
-10 MiB files. It is a size/file-count bound, not a time-based 30-day retention
-guarantee. The monitoring/logging platform owner must configure and verify the
-separate 30-day retention policy before Task 7.1 is accepted.
+10 MiB files. This size/file-count bound is the accepted log-retention policy;
+there is no time-based retention SLA.
 
 After a declarative deploy, run:
 

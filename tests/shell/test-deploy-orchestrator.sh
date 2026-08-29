@@ -4,13 +4,13 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 script="$root/scripts/deploy-orchestrator-swarm.sh"
 tmp=$(mktemp -d)
-trap 'rm -rf -- "$tmp"' EXIT
+trap 'chmod 700 -- "$tmp/mapping" 2>/dev/null || true; rm -rf -- "$tmp"' EXIT
 fake_bin="$tmp/bin"
 calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
-mapping_file="$tmp/secret-mapping.env"
+mapping_file="$tmp/mapping/secret-mapping.env"
 server_env_file="$tmp/server.environment"
-mkdir -p "$fake_bin" "$tmp/docker-secrets"
+mkdir -p "$fake_bin" "$tmp/docker-secrets" "$tmp/mapping"
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -129,16 +129,16 @@ if grep -Eq '^stack deploy ' "$calls"; then
   exit 1
 fi
 
+chmod 500 "$tmp/mapping"
+
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-first_smtp_secret=$(awk -F= '$1 == "SMTP_CREDENTIALS_SECRET_NAME" { print $2 }' "$mapping_file")
+first_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
 [[ "$first_smtp_secret" != smtp2graph_smtp_users_vmapped ]]
-grep -Eq "^mapped-secret=${first_smtp_secret}$" "$calls"
 sed -i 's/synthetic-password/synthetic-password-rotated/' "$env_file"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-second_smtp_secret=$(awk -F= '$1 == "SMTP_CREDENTIALS_SECRET_NAME" { print $2 }' "$mapping_file")
+second_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
 [[ "$second_smtp_secret" != "$first_smtp_secret" ]]
-grep -Eq "^mapped-secret=${second_smtp_secret}$" "$calls"
 test "$(grep -c '^stack deploy ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
 if grep -Fq -- '--prune' "$calls"; then

@@ -197,10 +197,19 @@ initialize_storage() {
 }
 
 reconcile_deploy_secrets() {
+  local reconcile_mapping_file mapping_parent
+  reconcile_mapping_file=$TLS_SECRET_MAPPING_FILE
+  mapping_parent=$(dirname "$TLS_SECRET_MAPPING_FILE") || die 'could not resolve Secret mapping parent directory.'
+  if [[ ! -w "$mapping_parent" ]]; then
+    reconcile_mapping_file=$(mktemp "${SOPS_DEPLOY_STAGE_DIR}/secret-mapping.XXXXXX") || die 'could not create temporary Secret mapping.'
+    cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    chmod 600 "$reconcile_mapping_file"
+    log 'using an ephemeral Secret mapping because the configured mapping directory is not writable.'
+  fi
   local reconcile_args=(
     --environment "$environment"
     --env-file "$SOPS_DEPLOY_SOURCE_FILE"
-    --mapping-file "$TLS_SECRET_MAPPING_FILE"
+    --mapping-file "$reconcile_mapping_file"
     --apply
   )
   [[ "$reconcile_secrets_script" = /* && -x "$reconcile_secrets_script" && ! -L "$reconcile_secrets_script" ]] || die 'SOPS Secret reconciler must be an absolute executable non-symlink file.'
@@ -211,6 +220,7 @@ reconcile_deploy_secrets() {
   # A changed secret receives a new content-addressed name. Reload the atomic
   # mapping so the next stack render changes the Swarm task template exactly
   # when a mounted Secret changed.
+  TLS_SECRET_MAPPING_FILE=$reconcile_mapping_file
   load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not reload complete Secret mapping after reconciliation.'
   refresh_stack_secret_env
 }

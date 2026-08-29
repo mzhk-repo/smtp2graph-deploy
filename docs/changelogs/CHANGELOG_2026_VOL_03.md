@@ -162,3 +162,10 @@
     Verification: Security regression covers both encrypted and owner-only plaintext contracts, and rejects group-readable plaintext input.
     Risks: CI remains responsible for supplying the temporary plaintext file with mode `0600` or stricter and removing it after deployment; the reconciler never logs values.
     Rollback: Restore the prior encrypted-only behavior only if the CI deployer is changed to pass SOPS ciphertext directly and its integration test is updated together.
+
+2026-08-29 — Task 5.2: read-only Secret mapping CI deployment compatibility
+    Context: CI can read the root-owned names-only mapping under `/srv/smtp2graph`, but cannot create the adjacent temporary file required for its atomic replacement. Reconciliation therefore failed after creating or resolving content-addressed Secret names and before stack submission.
+    Change: When the configured mapping directory is not writable, orchestration copies the names-only mapping into its existing `/dev/shm` deployment staging directory, reconciles that ephemeral copy and uses it for the current stack render/deploy. Writable operator mappings retain their atomic persistent update behavior.
+    Verification: Fake-Docker deploy regression makes the mapping directory read-only, rotates `SMTP_USERS_TSV` and confirms that both replacement Secret references reach rendered stack submissions.
+    Risks: A CI-only mapping update is intentionally ephemeral; the next normal deploy reconciles the selected environment again. No Secret payload is written outside Docker Secrets or `/dev/shm`.
+    Rollback: Restore an explicit reviewed persistent mapping only after queue/recovery assessment. Do not grant CI write access to `/srv` solely to persist Secret names.

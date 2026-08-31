@@ -176,3 +176,10 @@
     Verification: Security regression rejects a malformed space-separated SMTP user record without printing credentials; live Swarm logs identified the existing deployed failure as `malformed SMTP users record at line 1`.
     Risks: The currently deployed malformed Secret remains active until its encrypted source is corrected and a normal deploy succeeds. The `/readyz` healthcheck is intentionally unchanged because it already measures post-listener readiness.
     Rollback: Correct the encrypted `SMTP_USERS_TSV` source to `username<TAB>password<TAB>sender@example.invalid` (use `\t` escapes in quoted Dotenv values), then redeploy; do not manually edit Docker Secret payloads.
+
+2026-08-31 — Task 5.2: TLS PEM reconciliation and preflight validation
+    Context: Live gateway tasks failed before readiness with Node `ERR_OSSL_PEM_NO_START_LINE`, while the mounted Secret targets and entrypoint paths were correct. The SOPS reconciler decoded Dotenv `\t`/`\n` only for SMTP users, leaving PEM values with literal `\n` escapes.
+    Change: The reconciler now decodes escaped PEM line endings for SMTP TLS and Graph certificate private-key material. Before Docker Secret creation it validates TLS certificate/key PEM syntax, expiry, configured FQDN coverage and public-key match.
+    Verification: Synthetic cert/key regressions cover encrypted and owner-only plaintext input; malformed TLS certificate input is rejected without logging PEM or key contents. Live Swarm evidence confirms the prior task exit occurred before the existing `/readyz` healthcheck could execute.
+    Risks: A genuinely malformed or mismatched encrypted TLS value now blocks deploy before Swarm submission; this is intentional. Existing failed task state remains until a successful redeploy.
+    Rollback: Correct the SOPS TLS certificate/key pair and redeploy declaratively. Do not modify mounted Docker Secret payloads or weaken the `/readyz` healthcheck.

@@ -59,7 +59,7 @@ done
 
 [[ "$env_file" = /* && -f "$env_file" && ! -L "$env_file" ]] || die '--env-file must be an absolute regular non-symlink file.'
 [[ "$mapping_file" = /* && -f "$mapping_file" && ! -L "$mapping_file" ]] || die '--mapping-file must be an existing regular non-symlink file.'
-for tool in dd grep sha256sum mktemp stat tail awk install; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in dd grep sha256sum mktemp stat tail awk install openssl; do command -v "$tool" >/dev/null || die "$tool is required."; done
 
 source_is_sops=false
 if grep -q '^sops_version=' "$env_file" || grep -q 'ENC\[AES256_GCM' "$env_file"; then
@@ -107,12 +107,14 @@ extract_secret() {
   else
     mv "$raw_target" "$target"
   fi
-  if [[ "$key" == SMTP_USERS_TSV ]]; then
+  case "$key" in
+    SMTP_USERS_TSV | TLS_CERTIFICATE_PEM | TLS_PRIVATE_KEY_PEM | GRAPH_CERT_PRIVATE_KEY_PEM)
     decoded_target="$target.decoded"
     value=$(cat "$target")
     printf '%b' "$value" >"$decoded_target"
     mv "$decoded_target" "$target"
-  fi
+      ;;
+  esac
   chmod 400 "$target"
   [[ -s "$target" ]] || die "environment value is empty: $key."
   ! grep -q '^REPLACE_WITH_' "$target" || die "required environment value is still a placeholder: $key."
@@ -145,6 +147,14 @@ extract_secret TLS_PRIVATE_KEY_PEM "$stage_dir/smtp-tls-key"
 graph_sender_mailbox=$(extract_metadata GRAPH_SENDER_MAILBOX)
 global_sender=$(normalize_email "$graph_sender_mailbox") || die 'GRAPH_SENDER_MAILBOX is invalid.'
 render_smtp_users "$stage_dir/smtp-users" "$global_sender" >/dev/null || die 'SMTP_USERS_TSV does not satisfy the runtime SMTP policy.'
+smtp_tls_fqdn=$(extract_metadata SMTP_TLS_FQDN)
+openssl x509 -in "$stage_dir/smtp-tls-cert" -noout >/dev/null 2>&1 || die 'TLS_CERTIFICATE_PEM is not valid PEM.'
+openssl pkey -in "$stage_dir/smtp-tls-key" -noout >/dev/null 2>&1 || die 'TLS_PRIVATE_KEY_PEM is not valid PEM.'
+openssl x509 -in "$stage_dir/smtp-tls-cert" -checkend 1 -noout >/dev/null 2>&1 || die 'TLS certificate is expired or expires within one second.'
+openssl x509 -in "$stage_dir/smtp-tls-cert" -noout -checkhost "$smtp_tls_fqdn" >/dev/null 2>&1 || die 'TLS certificate does not match SMTP_TLS_FQDN.'
+cert_pub=$(openssl x509 -in "$stage_dir/smtp-tls-cert" -pubkey -noout | openssl pkey -pubin -pubout -outform DER | sha256sum | awk '{print $1}')
+key_pub=$(openssl pkey -in "$stage_dir/smtp-tls-key" -pubout -outform DER | sha256sum | awk '{print $1}')
+[[ "$cert_pub" == "$key_pub" ]] || die 'TLS certificate and private key do not match.'
 case "$graph_auth_mode" in
   certificate)
     extract_secret GRAPH_CERT_PRIVATE_KEY_PEM "$stage_dir/graph-credential"

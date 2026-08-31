@@ -11,6 +11,13 @@ env_file="$tmp/development.env"
 mapping_file="$tmp/mapping/secret-mapping.env"
 server_env_file="$tmp/server.environment"
 mkdir -p "$fake_bin" "$tmp/docker-secrets" "$tmp/mapping"
+tls_cert="$tmp/tls-cert.pem"
+tls_key="$tmp/tls-key.pem"
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+  -subj '/CN=smtp-int.example.invalid' -addext 'subjectAltName=DNS:smtp-int.example.invalid' \
+  -keyout "$tls_key" -out "$tls_cert" >/dev/null 2>&1
+tls_certificate_escaped=$(awk '{ printf "%s\\n", $0 }' "$tls_cert")
+tls_private_key_escaped=$(awk '{ printf "%s\\n", $0 }' "$tls_key")
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -36,8 +43,8 @@ printf '%s\n' \
   'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
   'GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key"' \
   'SMTP_USERS_TSV="gateway\tsynthetic-password\tnoreply@example.invalid"' \
-  'TLS_CERTIFICATE_PEM="synthetic-certificate"' \
-  'TLS_PRIVATE_KEY_PEM="synthetic-tls-key"' \
+  "TLS_CERTIFICATE_PEM=\"${tls_certificate_escaped}\"" \
+  "TLS_PRIVATE_KEY_PEM=\"${tls_private_key_escaped}\"" \
   'GRAPH_TENANT_ID_SECRET_NAME=stale_tenant_reference' \
   'GRAPH_CLIENT_ID_SECRET_NAME=stale_client_reference' \
   'GRAPH_CREDENTIAL_SECRET_NAME=stale_credential_reference' \

@@ -11,16 +11,19 @@ die() {
 }
 usage() {
   cat <<'USAGE'
-Usage: scripts/init-storage.sh --storage-root ABSOLUTE_PATH [--environment development|production] [--apply]
+Usage: scripts/init-storage.sh --storage-root ABSOLUTE_PATH [--backup-local-dir PATH \
+  --backup-rclone-remote NAME --backup-rclone-path PATH] [--environment development|production] [--apply]
 
 The default is validation-only. --apply requires a matching host SERVER_ENV and creates
 or corrects only the validated storage root and its direct queue and failed children
 with owner 65532:65532 and mode 0700. It never recursively changes ownership or
-traverses message payloads.
+traverses message payloads. Optional backup paths create only an owner-only local
+directory and an empty rclone destination during explicit apply.
 USAGE
 }
 
 storage_root=''
+backup_local_dir='' backup_rclone_remote='' backup_rclone_path=''
 environment=''
 apply=false
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -37,6 +40,18 @@ while (($#)); do
       environment=${2:-}
       shift 2
       ;;
+    --backup-local-dir)
+      backup_local_dir=${2:-}
+      shift 2
+      ;;
+    --backup-rclone-remote)
+      backup_rclone_remote=${2:-}
+      shift 2
+      ;;
+    --backup-rclone-path)
+      backup_rclone_path=${2:-}
+      shift 2
+      ;;
     --apply)
       apply=true
       shift
@@ -50,6 +65,12 @@ while (($#)); do
 done
 
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die '--storage-root must be an absolute path other than /.'
+if [[ -n "$backup_local_dir$backup_rclone_remote$backup_rclone_path" ]]; then
+  [[ -n "$backup_local_dir" && -n "$backup_rclone_remote" && -n "$backup_rclone_path" ]] || die 'backup local dir, rclone remote and rclone path must be supplied together.'
+  [[ "$backup_local_dir" = /* && "$backup_local_dir" != / ]] || die '--backup-local-dir must be an absolute path other than /.'
+  [[ "$backup_rclone_remote" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die '--backup-rclone-remote is unsafe.'
+  [[ "$backup_rclone_path" =~ ^[A-Za-z0-9][A-Za-z0-9_./-]{0,255}$ && "$backup_rclone_path" != *..* ]] || die '--backup-rclone-path is unsafe.'
+fi
 for tool in dirname basename find grep install realpath stat chown chmod; do command -v "$tool" >/dev/null || die "$tool is required."; done
 if [[ "$apply" == true ]]; then
   [[ "$environment" == development || "$environment" == production ]] || die '--apply requires --environment development or production.'
@@ -79,6 +100,21 @@ prepare_storage_root() {
 }
 
 prepare_storage_root
+
+prepare_backup_local_dir() {
+  [[ -z "$backup_local_dir" ]] && return
+  if [[ ! -e "$backup_local_dir" ]]; then
+    [[ "$apply" == true ]] || {
+      printf 'READY: backup local directory will be initialized mode 0700.\n'
+      return
+    }
+    mkdir -p -- "$backup_local_dir"
+    chmod 0700 -- "$backup_local_dir"
+    needs_mutation=true
+  fi
+  [[ -d "$backup_local_dir" && ! -L "$backup_local_dir" ]] || die '--backup-local-dir must be a non-symlink directory.'
+  [[ "$(stat -c '%a' "$backup_local_dir")" =~ ^[67]00$ ]] || die '--backup-local-dir must not be group/world accessible.'
+}
 
 validate_storage_root_owner() {
   local owner mode
@@ -116,6 +152,11 @@ validate_existing_child() {
 
 validate_storage_root_owner
 for child in queue failed; do validate_existing_child "$child"; done
+prepare_backup_local_dir
+if [[ -n "$backup_rclone_remote" ]]; then
+  needs_mutation=true
+  [[ "$apply" == true ]] || printf 'READY: rclone backup destination will be initialized on apply.\n'
+fi
 [[ "$apply" == true ]] || exit 0
 if [[ "$needs_mutation" == false ]]; then
   printf 'PASS: storage root and children are initialized; deploy separately through approved orchestration.\n'
@@ -130,4 +171,8 @@ for child in queue failed; do
   chown "$runtime_uid:$runtime_gid" -- "$storage_root/$child" 2>/dev/null || true
   chmod 0700 -- "$storage_root/$child" 2>/dev/null || true
 done
+if [[ -n "$backup_rclone_remote" ]]; then
+  command -v rclone >/dev/null || die 'rclone is required to initialize backup destination.'
+  rclone mkdir "$backup_rclone_remote:${backup_rclone_path%/}"
+fi
 printf 'PASS: storage root and children are initialized; deploy separately through approved orchestration.\n'

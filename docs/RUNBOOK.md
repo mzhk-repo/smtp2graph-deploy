@@ -55,6 +55,9 @@ at least daily to support the 24-hour configuration RPO. Backup destinations
 are read only from the selected SOPS-encrypted `env.*.enc`: local host path,
 rclone remote and rclone path. `rclone` credentials and the age private
 recovery identity are external custody items and are never archived.
+During an explicit declarative deploy or rollback, `init-storage.sh` creates
+the local backup path with mode `0700` and initializes the configured rclone
+path. It never creates either destination during validation-only checks.
 
 ```bash
 ./scripts/backup.sh --environment development \

@@ -100,6 +100,7 @@ allowed_keys=(
   SWARM_STACK_NAME
   SWARM_OVERLAY_NETWORK
   SMTP2GRAPH_STORAGE_HOST_PATH
+  SMTP2GRAPH_BACKUP_LOCAL_DIR SMTP2GRAPH_BACKUP_RCLONE_REMOTE SMTP2GRAPH_BACKUP_RCLONE_PATH
   SMTP2GRAPH_MODE
   GRAPH_AUTH_MODE
   SMTP_MAX_MESSAGE_BYTES
@@ -193,7 +194,11 @@ deploy_stack() {
 
 initialize_storage() {
   [[ "$init_storage_script" = /* && -x "$init_storage_script" && ! -L "$init_storage_script" ]] || die 'storage initializer must be an absolute executable non-symlink file.'
-  "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" --environment "$environment" --apply
+  local backup_args=()
+  if [[ -n "${SMTP2GRAPH_BACKUP_LOCAL_DIR:-}${SMTP2GRAPH_BACKUP_RCLONE_REMOTE:-}${SMTP2GRAPH_BACKUP_RCLONE_PATH:-}" ]]; then
+    backup_args=(--backup-local-dir "$SMTP2GRAPH_BACKUP_LOCAL_DIR" --backup-rclone-remote "$SMTP2GRAPH_BACKUP_RCLONE_REMOTE" --backup-rclone-path "$SMTP2GRAPH_BACKUP_RCLONE_PATH")
+  fi
+  "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" "${backup_args[@]}" --environment "$environment" --apply
 }
 
 reconcile_deploy_secrets() {

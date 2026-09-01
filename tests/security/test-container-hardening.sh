@@ -55,8 +55,18 @@ if grep -Fq 'chown -R' "$storage_init"; then
 fi
 server_env_file="$tmp/server.environment"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
+mkdir -p "$tmp/bin"
+cat >"$tmp/bin/rclone" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+test "$1" = mkdir
+mkdir -p "${FAKE_RCLONE_ROOT}/${2#*:}"
+EOF
+chmod 700 "$tmp/bin/rclone"
 rm -f "$tmp/storage/queue/existing-message.eml"
-SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$storage_init" --storage-root "$tmp/storage" --environment development --apply >/dev/null
+PATH="$tmp/bin:$PATH" FAKE_RCLONE_ROOT="$tmp/rclone" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$storage_init" --storage-root "$tmp/storage" --backup-local-dir "$tmp/backups" --backup-rclone-remote gdrive-backup --backup-rclone-path smtp2graph/dev --environment development --apply >/dev/null
 test -d "$tmp/storage/queue"
 test -d "$tmp/storage/failed"
+test -d "$tmp/backups"
+test -d "$tmp/rclone/smtp2graph/dev"
 printf 'PASS: container hardening and storage initialization policies fail closed.\n'

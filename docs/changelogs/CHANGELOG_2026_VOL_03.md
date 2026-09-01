@@ -197,3 +197,10 @@
     Verification: Isolated regression verifies local/cloud retention, checksum validation, queue-free archive contents and safe cold extraction. Live host backup/recovery evidence remains pending the operator-provided encrypted destination values and Ansible scheduling.
     Risks: Recovery requires external age and rclone custody plus manual secret reconciliation/deploy. At-Least-Once duplicate risk remains unchanged because live queue is not restored.
     Rollback: Stop the Ansible schedule and retain existing verified archives. Do not delete queue data, archive age keys, or restore over an active host.
+
+2026-09-01 — Task 7.3: initialize local and rclone backup destinations during explicit deploy
+    Context: Backup destinations are supplied through encrypted environment contracts, but the host initializer previously converged only gateway queue storage.
+    Change: `init-storage.sh` now accepts the validated backup local directory and rclone destination as one optional contract. On explicit apply it creates the owner-only local directory and executes `rclone mkdir`; deploy orchestration passes the encrypted values before stack submission.
+    Verification: Container-hardening regression proves local and fake-rclone directory initialization; deploy-orchestrator regression and `make validate` passed.
+    Risks: A missing rclone binary or unavailable cloud remote blocks explicit deploy/rollback before stack submission; this is intentional to avoid a deployment that cannot meet the backup contract.
+    Rollback: Stop the Ansible schedule or remove the reviewed backup contract only after retaining verified archives. Do not remove active cloud/local archives automatically.

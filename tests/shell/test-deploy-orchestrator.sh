@@ -27,6 +27,9 @@ printf '%s\n' \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${tmp}/data" \
+  "SMTP2GRAPH_BACKUP_LOCAL_DIR=${tmp}/backups" \
+  'SMTP2GRAPH_BACKUP_RCLONE_REMOTE=gdrive-backup' \
+  'SMTP2GRAPH_BACKUP_RCLONE_PATH=smtp2graph/dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \

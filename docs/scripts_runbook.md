@@ -7,6 +7,41 @@
 - Side effects: `backup.sh --apply` creates a checksum-paired allowlisted archive locally and in rclone, then applies 7-local/30-cloud retention. `restore.sh --apply` extracts only a verified control-plane bundle and never deploys.
 - Safety: no `source`; age/rclone credentials, Docker Secret payloads, queue, failed payloads and logs are excluded. Restore never overwrites an active host/storage root. Ansible owns scheduling outside this repository.
 - Check: `./tests/recovery/cold-restore.sh`, `bash -n scripts/backup.sh scripts/restore.sh`.
+- Manual backup validation (does not create files or contact rclone):
+  ```bash
+  ./scripts/backup.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc --check
+  ```
+- Manual backup apply: creates the local archive, uploads it to the configured `gdrive-backup:smtp2graph/dev` path and rotates only recognized archive/checksum pairs. Run only through the approved Ansible/operator procedure that provides the age identity:
+  ```bash
+  ./scripts/backup.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc --apply
+  ```
+- Manual restore validation verifies an existing local archive and target without extraction:
+  ```bash
+  ./scripts/restore.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc \
+    --backup /srv/smtp2graph/backups/smtp2graph-development-YYYYMMDDTHHMMSSZ.tar.gz \
+    --target /srv/smtp2graph/recovery/control-plane \
+    --confirm-target /srv/smtp2graph/recovery/control-plane --check
+  ```
+- Restore apply extracts only to the named new/empty target. Reconcile secrets, bootstrap, deploy and run smoke/synthetic checks separately after extraction:
+  ```bash
+  ./scripts/restore.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc \
+    --backup /srv/smtp2graph/backups/smtp2graph-development-YYYYMMDDTHHMMSSZ.tar.gz \
+    --target /srv/smtp2graph/recovery/control-plane \
+    --confirm-target /srv/smtp2graph/recovery/control-plane --apply
+  ```
+
+## `tests/recovery/cold-restore.sh`
+
+- Category: 1a (isolated recovery regression).
+- Manual run: executes only temporary `/dev/shm` fixtures and a fake rclone remote; it does not access Google Drive, Docker, SOPS production values or host storage.
+  ```bash
+  ./tests/recovery/cold-restore.sh
+  ```
+- Expected result: local/cloud retention, checksum verification, queue-free archive and safe extraction all pass.
 
 ## `ci-deploy-swarm.sh`
 
@@ -72,6 +107,23 @@
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads. Cloud mutation occurs only with explicit `--apply`.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
+- Manual validation reports the required queue/failed, local backup and rclone destination work without changing host or cloud state:
+  ```bash
+  ./scripts/init-storage.sh \
+    --storage-root /srv/smtp2graph/dev/data \
+    --backup-local-dir /srv/smtp2graph/backups \
+    --backup-rclone-remote gdrive-backup \
+    --backup-rclone-path smtp2graph/dev
+  ```
+- Manual apply creates/corrects the supplied storage root, creates the local backup directory as `0700`, and performs `rclone mkdir`. Use the actual storage root from the selected encrypted environment contract:
+  ```bash
+  ./scripts/init-storage.sh \
+    --storage-root /srv/smtp2graph/dev/data \
+    --backup-local-dir /srv/smtp2graph/backups \
+    --backup-rclone-remote gdrive-backup \
+    --backup-rclone-path smtp2graph/dev \
+    --environment development --apply
+  ```
 
 ## `bootstrap-swarm-host.sh`
 

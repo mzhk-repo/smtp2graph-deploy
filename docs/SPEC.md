@@ -299,7 +299,7 @@ SMTP2Graph є початковим кандидатом, оскільки над
 
 - **Безпека:** least privilege, відсутність plaintext secrets у Git, відсутність public SMTP exposure.
 - **Доступність:** 99,5% на місяць.
-- **Recovery:** RTO 60 хвилин (підтверджено); configuration RPO 24 години.
+- **Recovery:** practical cold recovery без обов'язкового RTO; configuration RPO 24 години.
 - **Продуктивність:** витримувати очікуваний burst без втрати повідомлень.
 - **Підтримуваність:** один deployable service, pinned dependencies, documented operations.
 - **Аудитованість:** security events прив’язані до клієнта й часу.

@@ -109,10 +109,10 @@ extract_secret() {
   fi
   case "$key" in
     SMTP_USERS_TSV | TLS_CERTIFICATE_PEM | TLS_PRIVATE_KEY_PEM | GRAPH_CERT_PRIVATE_KEY_PEM)
-    decoded_target="$target.decoded"
-    value=$(cat "$target")
-    printf '%b' "$value" >"$decoded_target"
-    mv "$decoded_target" "$target"
+      decoded_target="$target.decoded"
+      value=$(cat "$target")
+      printf '%b' "$value" >"$decoded_target"
+      mv "$decoded_target" "$target"
       ;;
   esac
   chmod 400 "$target"

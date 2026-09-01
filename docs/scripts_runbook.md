@@ -1,5 +1,13 @@
 # Script runbook
 
+## `backup.sh` / `restore.sh`
+
+- Category: 2 (manual backup and cold-recovery automation).
+- Inputs: explicit `--environment`, SOPS-encrypted `--env-file`, and backup destinations only from the encrypted contract. Restore additionally requires a local archive or a safe rclone archive name, a new/empty absolute target and exact `--confirm-target`.
+- Side effects: `backup.sh --apply` creates a checksum-paired allowlisted archive locally and in rclone, then applies 7-local/30-cloud retention. `restore.sh --apply` extracts only a verified control-plane bundle and never deploys.
+- Safety: no `source`; age/rclone credentials, Docker Secret payloads, queue, failed payloads and logs are excluded. Restore never overwrites an active host/storage root. Ansible owns scheduling outside this repository.
+- Check: `./tests/recovery/cold-restore.sh`, `bash -n scripts/backup.sh scripts/restore.sh`.
+
 ## `ci-deploy-swarm.sh`
 
 - Category: 1b (CI-to-Swarm deployment adapter).

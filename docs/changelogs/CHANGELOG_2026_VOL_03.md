@@ -183,3 +183,17 @@
     Verification: Synthetic cert/key regressions cover encrypted and owner-only plaintext input; malformed TLS certificate input is rejected without logging PEM or key contents. Live Swarm evidence confirms the prior task exit occurred before the existing `/readyz` healthcheck could execute.
     Risks: A genuinely malformed or mismatched encrypted TLS value now blocks deploy before Swarm submission; this is intentional. Existing failed task state remains until a successful redeploy.
     Rollback: Correct the SOPS TLS certificate/key pair and redeploy declaratively. Do not modify mounted Docker Secret payloads or weaken the `/readyz` healthcheck.
+
+2026-08-31 — Task 7.2: VictoriaMetrics alerts and independent synthetic delivery accepted
+    Context: Task 7.1 exposed gateway observability only inside the encrypted overlay; it did not yet provide metrics collection, dashboarding, alerting or an end-to-end independent delivery signal.
+    Change: The monitoring control plane now attaches VictoriaMetrics to the encrypted gateway overlay, scrapes `smtp2graph_gateway:9464/metrics` with stable gateway labels, provisions the SMTP2Graph Gateway dashboard and alert catalog, and runs a single STARTTLS synthetic delivery probe through overlay alias `gateway`. The probe verifies SMTP acceptance plus an increased Graph-success counter, publishes a freshness threshold derived from its interval and grace period, and alerts via an external SMTP provider rather than SMTP2Graph.
+    Verification: Monitoring-repository configuration and integration checks passed for the scrape target, dashboard/alert artifacts, synthetic delivery, VictoriaMetrics `up == 1`, and external alert payload contract. This repository adds a static integration-contract regression and expands the live signal verifier to cover every metric consumed by the dashboard and alerts.
+    Risks: Synthetic delivery remains a controlled non-production message and can detect only the represented sender/recipient path. Task 7.3 backup/restore, Task 7.4 operator game day and Task 7.5 Gate D remain incomplete.
+    Rollback: Revert monitoring rules/dashboard and runner as a reviewed monitoring-stack release; do not publish port 9464, route alerts through SMTP2Graph, or retain synthetic credentials outside versioned Docker Secrets.
+
+2026-09-01 — Task 7.3: dual-destination control-plane backup and cold recovery automation
+    Context: The project required repeatable recovery without treating queue payloads as a mail archive, while the former fixed RTO had no approved operational basis.
+    Change: Added strict SOPS-backed backup and restore scripts, isolated dual-retention recovery regression, and ADR-0010. Backups create checksum-verified local and rclone copies from paths in encrypted env contracts, retaining 7 and 30 copies respectively; restore only extracts an allowlisted control-plane bundle into a new or empty target.
+    Verification: Isolated regression verifies local/cloud retention, checksum validation, queue-free archive contents and safe cold extraction. Live host backup/recovery evidence remains pending the operator-provided encrypted destination values and Ansible scheduling.
+    Risks: Recovery requires external age and rclone custody plus manual secret reconciliation/deploy. At-Least-Once duplicate risk remains unchanged because live queue is not restored.
+    Rollback: Stop the Ansible schedule and retain existing verified archives. Do not delete queue data, archive age keys, or restore over an active host.

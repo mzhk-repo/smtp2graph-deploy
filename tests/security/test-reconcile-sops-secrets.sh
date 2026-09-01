@@ -37,8 +37,10 @@ sops --encrypt --input-type dotenv --output-type dotenv --age "$recipient" "$pla
 : >"$mapping"
 chmod 600 "$mapping"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
-SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping" | grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
-SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping" | grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v'
+names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$encrypted" --mapping-file "$mapping")
+grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v' <<<"$names"
+names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping")
+grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v' <<<"$names"
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail

@@ -1,8 +1,14 @@
 # Import this job into the VictoriaMetrics scrape configuration.
 # The scraper must join the same external encrypted overlay as smtp2graph.
+# `smtp2graph_gateway` is the reviewed Swarm service DNS name; port 9464 is
+# deliberately internal and must never be host-published.
 scrape_configs:
   - job_name: smtp2graph-gateway
     metrics_path: /metrics
     static_configs:
       - targets:
           - smtp2graph_gateway:9464
+        labels:
+          env: prod
+          service: smtp2graph
+          component: gateway

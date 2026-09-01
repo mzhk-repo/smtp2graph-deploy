@@ -59,11 +59,16 @@ const get = path => new Promise((resolve, reject) => {
   if (ready.status !== 200 || ready.body !== "ready\n") throw new Error("readiness endpoint is unhealthy");
   for (const metric of [
     "smtp2graph_process_start_time_seconds",
+    "smtp2graph_smtp_sessions_active",
+    "smtp2graph_smtp_submissions_total",
     "smtp2graph_smtp_auth_total",
     "smtp2graph_delivery_attempts_total",
+    "smtp2graph_delivery_duration_seconds",
+    "smtp2graph_queue_messages",
     "smtp2graph_queue_bytes",
     "smtp2graph_storage_bytes",
     "smtp2graph_storage_reject_threshold_bytes",
+    "smtp2graph_tls_certificate_not_after_seconds",
   ]) {
     if (!metrics.body.includes(metric)) throw new Error(`missing metric: ${metric}`);
   }

@@ -3,6 +3,8 @@
 
 SOPS_DEPLOY_STAGE_DIR=''
 SOPS_DEPLOY_ENV_FILE=''
+# shellcheck disable=SC2034 # consumed by deploy-adjacent callers after sourcing this library
+SOPS_DEPLOY_SOURCE_FILE=''
 
 prepare_sops_deploy_env() {
   local root=$1 requested=$2 server_env encrypted
@@ -19,18 +21,29 @@ prepare_sops_deploy_env() {
     printf 'ERROR: encrypted deploy env must be an absolute regular non-symlink file.\n' >&2
     return 64
   }
-  command -v sops >/dev/null || {
-    printf 'ERROR: sops is required for deploy environment decryption.\n' >&2
-    return 69
-  }
+  SOPS_DEPLOY_SOURCE_FILE=$encrypted
   SOPS_DEPLOY_STAGE_DIR=$(mktemp -d /dev/shm/smtp2graph-deploy-env.XXXXXX) || return
   chmod 700 "$SOPS_DEPLOY_STAGE_DIR"
   SOPS_DEPLOY_ENV_FILE="$SOPS_DEPLOY_STAGE_DIR/environment.env"
-  sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || {
-    rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
-    SOPS_DEPLOY_STAGE_DIR=''
-    return 64
-  }
+  if grep -q '^sops_version=' "$encrypted" || grep -q 'ENC\[AES256_GCM' "$encrypted"; then
+    command -v sops >/dev/null || {
+      printf 'ERROR: sops is required for deploy environment decryption.\n' >&2
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 69
+    }
+    sops --decrypt --input-type dotenv --output-type dotenv "$encrypted" >"$SOPS_DEPLOY_ENV_FILE" || {
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 64
+    }
+  else
+    cp "$encrypted" "$SOPS_DEPLOY_ENV_FILE" || {
+      rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
+      SOPS_DEPLOY_STAGE_DIR=''
+      return 64
+    }
+  fi
   chmod 600 "$SOPS_DEPLOY_ENV_FILE"
 }
 
@@ -38,6 +51,8 @@ cleanup_sops_deploy_env() {
   [[ -z "$SOPS_DEPLOY_STAGE_DIR" ]] || rm -rf -- "$SOPS_DEPLOY_STAGE_DIR"
   SOPS_DEPLOY_STAGE_DIR=''
   SOPS_DEPLOY_ENV_FILE=''
+  # shellcheck disable=SC2034 # consumed by deploy-adjacent callers after sourcing this library
+  SOPS_DEPLOY_SOURCE_FILE=''
 }
 
 resolve_deploy_env_file() {
@@ -102,9 +117,13 @@ load_deploy_secret_mapping() {
     printf 'ERROR: Secret mapping must be an absolute regular non-symlink file.\n' >&2
     return 64
   }
+  [[ -r "$file" ]] || {
+    printf 'ERROR: Secret mapping file is not readable: %s.\n' "$file" >&2
+    return 64
+  }
   mode=$(stat -c '%a' "$file") || return
-  [[ "$mode" =~ ^[0-7]{3,4}$ && $((8#$mode & 077)) -eq 0 && $((8#$mode & 400)) -ne 0 ]] || {
-    printf 'ERROR: Secret mapping must be readable only by its owner.\n' >&2
+  [[ "$mode" =~ ^[0-7]{3,4}$ && $((8#$mode & 022)) -eq 0 && $((8#$mode & 400)) -ne 0 ]] || {
+    printf 'ERROR: Secret mapping must not be group/world-writable and must be readable.\n' >&2
     return 64
   }
   while IFS= read -r line || [[ -n "$line" ]]; do

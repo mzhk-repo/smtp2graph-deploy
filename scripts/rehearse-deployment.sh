@@ -87,7 +87,7 @@ done
 [[ "$(stat -c '%a' "$evidence_dir")" =~ ^[67]00$ ]] || die '--evidence-dir must not be group/world readable.'
 [[ "$smtp_user" =~ ^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$ ]] || die '--smtp-user is unsafe.'
 [[ "$recipient" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]] || die '--recipient is invalid.'
-for tool in docker node awk find stat mktemp date rg; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in docker node awk find stat mktemp date grep; do command -v "$tool" >/dev/null || die "$tool is required."; done
 [[ -x "$orchestrator" && -x "$smoke_script" && -f "$submit_helper" ]] || die 'required rehearsal helper is unavailable.'
 
 is_digest() { [[ "$1" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; }
@@ -197,7 +197,7 @@ printf 'fresh-deploy-and-noop=passed\n' >>"$evidence_file"
 printf 'synthetic-invalid-credential-for-rehearsal\n' | docker secret create "$temporary_secret" - >/dev/null
 render_mapping "$temporary_secret"
 render_env "$current_digest" "$temporary_mapping" "$temporary_env"
-"$orchestrator" --env-file "$temporary_env" --deploy --apply
+"$orchestrator" --env-file "$temporary_env" --deploy --apply --secret-mapping-already-reconciled
 active_temporary_mapping=true
 smoke
 queue_before=$(queue_count)
@@ -206,7 +206,7 @@ wait_for 'durable queued SMTP submission' 60 $((queue_before + 1))
 printf 'queued-before-upgrade=%s\n' "$((queue_before + 1))" >>"$evidence_file"
 
 render_env "$candidate_digest" "$temporary_mapping" "$temporary_env"
-"$orchestrator" --env-file "$temporary_env" --deploy --apply
+"$orchestrator" --env-file "$temporary_env" --deploy --apply --secret-mapping-already-reconciled
 smoke
 wait_for 'queue preservation after candidate upgrade' 30 $((queue_before + 1))
 printf 'candidate-upgrade=passed\n' >>"$evidence_file"

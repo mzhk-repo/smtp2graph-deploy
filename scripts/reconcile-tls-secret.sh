@@ -113,7 +113,7 @@ for item in "$cert_secret:$stage_dir/certificate.pem" "$key_secret:$stage_dir/pr
   docker secret inspect "$name" >/dev/null 2>&1 || docker secret create "$name" "$file" >/dev/null
 done
 mapping_tmp=$(mktemp "$(dirname "$mapping_file")/.tls-secret-map.XXXXXX")
-chmod 600 "$mapping_tmp"
+chmod 644 "$mapping_tmp"
 awk -v cert="$cert_secret" -v key="$key_secret" '
   BEGIN { seen_cert=0; seen_key=0 }
   /^TLS_CERTIFICATE_SECRET_NAME=/ { print "TLS_CERTIFICATE_SECRET_NAME=" cert; seen_cert=1; next }
@@ -122,5 +122,8 @@ awk -v cert="$cert_secret" -v key="$key_secret" '
   END { if (!seen_cert) print "TLS_CERTIFICATE_SECRET_NAME=" cert; if (!seen_key) print "TLS_PRIVATE_KEY_SECRET_NAME=" key }
 ' "$mapping_file" >"$mapping_tmp"
 mv "$mapping_tmp" "$mapping_file"
-chmod 600 "$mapping_file"
+chmod 644 "$mapping_file"
+if [[ -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]]; then
+  chown "${SUDO_UID}:${SUDO_GID}" "$mapping_file" 2>/dev/null || true
+fi
 log 'TLS Docker Secret mapping updated; deploy separately after policy verification.'

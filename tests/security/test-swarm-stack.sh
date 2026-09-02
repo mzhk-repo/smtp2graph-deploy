@@ -4,24 +4,32 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stack="$root/deploy/swarm/stack.yml"
 
-rg -q '^    entrypoint:$' "$stack"
-rg -q '^      - /run/configs/entrypoint.sh$' "$stack"
-rg -Fq '        source: ${SMTP2GRAPH_STORAGE_HOST_PATH:' "$stack"
-rg -q '^        target: /data$' "$stack"
-rg -Fq 'node.labels.${SMTP2GRAPH_NODE_LABEL:' "$stack"
-rg -q '^      restart_policy:$' "$stack"
-rg -q '^      update_config:$' "$stack"
-rg -q '^      rollback_config:$' "$stack"
-rg -q '^    healthcheck:$' "$stack"
-rg -q 'connect\(2525' "$stack"
-rg -q '^    configs:$' "$stack"
-rg -q '^  gateway_entrypoint:$' "$stack"
-rg -q '^    external: true$' "$stack"
-rg -q '^        mode: host$' "$stack"
-rg -q '^      SMTP_BIND_ADDRESS: 0.0.0.0$' "$stack"
-rg -q '^      QUEUE_MAX_BYTES: "1073741824"$' "$stack"
-rg -q '^      QUEUE_REJECT_THRESHOLD_PERCENT: "80"$' "$stack"
-if rg -q '^    build:|^    restart:|privileged:[[:space:]]*true|/var/run/docker.sock|network_mode:[[:space:]]*host|pid:[[:space:]]*host' "$stack"; then
+grep -Eq '^    entrypoint:$' "$stack"
+grep -Eq '^      - /run/configs/entrypoint.sh$' "$stack"
+grep -Fq '        source: ${SMTP2GRAPH_STORAGE_HOST_PATH:' "$stack"
+grep -Eq '^        target: /data$' "$stack"
+grep -Fq 'node.labels.${SMTP2GRAPH_NODE_LABEL:' "$stack"
+grep -Eq '^      restart_policy:$' "$stack"
+grep -Eq '^      update_config:$' "$stack"
+grep -Eq '^      rollback_config:$' "$stack"
+grep -Eq '^    healthcheck:$' "$stack"
+grep -Fq '127.0.0.1:9464/readyz' "$stack"
+grep -Eq '^    logging:$' "$stack"
+grep -Eq '^      driver: local$' "$stack"
+grep -Eq '^        max-size: "10m"$' "$stack"
+grep -Eq '^        max-file: "30"$' "$stack"
+grep -Eq '^    configs:$' "$stack"
+grep -Eq '^  gateway_entrypoint:$' "$stack"
+grep -Eq '^    external: true$' "$stack"
+grep -Eq '^        mode: host$' "$stack"
+grep -Eq '^      SMTP_BIND_ADDRESS: 0.0.0.0$' "$stack"
+grep -Eq '^      QUEUE_MAX_BYTES: "1073741824"$' "$stack"
+grep -Eq '^      QUEUE_REJECT_THRESHOLD_PERCENT: "80"$' "$stack"
+if grep -Eq 'target: 9464|published: 9464' "$stack"; then
+  printf 'ERROR: observability endpoint must not be host-published.\n' >&2
+  exit 1
+fi
+if grep -Eq '^    build:|^    restart:|privileged:[[:space:]]*true|/var/run/docker.sock|network_mode:[[:space:]]*host|pid:[[:space:]]*host' "$stack"; then
   printf 'ERROR: stack contains a forbidden Compose or privilege field.\n' >&2
   exit 1
 fi

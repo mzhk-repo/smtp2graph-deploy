@@ -22,6 +22,11 @@ FAILED_PAYLOAD_RETENTION_DAYS|required|public|7
 LOG_RETENTION_DAYS|required|public|30
 SWARM_STACK_NAME|required|public|smtp2graph
 SWARM_OVERLAY_NETWORK|required|public|smtp2graph_internal
+SMTP2GRAPH_BACKUP_LOCAL_DIR|required|public|/srv/smtp2graph/dev/backups
+SMTP2GRAPH_BACKUP_RCLONE_REMOTE|required|public|REPLACE_WITH_RCLONE_REMOTE
+SMTP2GRAPH_BACKUP_RCLONE_PATH|required|public|smtp2graph/dev
+SMTP2GRAPH_BACKUP_LOCAL_RETENTION_COUNT|required|public|7
+SMTP2GRAPH_BACKUP_CLOUD_RETENTION_COUNT|required|public|30
 SMTP_TLS_FQDN|required|public|smtp-int.ldubgd.edu.ua
 TLS_ACME_EMAIL|required|public|operator@example.invalid
 TLS_ACME_STATE_DIR|required|public|/srv/smtp2graph/dev/acme

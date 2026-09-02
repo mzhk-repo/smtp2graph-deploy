@@ -4,13 +4,20 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 script="$root/scripts/deploy-orchestrator-swarm.sh"
 tmp=$(mktemp -d)
-trap 'rm -rf -- "$tmp"' EXIT
+trap 'chmod 700 -- "$tmp/mapping" 2>/dev/null || true; rm -rf -- "$tmp"' EXIT
 fake_bin="$tmp/bin"
 calls="$tmp/docker.calls"
 env_file="$tmp/development.env"
-mapping_file="$tmp/secret-mapping.env"
+mapping_file="$tmp/mapping/secret-mapping.env"
 server_env_file="$tmp/server.environment"
-mkdir -p "$fake_bin"
+mkdir -p "$fake_bin" "$tmp/docker-secrets" "$tmp/mapping"
+tls_cert="$tmp/tls-cert.pem"
+tls_key="$tmp/tls-key.pem"
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+  -subj '/CN=smtp-int.example.invalid' -addext 'subjectAltName=DNS:smtp-int.example.invalid' \
+  -keyout "$tls_key" -out "$tls_cert" >/dev/null 2>&1
+tls_certificate_escaped=$(awk '{ printf "%s\\n", $0 }' "$tls_cert")
+tls_private_key_escaped=$(awk '{ printf "%s\\n", $0 }' "$tls_key")
 
 valid_digest='example.invalid/smtp2graph@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 rollback_digest='example.invalid/smtp2graph@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -20,6 +27,9 @@ printf '%s\n' \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${tmp}/data" \
+  "SMTP2GRAPH_BACKUP_LOCAL_DIR=${tmp}/backups" \
+  'SMTP2GRAPH_BACKUP_RCLONE_REMOTE=gdrive-backup' \
+  'SMTP2GRAPH_BACKUP_RCLONE_PATH=smtp2graph/dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \
@@ -31,6 +41,13 @@ printf '%s\n' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
   "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'GRAPH_TENANT_ID="00000000-0000-0000-0000-000000000000"' \
+  'GRAPH_CLIENT_ID="11111111-1111-1111-1111-111111111111"' \
+  'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
+  'GRAPH_CERT_PRIVATE_KEY_PEM="synthetic-private-key"' \
+  'SMTP_USERS_TSV="gateway\tsynthetic-password\tnoreply@example.invalid"' \
+  "TLS_CERTIFICATE_PEM=\"${tls_certificate_escaped}\"" \
+  "TLS_PRIVATE_KEY_PEM=\"${tls_private_key_escaped}\"" \
   'GRAPH_TENANT_ID_SECRET_NAME=stale_tenant_reference' \
   'GRAPH_CLIENT_ID_SECRET_NAME=stale_client_reference' \
   'GRAPH_CREDENTIAL_SECRET_NAME=stale_credential_reference' \
@@ -38,6 +55,7 @@ printf '%s\n' \
   'SMTP_CREDENTIALS_SECRET_NAME=stale_smtp_reference' \
   'TLS_CERTIFICATE_SECRET_NAME=stale_certificate_reference' \
   'TLS_PRIVATE_KEY_SECRET_NAME=stale_key_reference' >"$env_file"
+chmod 600 "$env_file"
 printf '%s\n' \
   'GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_vmapped' \
   'GRAPH_CLIENT_ID_SECRET_NAME=smtp2graph_graph_client_id_vmapped' \
@@ -56,6 +74,8 @@ if [[ "${1:-} ${2:-}" == 'stack deploy' ]]; then
   printf 'digest=%s\n' "${SMTP2GRAPH_IMAGE_DIGEST}" >>"${FAKE_DOCKER_CALLS}"
 fi
 case "${1:-} ${2:-}" in
+  'secret inspect') test -f "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
+  'secret create') cp "$4" "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
     printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"
@@ -73,8 +93,26 @@ chmod 700 "$fake_bin/docker"
 cat >"$fake_bin/sops" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-for argument in "$@"; do input=$argument; done
-cat "$input"
+input='' extract=''
+while (($#)); do
+  case "$1" in
+    --extract)
+      extract=${2:-}
+      shift 2
+      ;;
+    *)
+      input=$1
+      shift
+      ;;
+  esac
+done
+if [[ -z "$extract" ]]; then
+  cat "$input"
+  exit 0
+fi
+key=${extract#*\"}
+key=${key%%\"*}
+awk -v key="$key" '$0 ~ ("^" key "=") { print substr($0, length(key) + 2); exit }' "$input"
 EOF
 chmod 700 "$fake_bin/sops"
 cat >"$fake_bin/init-storage" <<'EOF'
@@ -86,40 +124,47 @@ chmod 700 "$fake_bin/init-storage"
 export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
-rg -q '^stack config ' "$calls"
-rg -q '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
-rg -q '^derived-sender=noreply@example.invalid$' "$calls"
+grep -Eq '^stack config ' "$calls"
+grep -Eq '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
+grep -Eq '^derived-sender=noreply@example.invalid$' "$calls"
 expected_config_version=$(sha256sum \
   "$root/scripts/entrypoint.sh" \
   "$root/scripts/lib/render-config.sh" \
   "$root/deploy/config/gateway-config.yml.template" \
   "$root/scripts/init-storage.sh" |
   sha256sum | awk '{print substr($1, 1, 16)}')
-rg -q "^config-version=${expected_config_version}$" "$calls"
-if rg -q '^stack deploy ' "$calls"; then
+grep -Eq "^config-version=${expected_config_version}$" "$calls"
+if grep -Eq '^stack deploy ' "$calls"; then
   printf 'ERROR: check unexpectedly submitted a stack deploy.\n' >&2
   exit 1
 fi
 
+chmod 500 "$tmp/mapping"
+
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
-test "$(rg -c '^stack deploy ' "$calls")" -eq 2
-test "$(rg -c '^init-storage ' "$calls")" -eq 2
-if rg -q -- '--prune' "$calls"; then
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+first_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
+[[ "$first_smtp_secret" != smtp2graph_smtp_users_vmapped ]]
+sed -i 's/synthetic-password/synthetic-password-rotated/' "$env_file"
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+second_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
+[[ "$second_smtp_secret" != "$first_smtp_secret" ]]
+test "$(grep -c '^stack deploy ' "$calls")" -eq 2
+test "$(grep -c '^init-storage ' "$calls")" -eq 2
+if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1
 fi
 
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --status >/dev/null
-rg -q '^service inspect smtp2graph_gateway$' "$calls"
-rg -q '^service ps smtp2graph_gateway --no-trunc$' "$calls"
+grep -Eq '^service inspect smtp2graph_gateway$' "$calls"
+grep -Eq '^service ps smtp2graph_gateway --no-trunc$' "$calls"
 
 : >"$calls"
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
-rg -q '^stack deploy ' "$calls"
-rg -q "^digest=${rollback_digest}$" "$calls"
+grep -Eq '^stack deploy ' "$calls"
+grep -Eq "^digest=${rollback_digest}$" "$calls"
 
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
   printf 'ERROR: rollback unexpectedly skipped queue compatibility confirmation.\n' >&2
@@ -128,10 +173,11 @@ fi
 
 unknown_digest='example.invalid/smtp2graph@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null
-rg -q "^digest=${unknown_digest}$" "$calls"
+grep -Eq "^digest=${unknown_digest}$" "$calls"
 
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
+chmod 600 "$production_env"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
   printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
   exit 1
@@ -139,8 +185,12 @@ fi
 
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
-rg -q '^stack deploy ' "$calls"
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
+grep -Eq '^stack deploy ' "$calls"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
+  printf 'ERROR: production deploy unexpectedly skipped SOPS Secret reconciliation.\n' >&2
+  exit 1
+fi
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly accepted SERVER_ENV mismatch.\n' >&2
@@ -170,6 +220,19 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   printf 'ERROR: deploy loader unexpectedly accepted an incomplete Secret mapping.\n' >&2
   exit 1
 fi
+
+chmod 644 "$mapping_file"
+if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly rejected a 0644 Secret mapping.\n' >&2
+  exit 1
+fi
+
+chmod 666 "$mapping_file"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
+  printf 'ERROR: deploy loader unexpectedly accepted a world-writable Secret mapping.\n' >&2
+  exit 1
+fi
+chmod 600 "$mapping_file"
 
 fallback_root="$tmp/fallback-root"
 mkdir -p "$fallback_root"

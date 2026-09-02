@@ -1,20 +1,72 @@
 # Script runbook
 
+## `backup.sh` / `restore.sh`
+
+- Category: 2 (manual backup and cold-recovery automation).
+- Inputs: explicit `--environment`, SOPS-encrypted `--env-file`, and backup destinations only from the encrypted contract. Restore additionally requires a local archive or a safe rclone archive name, a new/empty absolute target and exact `--confirm-target`.
+- Side effects: `backup.sh --apply` creates a checksum-paired allowlisted archive locally and in rclone, then applies 7-local/30-cloud retention. `restore.sh --apply` extracts only a verified control-plane bundle and never deploys.
+- Safety: no `source`; age/rclone credentials, Docker Secret payloads, queue, failed payloads and logs are excluded. Restore never overwrites an active host/storage root. Ansible owns scheduling outside this repository.
+- Check: `./tests/recovery/cold-restore.sh`, `bash -n scripts/backup.sh scripts/restore.sh`.
+- Manual backup validation (does not create files or contact rclone):
+  ```bash
+  ./scripts/backup.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc --check
+  ```
+- Manual backup apply: creates the local archive, uploads it to the configured `gdrive-backup:smtp2graph/dev` path and rotates only recognized archive/checksum pairs. Run only through the approved Ansible/operator procedure that provides the age identity:
+  ```bash
+  ./scripts/backup.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc --apply
+  ```
+- Manual restore validation verifies an existing local archive and target without extraction:
+  ```bash
+  ./scripts/restore.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc \
+    --backup /srv/smtp2graph/backups/smtp2graph-development-YYYYMMDDTHHMMSSZ.tar.gz \
+    --target /srv/smtp2graph/recovery/control-plane \
+    --confirm-target /srv/smtp2graph/recovery/control-plane --check
+  ```
+- Restore apply extracts only to the named new/empty target. Reconcile secrets, bootstrap, deploy and run smoke/synthetic checks separately after extraction:
+  ```bash
+  ./scripts/restore.sh --environment development \
+    --env-file /opt/smtp2graph-deploy/env.dev.enc \
+    --backup /srv/smtp2graph/backups/smtp2graph-development-YYYYMMDDTHHMMSSZ.tar.gz \
+    --target /srv/smtp2graph/recovery/control-plane \
+    --confirm-target /srv/smtp2graph/recovery/control-plane --apply
+  ```
+
+## `tests/recovery/cold-restore.sh`
+
+- Category: 1a (isolated recovery regression).
+- Manual run: executes only temporary `/dev/shm` fixtures and a fake rclone remote; it does not access Google Drive, Docker, SOPS production values or host storage.
+  ```bash
+  ./tests/recovery/cold-restore.sh
+  ```
+- Expected result: local/cloud retention, checksum verification, queue-free archive and safe extraction all pass.
+
 ## `ci-deploy-swarm.sh`
 
 - Category: 1b (CI-to-Swarm deployment adapter).
 - Inputs: the shared workflow provides an absolute `ORCHESTRATOR_ENV_FILE`, `ENVIRONMENT_NAME`, immutable image digest in the env contract, and production-only release tag, approval context and control-plane SHA.
-- Side effects: invokes only the reviewed `deploy-orchestrator-swarm.sh --env-file ... --deploy --apply` contract. It never builds, pushes, resolves tags, changes Secrets or bypasses host/environment guards.
+- Side effects: invokes only the reviewed `deploy-orchestrator-swarm.sh --env-file ... --deploy --apply` contract. It never builds, pushes or resolves tags; the orchestrator reconciles versioned runtime Secrets from the selected SOPS contract before submitting the stack.
 - Safety: development rejects production context. Production rejects missing or malformed tag, approval context or SHA before invoking the orchestrator.
 - Check: `bash -n scripts/ci-deploy-swarm.sh`, `./tests/shell/test-ci-deploy-swarm.sh`.
+
+## `tests/observability/test-signals.sh`
+
+- Category: 1a (read-only deployed observability verification).
+- Inputs: optional safe stack name and explicit `--environment development|production`.
+- Side effects: none. The check reads Swarm service metadata, probes the gateway's loopback-only observability listener from inside its running container, and inspects current logs in memory without printing metric or log payloads.
+- Safety: requires exactly one running gateway container; refuses a missing readiness healthcheck, unbounded Docker logging policy, unavailable metrics, or sensitive/high-cardinality metric fields. It does not submit SMTP mail, read Docker Secrets, or change runtime state.
+- Check: `./tests/observability/test-signals.sh --environment development` after declarative deploy.
 
 ## `deploy-orchestrator-swarm.sh`
 
 - Category: 1b (dev/prod Swarm orchestration).
 - Inputs: decrypts the selected SOPS-encrypted Dotenv contract only into `/dev/shm`, strictly parses allowlisted public stack inputs and resolves `TLS_SECRET_MAPPING_FILE`. `SMTP_TLS_FQDN` is attached as the private DNS alias of the gateway endpoint on `SWARM_OVERLAY_NETWORK`; client stacks join that external encrypted overlay and resolve the same TLS name without `extra_hosts` or the host-published SMTP port. The loader then requires a private names-only mapping with all seven versioned Docker Secret references and merges those references over the decrypted deployment config. The loader never sources either file; host `SERVER_ENV=dev|prod` remains mandatory.
-- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` uses local `.env` fallback after `SERVER_ENV=dev` verification and invokes `init-storage.sh` before stack submission. Production requires `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA. Normal deploy reads only the immutable digest from the environment contract. Rollback additionally requires an operator-reviewed exact digest pair and `--queue-compatibility-confirmed` before it initializes storage and submits the stack.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` reconciles content-addressed runtime Secrets from the selected SOPS contract, reloads the atomic names-only mapping, and invokes `init-storage.sh` before stack submission. If the configured mapping directory is not writable by CI, it is copied to `/dev/shm` and used only for that deploy; a changed secret name still changes the task template and Swarm creates a replacement task. Unchanged secret content leaves the task template unchanged. Production applies the same reconciliation only after `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA are validated. Normal deploy reads only the immutable digest from the environment contract. Rollback additionally requires an operator-reviewed exact digest pair and `--queue-compatibility-confirmed` before it initializes storage and submits the stack.
 - Safety: missing, incomplete, duplicate, unsafe or owner-readable-by-group/other Secret mappings fail closed. Only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
+- Exception: `--secret-mapping-already-reconciled` is development-only and reserved for the reviewed two-release rehearsal, whose temporary invalid credential mapping must remain intact while testing queue recovery. Normal deploy and every production deploy always reconcile SOPS secret content first.
 - Manual development deploy: run only on the authorised privileged development Swarm manager, after successful host bootstrap. If the approved age identity is private to the operator account, pass only its path into the privileged process; do not copy the identity to `/root`, relax its permissions or print its contents:
   ```bash
   cd /opt/smtp2graph-deploy
@@ -31,8 +83,8 @@
 ## `reconcile-sops-secrets.sh`
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).
-- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS and an existing absolute `--mapping-file`. It extracts only the required encrypted Graph, SMTP and TLS values; values are never logged or sourced by a shell.
-- Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. It decrypts only into a mode-`0700` directory under `/dev/shm`, creates missing immutable Docker Secrets and atomically updates the names-only mapping file.
+- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS, or an owner-only plaintext file supplied by the CI deployer after its controlled decryption, and an existing absolute `--mapping-file`. It extracts only the required Graph, SMTP and TLS values; values are never logged or sourced by a shell. Group- or world-readable plaintext input is rejected. Escaped `\n` is decoded for PEM material and the resulting SMTP users TSV, TLS certificate/key PEM syntax, expiration, hostname and public-key match are preflight-validated before Docker Secret creation.
+- Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. SOPS values are decrypted only into a mode-`0700` directory under `/dev/shm`; owner-only CI plaintext is staged only there before creating missing immutable Docker Secrets and atomically updating the names-only mapping file.
 - Rotation: update the encrypted value, run validation, apply to create the new content-addressed Secret, deploy through the future approved Task 5.2 orchestration, complete smoke verification, then remove the prior Secret only by an explicitly approved cleanup operation.
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.
@@ -50,11 +102,28 @@
 ## `init-storage.sh`
 
 - Category: 1b (dev/prod persistent-storage initialization).
-- Inputs: explicit canonical `--storage-root`; it must be an absolute non-symlink directory, or have an existing non-symlink ancestor below `/` when `--apply` initializes it. Only the validated root and its direct `queue` and `failed` children are in scope.
-- Side effects: default mode is validation-only. `--apply` requires `--environment development|production`, matching `SERVER_ENV`, a privileged operator, and corrects the root plus direct children to UID/GID `65532` and mode `0700` without recursive ownership changes. The runtime can then create its required direct `/data/temp` path.
-- Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads.
+- Inputs: explicit canonical `--storage-root`; optional backup local directory, rclone remote and rclone path must be supplied together. Local paths must be absolute non-symlink directories; rclone names/paths are strictly validated.
+- Side effects: default mode is validation-only. `--apply` requires `--environment development|production` and matching `SERVER_ENV`; it converges the storage root/direct queue/failed children to UID/GID `65532` mode `0700`, creates the owner-only local backup directory and invokes `rclone mkdir` for the configured cloud path. The runtime can then create its required direct `/data/temp` path.
+- Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads. Cloud mutation occurs only with explicit `--apply`.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
+- Manual validation reports the required queue/failed, local backup and rclone destination work without changing host or cloud state:
+  ```bash
+  ./scripts/init-storage.sh \
+    --storage-root /srv/smtp2graph/dev/data \
+    --backup-local-dir /srv/smtp2graph/backups \
+    --backup-rclone-remote gdrive-backup \
+    --backup-rclone-path smtp2graph/dev
+  ```
+- Manual apply creates/corrects the supplied storage root, creates the local backup directory as `0700`, and performs `rclone mkdir`. Use the actual storage root from the selected encrypted environment contract:
+  ```bash
+  ./scripts/init-storage.sh \
+    --storage-root /srv/smtp2graph/dev/data \
+    --backup-local-dir /srv/smtp2graph/backups \
+    --backup-rclone-remote gdrive-backup \
+    --backup-rclone-path smtp2graph/dev \
+    --environment development --apply
+  ```
 
 ## `bootstrap-swarm-host.sh`
 

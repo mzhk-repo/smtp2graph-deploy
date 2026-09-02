@@ -1,5 +1,23 @@
 # План тестування
 
+## Task 7.3 — Backup, restore і cold recovery
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-REC-001 | Backup creates checksum-verified local and rclone copies, retains 7/30 archives, and excludes queue, failed, logs and Secret payloads. | `./tests/recovery/cold-restore.sh` | Isolated fake-rclone regression; live destination values remain only in `env.*.enc`. |
+| TB-REC-002 | Restore accepts only a verified allowlisted archive and extracts only to a new or empty target. | `./tests/recovery/cold-restore.sh` | Does not rebind secrets, deploy or modify a live host. |
+| TB-REC-003 | Cold-host recovery re-establishes age custody, Secret mapping, bootstrap, immutable deploy and independent synthetic delivery. | Redacted operator runbook evidence | Elapsed time is recorded without a fixed RTO; queue is not restored and duplicate risk remains At-Least-Once. |
+
+## Task 7.2 — Alerts і independent synthetic delivery
+
+| ID | Контроль | Команда / evidence | Межа |
+|---|---|---|---|
+| TB-OBS-001 | VictoriaMetrics reaches the gateway only on encrypted overlay DNS `smtp2graph_gateway:9464`; scrape has stable `env=prod`, `service=smtp2graph`, `component=gateway` labels and port 9464 is not host-published. | `./tests/shell/test-monitoring-contract.sh`; `/opt/victoriametrics-grafana/tests/test-observability-config.sh` | Static control-plane plus authorised monitoring-stack validation. |
+| TB-OBS-002 | Dashboard and alerts cover metrics availability, auth, delivery failure/retry, 60/80% storage, failed queue and TLS expiry at 30/7 days. | `/opt/victoriametrics-grafana/tests/test-observability-config.sh` | Validates monitoring-repository artifacts; no centralized mail-content logging. |
+| TB-OBS-003 | Synthetic STARTTLS submission to allowlisted non-production recipient is accepted and causes `smtp2graph_delivery_attempts_total{result="succeeded"}` to increase; fresh failure is independently alerted. | `/opt/victoriametrics-grafana/tests/integration/test-synthetic-and-metrics.sh` and redacted operator evidence | Requires authorised monitoring manager, deployed non-production gateway and external notification channel. Password, recipient, marker and message body are not evidence. |
+
+Task 7.2 status: **Completed for the deployed monitoring integration**. Task 7.3 backup/restore, Task 7.4 game day/runbook handoff and Task 7.5 Gate D remain required before production readiness.
+
 ## Task 6.1 — Integration та client compatibility suite
 
 ### Scope and execution order

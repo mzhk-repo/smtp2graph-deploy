@@ -19,7 +19,7 @@
 | [Phase 4](#phase-4--authentication-authorization-and-security-baseline) | Authentication, authorization і security baseline | `v0.4`: Gate C evidence, TLS, secret boundary та hardening | Gate C пройдений на non-production evidence |
 | [Phase 5](#phase-5--deployment-and-gitsecops) | Deployment та GitSecOps | `v0.5`: staging deployment candidate з rollback | staging deploy, no-op redeploy і rollback rehearsal успішні |
 | [Phase 6](#phase-6--testing-stabilization-and-release-candidate) | Testing, stabilization та release candidate | `v0.6`: функціональне/security/failure/recovery evidence | усі Must-тести зелені; Critical/High findings закриті або formally excepted |
-| [Phase 7](#phase-7--observability-backup-restore-and-operations) | Observability, backup/restore та operations | `v0.7`: runbooks, game day і Gate D evidence | Gate D пройдений; cold recovery вкладається у RTO 60 хвилин |
+| [Phase 7](#phase-7--observability-backup-restore-and-operations) | Observability, backup/restore та operations | `v0.7`: runbooks, game day і Gate D evidence | Gate D пройдений; practical cold recovery verified |
 | [Phase 8](#phase-8--optional-post-production-hardening) | Optional post-production hardening | контрольовані покращення після `v1.0` | окремий business/security trigger і approved scope; фаза не є передумовою `v1.0` |
 
 ## Переходи між фазами
@@ -63,7 +63,7 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 - Окремі SMTP credentials, IP/subnet allowlist, exact `From` allowlist, ліміти розміру, частоти й сесій.
 - Durable bounded queue, контрольований retry/dead-letter lifecycle та видалення failed payloads не пізніше 7 днів.
 - Docker Secrets у `/run/secrets/`; plaintext production secrets відсутні у Git, environment, image, CI artifacts і logs.
-- Відтворювані deploy, rollback і cold recovery з RTO 60 хвилин.
+- Відтворювані deploy, rollback і practical cold recovery без fixed RTO.
 - Незалежні health/synthetic checks, VictoriaMetrics + Grafana та незалежний канал сповіщень.
 
 ## Очікуваний release path
@@ -137,7 +137,7 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 - **Goal:** забезпечити виявлення збоїв і відновлення в межах SLO/RTO.
 - **Included capabilities:** health, structured logs, correlation IDs, minimal metrics, VictoriaMetrics/Grafana, alerts, synthetic delivery, backup/restore/rollback runbooks.
 - **Excluded capabilities:** active-active HA, довгостроковий mail archive.
-- **Exit criteria:** оператор проходить game day; cold recovery вкладається у 60 хвилин; alert надходить незалежним каналом.
+- **Exit criteria:** оператор проходить game day; practical cold recovery verified; alert надходить незалежним каналом.
 
 ## v1.0 — Production Minimum Release
 
@@ -164,7 +164,7 @@ Roadmap перетворює погоджені вимоги `docs/SPEC.md` на
 - Non-root container або formal blocker/exception до Gate D; no privileged/socket/host networking.
 - Secure CI/CD, protected production approval, secret/dependency/image/IaC scans і SBOM.
 - Integration, security, failure, rollback і cold recovery tests.
-- Structured privacy-safe logs, health, queue/disk/expiry/failure monitoring і independent synthetic alert.
+- Structured privacy-safe logs, health, queue/disk/TLS-certificate-expiry/failure monitoring і independent synthetic alert.
 - `README.md`, `docs/AI_CONTEXT.md`, ADR, test plan, runbook, client onboarding і script runbook у відповідні фази.
 
 ## Should Have
@@ -241,7 +241,7 @@ Implementation task готова до виконання, лише якщо:
 - [ ] Gate B, C і D пройдені з evidence.
 - [ ] Усі production-minimum acceptance criteria зі SPEC перевірені.
 - [ ] Backup/restore, rollback, credential revocation і cold recovery виконані практично.
-- [ ] RTO 60 хвилин підтверджено; RPO assumptions задокументовані.
+- [ ] Practical cold recovery підтверджено; RPO assumptions задокументовані.
 
 
 ---
@@ -919,7 +919,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** виявляти failure без журналювання sensitive content.
 - **Depends on:** Phase 6.
 - **Definition of Ready:** available gateway signals і privacy fields підтверджені.
-- **Implementation Steps:** liveness/readiness; correlation ID; structured metadata; log rotation 30 днів; metrics for process, queue, disk, failures, latency/retries, credential/cert expiry.
+- **Implementation Steps:** liveness/readiness; correlation ID; structured metadata; bounded Docker log rotation by size/file count; metrics for process, queue, disk, failures, latency/retries and TLS certificate expiry.
 - **Files / Directories:** `deploy/monitoring/`, `deploy/config/`, `tests/observability/`.
 - **Artifacts:** data dictionary і dashboard.
 - **Acceptance Criteria:** body/attachment/token/password/reset URL не логуються; queue/disk thresholds видимі; restart і auth failures distinguishable.
@@ -937,10 +937,10 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 - **Goal:** сповіщати про end-to-end failure через незалежний канал.
 - **Depends on:** Task 7.1.
 - **Definition of Ready:** test recipient, interval, ownership і external notification channel погоджені.
-- **Implementation Steps:** VictoriaMetrics scrape/rules; Grafana dashboard; alerts на process, failure rate, queue 60/80%, disk і expiry; для Entra client secret та SMTP TLS certificate створити warning alert за 30 днів до expiry і critical alert за 7 днів; synthetic delivery з контрольованим marker/receipt; anti-loop policy.
+- **Implementation Steps:** VictoriaMetrics scrape/rules; Grafana dashboard; alerts на process, failure rate, queue 60/80%, disk і TLS certificate expiry; synthetic delivery з контрольованим marker/receipt; anti-loop policy.
 - **Files / Directories:** `deploy/monitoring/`, `tests/smoke/synthetic-*`, `docs/RUNBOOK.md`.
 - **Artifacts:** alert catalog із severity/owner/action.
-- **Acceptance Criteria:** simulated outage produces independent alert; Entra secret і TLS certificate з контрольованим expiry `30` та `7` днів активують відповідно warning і critical alert із owner/action; recovery closes alert; synthetic traffic rate-limited і не містить secrets.
+- **Acceptance Criteria:** simulated outage produces independent alert; recovery closes alert; synthetic traffic rate-limited і не містить secrets.
 - **Validation Commands:**
   ```bash
   ./tests/observability/test-alerts.sh --environment staging
@@ -952,17 +952,17 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 ### Task 7.3 — Backup, restore, rollback і cold recovery
 
 - **Priority:** Must
-- **Goal:** підтвердити RTO 60 хвилин без перетворення queue на archive.
+- **Goal:** practically verify cold recovery without turning queue into an archive.
 - **Depends on:** Tasks 7.1–7.2.
 - **Definition of Ready:** backup target, encryption/custody, fresh host і recovery owners доступні.
 - **Implementation Steps:** allowlist backup non-secret config/manifests/public cert/recovery material; явно exclude `/data/queue` і `/data/failed`; restore на clean host; rotate/rebind secrets; synthetic verify; document replay decisions.
 - **Files / Directories:** `scripts/backup.sh`, `scripts/restore.sh`, `docs/RUNBOOK.md`, `tests/recovery/`.
-- **Artifacts:** encrypted backup manifest, restore evidence і measured RTO.
-- **Acceptance Criteria:** queue/failed payloads відсутні у planned backup; restore reproduces service; RTO ≤ 60 хв; duplicate risk documented.
+- **Artifacts:** checksum-verified local/cloud backup manifest і restore evidence.
+- **Acceptance Criteria:** queue/failed payloads відсутні у planned backup; restore reproduces control plane; secret rebind/deploy/synthetic steps documented; duplicate risk documented; fixed RTO не є критерієм.
 - **Validation Commands:**
   ```bash
-  ./scripts/backup.sh --environment staging --check
-  ./tests/recovery/cold-restore.sh --environment staging
+  ./scripts/backup.sh --environment development --env-file /absolute/path/to/env.dev.enc --check
+  ./tests/recovery/cold-restore.sh
   ```
 - **Risks:** backup leaks secrets або excludes required cert material.
 - **Rollback Notes:** restore не перезаписує active host; production restore потребує явного target confirmation.
@@ -999,7 +999,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 
 - [ ] Alerts і synthetic незалежні від gateway delivery path.
 - [ ] Backup exclusions і cold restore practically verified.
-- [ ] RTO ≤ 60 хвилин.
+- [ ] Practical cold recovery verified; elapsed time recorded without fixed RTO.
 - [ ] Runbooks пройдені іншим оператором.
 - [ ] Security, M365, platform і client owner sign-offs отримані.
 

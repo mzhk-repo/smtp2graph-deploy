@@ -52,12 +52,18 @@ services:
       test:
         - CMD-SHELL
         - >-
-          node -e "require('net').connect(2525, '127.0.0.1').once('connect',
-          () => process.exit(0)).once('error', () => process.exit(1))"
+          node -e "const r=require('http').get('http://127.0.0.1:9464/readyz',
+          x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));
+          r.setTimeout(3000,()=>{r.destroy();process.exit(1)})"
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "30"
     networks:
       smtp2graph_internal:
         aliases:

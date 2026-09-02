@@ -16,6 +16,7 @@ usage() {
 Usage:
   scripts/deploy-orchestrator-swarm.sh --env-file FILE --check
   scripts/deploy-orchestrator-swarm.sh --env-file FILE --deploy --apply
+  scripts/deploy-orchestrator-swarm.sh --env-file FILE --deploy --apply --secret-mapping-already-reconciled
   scripts/deploy-orchestrator-swarm.sh --env-file FILE --status
   scripts/deploy-orchestrator-swarm.sh --env-file FILE --rollback \
     --image-digest IMAGE@sha256:DIGEST --queue-compatibility-confirmed --apply
@@ -28,6 +29,7 @@ USAGE
 
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 init_storage_script=${SMTP_INIT_STORAGE_SCRIPT:-"${project_root}/scripts/init-storage.sh"}
+reconcile_secrets_script=${SMTP_RECONCILE_SOPS_SECRETS_SCRIPT:-"${project_root}/scripts/reconcile-sops-secrets.sh"}
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
@@ -40,6 +42,7 @@ queue_compatibility_confirmed=false
 approval_context=''
 release_tag=''
 declared_deploy_ref=''
+secret_mapping_already_reconciled=false
 
 while (($#)); do
   case "$1" in
@@ -76,6 +79,10 @@ while (($#)); do
       declared_deploy_ref=${2:-}
       shift 2
       ;;
+    --secret-mapping-already-reconciled)
+      secret_mapping_already_reconciled=true
+      shift
+      ;;
     -h | --help)
       usage
       exit 0
@@ -93,6 +100,7 @@ allowed_keys=(
   SWARM_STACK_NAME
   SWARM_OVERLAY_NETWORK
   SMTP2GRAPH_STORAGE_HOST_PATH
+  SMTP2GRAPH_BACKUP_LOCAL_DIR SMTP2GRAPH_BACKUP_RCLONE_REMOTE SMTP2GRAPH_BACKUP_RCLONE_PATH
   SMTP2GRAPH_MODE
   GRAPH_AUTH_MODE
   SMTP_MAX_MESSAGE_BYTES
@@ -165,6 +173,16 @@ stack_env+=("SMTP2GRAPH_NODE_LABEL=${SMTP2GRAPH_NODE_LABEL}")
 config_version=$(sha256sum "$project_root/scripts/entrypoint.sh" "$project_root/scripts/lib/render-config.sh" "$project_root/deploy/config/gateway-config.yml.template" "$project_root/scripts/init-storage.sh" | sha256sum | awk '{print substr($1, 1, 16)}')
 stack_env+=("SMTP2GRAPH_CONFIG_VERSION=${config_version}")
 
+refresh_stack_secret_env() {
+  local key index
+  for key in "${secret_mapping_keys[@]}"; do
+    for index in "${!stack_env[@]}"; do
+      [[ "${stack_env[$index]}" == "${key}="* ]] || continue
+      stack_env[index]="${key}=${!key}"
+    done
+  done
+}
+
 run_stack_config() {
   command -v docker >/dev/null || die 'docker is required.'
   env "${stack_env[@]}" docker stack config -c "$stack_file" >/dev/null
@@ -176,7 +194,40 @@ deploy_stack() {
 
 initialize_storage() {
   [[ "$init_storage_script" = /* && -x "$init_storage_script" && ! -L "$init_storage_script" ]] || die 'storage initializer must be an absolute executable non-symlink file.'
-  "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" --environment "$environment" --apply
+  local backup_args=()
+  if [[ -n "${SMTP2GRAPH_BACKUP_LOCAL_DIR:-}${SMTP2GRAPH_BACKUP_RCLONE_REMOTE:-}${SMTP2GRAPH_BACKUP_RCLONE_PATH:-}" ]]; then
+    backup_args=(--backup-local-dir "$SMTP2GRAPH_BACKUP_LOCAL_DIR" --backup-rclone-remote "$SMTP2GRAPH_BACKUP_RCLONE_REMOTE" --backup-rclone-path "$SMTP2GRAPH_BACKUP_RCLONE_PATH")
+  fi
+  "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" "${backup_args[@]}" --environment "$environment" --apply
+}
+
+reconcile_deploy_secrets() {
+  local reconcile_mapping_file mapping_parent
+  reconcile_mapping_file=$TLS_SECRET_MAPPING_FILE
+  mapping_parent=$(dirname "$TLS_SECRET_MAPPING_FILE") || die 'could not resolve Secret mapping parent directory.'
+  if [[ ! -w "$mapping_parent" ]]; then
+    reconcile_mapping_file=$(mktemp "${SOPS_DEPLOY_STAGE_DIR}/secret-mapping.XXXXXX") || die 'could not create temporary Secret mapping.'
+    cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    chmod 600 "$reconcile_mapping_file"
+    log 'using an ephemeral Secret mapping because the configured mapping directory is not writable.'
+  fi
+  local reconcile_args=(
+    --environment "$environment"
+    --env-file "$SOPS_DEPLOY_SOURCE_FILE"
+    --mapping-file "$reconcile_mapping_file"
+    --apply
+  )
+  [[ "$reconcile_secrets_script" = /* && -x "$reconcile_secrets_script" && ! -L "$reconcile_secrets_script" ]] || die 'SOPS Secret reconciler must be an absolute executable non-symlink file.'
+  if [[ "$environment" == production ]]; then
+    reconcile_args+=(--approval-context "$approval_context")
+  fi
+  "$reconcile_secrets_script" "${reconcile_args[@]}"
+  # A changed secret receives a new content-addressed name. Reload the atomic
+  # mapping so the next stack render changes the Swarm task template exactly
+  # when a mounted Secret changed.
+  TLS_SECRET_MAPPING_FILE=$reconcile_mapping_file
+  load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not reload complete Secret mapping after reconciliation.'
+  refresh_stack_secret_env
 }
 
 require_apply_authorization() {
@@ -195,7 +246,7 @@ require_apply_authorization() {
 
 case "$operation" in
   check)
-    [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--check accepts no mutation or rollback options.'
+    [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false && "$secret_mapping_already_reconciled" == false ]] || die '--check accepts no mutation or rollback options.'
     run_stack_config
     log 'PASS: stack input and rendered Swarm configuration are valid.'
     ;;
@@ -203,12 +254,19 @@ case "$operation" in
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
     run_stack_config
     require_apply_authorization
+    if [[ "$secret_mapping_already_reconciled" == true ]]; then
+      [[ "$environment" == development ]] || die '--secret-mapping-already-reconciled is development-only.'
+      log 'using explicitly prepared development Secret mapping for rehearsal.'
+    else
+      reconcile_deploy_secrets
+    fi
+    run_stack_config
     initialize_storage
     deploy_stack
     log "PASS: ${environment} stack deploy submitted; run check-network-policy.sh after service convergence."
     ;;
   status)
-    [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--status accepts no mutation or rollback options.'
+    [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false && "$secret_mapping_already_reconciled" == false ]] || die '--status accepts no mutation or rollback options.'
     command -v docker >/dev/null || die 'docker is required.'
     docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'
     docker service inspect "${SWARM_STACK_NAME}_gateway" >/dev/null
@@ -218,6 +276,7 @@ case "$operation" in
     [[ -n "$rollback_image" ]] || die '--rollback requires --image-digest.'
     is_digest "$rollback_image" || die '--image-digest must be an immutable sha256 digest.'
     [[ "$queue_compatibility_confirmed" == true ]] || die '--rollback requires --queue-compatibility-confirmed.'
+    [[ "$secret_mapping_already_reconciled" == false ]] || die '--rollback does not accept --secret-mapping-already-reconciled.'
     run_stack_config
     require_apply_authorization
     initialize_storage

@@ -50,6 +50,11 @@ cat >"$fake_bin/id" <<'EOF'
 [[ "${1:-}" == -u ]] && { printf '%s\n' 0; exit 0; }
 exec /usr/bin/id "$@"
 EOF
+cat >"$fake_bin/chown" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
 cat >"$fake_bin/install" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -57,7 +62,7 @@ target=${!#}
 mkdir -p -- "$target"
 chmod 0700 -- "$target"
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/id" "$fake_bin/install"
+chmod 700 "$fake_bin/docker" "$fake_bin/id" "$fake_bin/chown" "$fake_bin/install"
 
 test_env=(PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" SMTP2GRAPH_TEST_MODE=1)
 if env "${test_env[@]}" FAKE_RUNNING=1 "$script" --env-file "$env_file" --test-root "$tmp" --check >/dev/null 2>&1; then

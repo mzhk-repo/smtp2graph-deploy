@@ -85,8 +85,8 @@ PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_e
 PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
 test -f "$state/network"
 test "$(cat "$state/label")" = true
-rg -q -- '--check --file' "$state/nft.calls"
-rg -q -- '--file' "$state/nft.calls"
+grep -Fq -- '--check --file' "$state/nft.calls"
+grep -Fq -- '--file' "$state/nft.calls"
 
 sed -i 's/"encrypted":""/"encrypted":"false"/' "$fake_bin/docker"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then

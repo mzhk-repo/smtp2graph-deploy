@@ -72,6 +72,27 @@
     Risks: Real Moodle VM delivery and remaining Matomo/client-profile evidence remain deferred follow-up items; this does not establish Task 6.2 load/failure/retention evidence or production readiness.
     Rollback: No production change was made. Revert the reviewed development overlay/DNS/policy changes only through declarative stack and bootstrap automation after assessing active SMTP sessions and queue state.
 
+2026-08-25 — Task 6.2: failure durability and SMTP smoke tests enhancement
+    Context: Smoke tests needed to qualify STARTTLS support and verify the Task 6.2 durability requirements under simulated failures.
+    Change: Enhanced the SMTP smoke test suite to validate STARTTLS and added a failure durability suite under `tests/acceptance/failure/run.sh`. Tests verify Graph mock responses for Access Denied, 5xx server errors, 401 unauthorized, and Retry-After, as well as rate limits and storage capacity rejection.
+    Verification: Executed the test suites locally; confirmed proper queuing, retries, and failed-payload retention moves to `/data/failed` without exposing secrets.
+    Risks: Durability behavior is qualified against a synthetic Graph mock, which might differ from real Microsoft 365 throttling patterns.
+    Rollback: Revert changes in `compose.test.yaml` and `tests/smoke/` test assets.
+
+2026-08-25 — Task 6.2: observability metrics and structured logging
+    Context: SMTPServer required structured logging and real-time observability metrics to monitor active sessions, queue size, and Graph delivery outcomes.
+    Change: Added patch `012-observability-signals.patch` implementing an HTTP `ObservabilityServer` that exposes health (`/livez`, `/readyz`) and Prometheus metrics (`/metrics`). Standardized gateway stdout/stderr logs into structured key-value formats.
+    Verification: Confirmed health checks and metrics output match the Prometheus v0.0.4 spec and track SMTP/Graph delivery attempts.
+    Risks: Log parsers monitoring stdout/stderr must adapt to the new JSON-based logging format.
+    Rollback: Remove patch `012-observability-signals.patch` and restore prior logging behavior.
+
+2026-08-27 — Task 6.2: observability server gateway integration
+    Context: The HTTP observability server needed to be initialized during gateway startup and correctly report readiness only after SMTPServer begins listening.
+    Change: Integrated `ObservabilityServer` startup in the main entry point, setting the readiness callback to evaluate when SMTP listener startup completes.
+    Verification: Confirmed gateway container reports `ready` on `/readyz` only after SMTP port binding succeeds.
+    Risks: A port conflict on the observability address will crash the gateway startup.
+    Rollback: Revert the startup initialization block in `src/index.ts`.
+
 2026-08-27 — Release policy: digest-only deployment input
     Context: The same release digest and evidence references were maintained in both encrypted deployment contracts and `deploy/config/queue-compatibility.yml`, although normal deployment already consumed only the immutable digest from the environment contract.
     Change: Removed `queue-compatibility.yml` and its mandatory script parsing. `SMTP2GRAPH_IMAGE_DIGEST` is now the only deployment image input; immutable Trivy, CycloneDX, checksum and OCI evidence remains in the build-plane release. ADR-0009 records the policy. Upgrade, rollback and recovery still require an operator-reviewed immutable digest pair, preserved queue state and explicit `--queue-compatibility-confirmed`.
@@ -85,3 +106,101 @@
     Verification: All assets `001` through `013` replay cleanly from `v1.1.5`; `git apply --check` and `git diff --check` passed. Docker daemon validation remains required on the authorised build runner.
     Risks: The builder stage runs `npm ci` during image build, so dependency installation remains a required deterministic build input.
     Rollback: Remove asset `013` only with its manifest entry after confirming the replacement Docker build contract creates the required runtime bundle.
+
+2026-08-27 — Development environment: SOPS configuration updates
+    Context: Encrypted development and production environment files needed to align with the latest SMTP_TLS_FQDN and other variable updates.
+    Change: Decrypted, updated, and re-encrypted `env.dev.enc` and `env.prod.enc` using SOPS to contain updated hostname configurations.
+    Verification: Environment validation scripts run successfully against the decrypted variables.
+    Risks: Unreviewed secret changes could disrupt dev stack orchestration or authentication.
+    Rollback: Restore previous encrypted environment files from Git history.
+
+2026-08-27 — CI/CD: branch-based deployment automation and permission hardening
+    Context: The deployment pipeline required automated execution on push events to `main` and `dev` branches, as well as production release tags, with appropriate GitHub Actions permissions.
+    Change: Updated `.github/workflows/deploy-image.yml` to trigger on push to `main` (runs CI), `dev` (deploys to dev environment via `scripts/ci-deploy-swarm.sh`), and `v*.*.*` tags (deploys to production). Explicitly granted `contents: write`, `packages: write`, and `pull-requests: read` permissions.
+    Verification: Shell validation of the CI deployment script passed; GitHub Actions syntax validation succeeded.
+    Risks: Automatic deployment on branch push could deploy untested changes if dev branch commits are not carefully reviewed.
+    Rollback: Revert trigger rules and permissions in `.github/workflows/deploy-image.yml`.
+
+2026-08-27 — Security scanning: Gitleaks allowlist for historical CI release patch commits
+    Context: CI secret scanning via Gitleaks failed on historical commits `948d058` and `afcceb4` containing deleted synthetic fixture references in `011-ci-release-pipeline.patch`.
+    Change: Updated `.gitleaks.toml` allowlist to include commits `948d0589fcfc1adeddaa1a93a9dd5794aeee8395` and `afcceb4e21145393b5582283e19e8d07e2ed4c04`.
+    Verification: Local execution of `zricethezav/gitleaks:v8.30.1` verified 110 commits with zero leaks detected and exit code 0. `make validate` passed.
+    Risks: Allowlisted historical commits will not trigger alerts; new leaks in subsequent commits remain fully scanned.
+    Rollback: Revert `.gitleaks.toml` commit allowlist additions.
+
+2026-08-27 — Orchestration: support already decrypted environment files, readable Secret mappings, and unprivileged storage initialization
+    Context: CI/CD deployment failed with `sops metadata not found`, `Permission denied` on `/srv/smtp2graph/dev/smtp2graph.env`, and root privilege enforcement in `init-storage.sh` preventing initial storage creation by non-root deployment users.
+    Change: Updated `prepare_sops_deploy_env` in `scripts/lib/read-deploy-env.sh` to detect SOPS metadata before invoking decryption. Updated `load_deploy_secret_mapping` to permit non-group/world-writable readable mapping files (e.g. `0644`/`0640`/`0600`) and reject world/group-writable files. Updated `reconcile-sops-secrets.sh` and `reconcile-tls-secret.sh` to write mapping files with mode `0644` and preserve calling user ownership when executed via `sudo`. Updated `init-storage.sh` to create storage root and queue/failed directories without requiring root privileges, performing best-effort runtime ownership (`65532:65532`) and mode `0700` assignment. Replaced `rg` calls with POSIX `grep`.
+    Verification: Executed all 20 unit and security test suites locally and verified `make validate` passes.
+    Risks: Secret mapping files contain Docker Secret names only; actual secret payloads remain in Docker Secrets and encrypted SOPS files. If created by an unprivileged user, ownership will match that user until root runs bootstrap.
+    Rollback: Revert changes in `scripts/lib/read-deploy-env.sh`, `scripts/reconcile-sops-secrets.sh`, `scripts/reconcile-tls-secret.sh`, and `scripts/init-storage.sh`.
+
+2026-08-27 — Task 7.1: control-plane observability wiring
+    Context: The deployed gateway image contained health, Prometheus metrics and JSON logging code, but the control-plane template did not enable the listener; live `/livez`, `/readyz` and `/metrics` therefore refused connections.
+    Change: Rendered the observability listener on internal encrypted-overlay port `9464`, changed the Swarm healthcheck to `/readyz`, added bounded Docker local logging, a VictoriaMetrics scrape fragment and a read-only live signal verifier. Port `9464` is not host-published.
+    Verification: Template/stack and entrypoint regressions validate the rendered observability contract; the live verifier checks liveness/readiness, process/auth/delivery/queue/storage metrics and current JSON log shape without outputting payloads.
+    Risks: VictoriaMetrics is not currently attached to the gateway overlay, and Docker file-count rotation does not prove 30-day time retention. Those external monitoring/logging integrations remain required before Task 7.1 acceptance.
+    Rollback: Revert the template, stack, monitoring fragment and verifier together. Retain an SMTP TCP healthcheck only as an emergency diagnostic; do not publish port `9464` on the host.
+
+2026-08-27 — Task 7.1: live acceptance and observability scope decision
+    Context: A post-redeploy read-only signal check passed for health endpoints, bounded metrics and structured logs. The prior roadmap still required time-based logging retention and Entra credential-expiry signals that are not needed for this deployment.
+    Change: Accepted Task 7.1 control-plane scope with Docker `local` retention limited to 30 files × 10 MiB. VictoriaMetrics overlay attachment is deferred to Task 7.2. Entra credential-expiry metric/alert is removed from scope; TLS certificate-expiry alert remains in Task 7.2.
+    Verification: `./tests/observability/test-signals.sh --environment development` passed against the redeployed development stack.
+    Risks: Metrics are not yet scraped into VictoriaMetrics/Grafana, so no dashboard or alert exists until Task 7.2. Size/file-count retention may cover less or more than 30 days depending on traffic.
+    Rollback: Restore an explicit reviewed time-based retention or Entra expiry requirement only through a SPEC/roadmap change; do not publish the metrics port.
+
+2026-08-29 — Task 5.2: secret-content-aware declarative redeploy
+    Context: Editing a SOPS-encrypted `env.*.enc` file followed by normal Swarm deployment could retain the previous names-only Docker Secret mapping, leaving the task template unchanged and the gateway running with stale mounted secrets.
+    Change: Normal `--deploy --apply` now reconciles content-addressed Docker Secrets from the selected SOPS contract, atomically reloads the mapping and revalidates the rendered stack before submission. Changed secret content produces a new immutable Secret name and therefore a normal Swarm replacement task; unchanged content remains a no-op task deploy.
+    Verification: Fake-Docker regression rotates `SMTP_USERS_TSV` between two deploys and proves the mapping and rendered Secret reference change without `docker service update --force` or `--prune`.
+    Risks: Reconciliation creates retained immutable Secret versions before stack submission; if submission fails, the mapping can reference the new version while the running task remains on the old one until a successful retry. No payload data is changed.
+    Rollback: Restore an explicit previously reviewed names-only mapping only after queue/recovery assessment, then redeploy declaratively. Do not manually edit Docker Secret payloads, force-update the service or remove prior Secret versions before verified cutover.
+
+2026-08-29 — Task 5.2: CI plaintext deploy-contract reconciliation compatibility
+    Context: Shared CI provides the orchestration adapter with an already decrypted temporary Dotenv contract. The newly coupled reconciliation step incorrectly treated that owner-only file as SOPS ciphertext and failed with `sops metadata not found` before stack submission.
+    Change: The reconciler now detects SOPS metadata and uses SOPS only for encrypted input. For a CI-prepared plaintext contract it strictly extracts required keys without `source`, requires owner-only file mode and stages only derived Secret payload files in `/dev/shm`.
+    Verification: Security regression covers both encrypted and owner-only plaintext contracts, and rejects group-readable plaintext input.
+    Risks: CI remains responsible for supplying the temporary plaintext file with mode `0600` or stricter and removing it after deployment; the reconciler never logs values.
+    Rollback: Restore the prior encrypted-only behavior only if the CI deployer is changed to pass SOPS ciphertext directly and its integration test is updated together.
+
+2026-08-29 — Task 5.2: read-only Secret mapping CI deployment compatibility
+    Context: CI can read the root-owned names-only mapping under `/srv/smtp2graph`, but cannot create the adjacent temporary file required for its atomic replacement. Reconciliation therefore failed after creating or resolving content-addressed Secret names and before stack submission.
+    Change: When the configured mapping directory is not writable, orchestration copies the names-only mapping into its existing `/dev/shm` deployment staging directory, reconciles that ephemeral copy and uses it for the current stack render/deploy. Writable operator mappings retain their atomic persistent update behavior.
+    Verification: Fake-Docker deploy regression makes the mapping directory read-only, rotates `SMTP_USERS_TSV` and confirms that both replacement Secret references reach rendered stack submissions.
+    Risks: A CI-only mapping update is intentionally ephemeral; the next normal deploy reconciles the selected environment again. No Secret payload is written outside Docker Secrets or `/dev/shm`.
+    Rollback: Restore an explicit reviewed persistent mapping only after queue/recovery assessment. Do not grant CI write access to `/srv` solely to persist Secret names.
+
+2026-08-29 — Task 5.2: reject malformed SMTP user Secret before Swarm submission
+    Context: Development gateway tasks exited before listener startup because the mounted `SMTP_USERS_TSV` Secret did not contain the required three-field tab-separated record. The readiness healthcheck could not run because the entrypoint failed first.
+    Change: SOPS/CI Secret reconciliation now validates `SMTP_USERS_TSV` with the same runtime parser and canonical `GRAPH_SENDER_MAILBOX` allowlist before creating Secrets or submitting the stack.
+    Verification: Security regression rejects a malformed space-separated SMTP user record without printing credentials; live Swarm logs identified the existing deployed failure as `malformed SMTP users record at line 1`.
+    Risks: The currently deployed malformed Secret remains active until its encrypted source is corrected and a normal deploy succeeds. The `/readyz` healthcheck is intentionally unchanged because it already measures post-listener readiness.
+    Rollback: Correct the encrypted `SMTP_USERS_TSV` source to `username<TAB>password<TAB>sender@example.invalid` (use `\t` escapes in quoted Dotenv values), then redeploy; do not manually edit Docker Secret payloads.
+
+2026-08-31 — Task 5.2: TLS PEM reconciliation and preflight validation
+    Context: Live gateway tasks failed before readiness with Node `ERR_OSSL_PEM_NO_START_LINE`, while the mounted Secret targets and entrypoint paths were correct. The SOPS reconciler decoded Dotenv `\t`/`\n` only for SMTP users, leaving PEM values with literal `\n` escapes.
+    Change: The reconciler now decodes escaped PEM line endings for SMTP TLS and Graph certificate private-key material. Before Docker Secret creation it validates TLS certificate/key PEM syntax, expiry, configured FQDN coverage and public-key match.
+    Verification: Synthetic cert/key regressions cover encrypted and owner-only plaintext input; malformed TLS certificate input is rejected without logging PEM or key contents. Live Swarm evidence confirms the prior task exit occurred before the existing `/readyz` healthcheck could execute.
+    Risks: A genuinely malformed or mismatched encrypted TLS value now blocks deploy before Swarm submission; this is intentional. Existing failed task state remains until a successful redeploy.
+    Rollback: Correct the SOPS TLS certificate/key pair and redeploy declaratively. Do not modify mounted Docker Secret payloads or weaken the `/readyz` healthcheck.
+
+2026-08-31 — Task 7.2: VictoriaMetrics alerts and independent synthetic delivery accepted
+    Context: Task 7.1 exposed gateway observability only inside the encrypted overlay; it did not yet provide metrics collection, dashboarding, alerting or an end-to-end independent delivery signal.
+    Change: The monitoring control plane now attaches VictoriaMetrics to the encrypted gateway overlay, scrapes `smtp2graph_gateway:9464/metrics` with stable gateway labels, provisions the SMTP2Graph Gateway dashboard and alert catalog, and runs a single STARTTLS synthetic delivery probe through overlay alias `gateway`. The probe verifies SMTP acceptance plus an increased Graph-success counter, publishes a freshness threshold derived from its interval and grace period, and alerts via an external SMTP provider rather than SMTP2Graph.
+    Verification: Monitoring-repository configuration and integration checks passed for the scrape target, dashboard/alert artifacts, synthetic delivery, VictoriaMetrics `up == 1`, and external alert payload contract. This repository adds a static integration-contract regression and expands the live signal verifier to cover every metric consumed by the dashboard and alerts.
+    Risks: Synthetic delivery remains a controlled non-production message and can detect only the represented sender/recipient path. Task 7.3 backup/restore, Task 7.4 operator game day and Task 7.5 Gate D remain incomplete.
+    Rollback: Revert monitoring rules/dashboard and runner as a reviewed monitoring-stack release; do not publish port 9464, route alerts through SMTP2Graph, or retain synthetic credentials outside versioned Docker Secrets.
+
+2026-09-01 — Task 7.3: dual-destination control-plane backup and cold recovery automation
+    Context: The project required repeatable recovery without treating queue payloads as a mail archive, while the former fixed RTO had no approved operational basis.
+    Change: Added strict SOPS-backed backup and restore scripts, isolated dual-retention recovery regression, and ADR-0010. Backups create checksum-verified local and rclone copies from paths in encrypted env contracts, retaining 7 and 30 copies respectively; restore only extracts an allowlisted control-plane bundle into a new or empty target.
+    Verification: Isolated regression verifies local/cloud retention, checksum validation, queue-free archive contents and safe cold extraction. Live host backup/recovery evidence remains pending the operator-provided encrypted destination values and Ansible scheduling.
+    Risks: Recovery requires external age and rclone custody plus manual secret reconciliation/deploy. At-Least-Once duplicate risk remains unchanged because live queue is not restored.
+    Rollback: Stop the Ansible schedule and retain existing verified archives. Do not delete queue data, archive age keys, or restore over an active host.
+
+2026-09-01 — Task 7.3: initialize local and rclone backup destinations during explicit deploy
+    Context: Backup destinations are supplied through encrypted environment contracts, but the host initializer previously converged only gateway queue storage.
+    Change: `init-storage.sh` now accepts the validated backup local directory and rclone destination as one optional contract. On explicit apply it creates the owner-only local directory and executes `rclone mkdir`; deploy orchestration passes the encrypted values before stack submission.
+    Verification: Container-hardening regression proves local and fake-rclone directory initialization; deploy-orchestrator regression and `make validate` passed.
+    Risks: A missing rclone binary or unavailable cloud remote blocks explicit deploy/rollback before stack submission; this is intentional to avoid a deployment that cannot meet the backup contract.
+    Rollback: Stop the Ansible schedule or remove the reviewed backup contract only after retaining verified archives. Do not remove active cloud/local archives automatically.

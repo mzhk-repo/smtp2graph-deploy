@@ -234,6 +234,19 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
 fi
 chmod 600 "$mapping_file"
 
+nonexistent_mapping_file="$tmp/nonexistent-secret-mapping.env"
+nonexistent_mapping_env="$tmp/nonexistent-mapping.env"
+sed "s#^TLS_SECRET_MAPPING_FILE=.*#TLS_SECRET_MAPPING_FILE=${nonexistent_mapping_file}#" "$env_file" >"$nonexistent_mapping_env"
+chmod 600 "$nonexistent_mapping_env"
+if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$nonexistent_mapping_env" --deploy --apply >/dev/null; then
+  printf 'ERROR: fresh deploy unexpectedly failed when Secret mapping file does not exist initially.\n' >&2
+  exit 1
+fi
+if [[ ! -f "$nonexistent_mapping_file" ]]; then
+  printf 'ERROR: Secret mapping file was not created by fresh deploy.\n' >&2
+  exit 1
+fi
+
 fallback_root="$tmp/fallback-root"
 mkdir -p "$fallback_root"
 cp "$env_file" "$fallback_root/.env"

@@ -2,6 +2,13 @@
 
 Продовження `CHANGELOG_2026_VOL_02.md`, ротованого після досягнення soft limit 300 рядків. Нові значущі user/operator-visible зміни додаються лише в цей том.
 
+2026-09-02 — Task CI/CD: fix secret mapping loading on fresh Swarm deployments
+    Context: CI/CD Swarm deployment via `scripts/ci-deploy-swarm.sh` and `scripts/deploy-orchestrator-swarm.sh` failed with exit code 64 ("Secret mapping must be an absolute regular non-symlink file") on fresh targets because the destination secret mapping file did not exist yet prior to initial reconciliation.
+    Change: In `scripts/deploy-orchestrator-swarm.sh`, deferred strict validation of the secret mapping file during initial `--deploy` environment loading until reconciliation executes, and handled initial staging when copying the file to temporary locations. In `scripts/reconcile-sops-secrets.sh`, ensured missing target mapping files are safely created with `0600` permissions. Added a test regression case in `tests/shell/test-deploy-orchestrator.sh`.
+    Verification: Shell test suite passed (`tests/shell/test-deploy-orchestrator.sh`), verifying that fresh deployments with non-existent secret mapping files succeed, populate secrets, and create the mapping file.
+    Risks: None. Permissions and non-symlink integrity checks remain strictly enforced.
+    Rollback: Revert the changes to `scripts/deploy-orchestrator-swarm.sh`, `scripts/reconcile-sops-secrets.sh`, and `tests/shell/test-deploy-orchestrator.sh`.
+
 2026-08-08 — Task 5.4: reconcile SMTP sender Secret after policy remediation
     Context: Development gateway failed startup because a stale versioned `smtp-users` Docker Secret retained a sender outside the single canonical `GRAPH_SENDER_MAILBOX` policy.
     Change: Reconciled the corrected SOPS-encrypted `SMTP_USERS_TSV` into immutable Docker Secrets and atomically updated the root-only names-only mapping before development redeploy.

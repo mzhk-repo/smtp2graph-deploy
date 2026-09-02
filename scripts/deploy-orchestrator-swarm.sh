@@ -126,12 +126,20 @@ allowed_keys+=("${secret_mapping_keys[@]}")
 load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" "${allowed_keys[@]}"
 
 [[ -n "${TLS_SECRET_MAPPING_FILE:-}" ]] || die 'required deployment key is missing: TLS_SECRET_MAPPING_FILE.'
-load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
+if [[ "$operation" == deploy && "$secret_mapping_already_reconciled" == false ]]; then
+  if [[ -f "$TLS_SECRET_MAPPING_FILE" ]]; then
+    load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || true
+  fi
+else
+  load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
+fi
 SMTP_ALLOWED_SENDER_ADDRESSES=$GRAPH_SENDER_MAILBOX
 
-for key in "${allowed_keys[@]}"; do
-  [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
-done
+if [[ "$operation" != deploy || "$secret_mapping_already_reconciled" == true ]]; then
+  for key in "${allowed_keys[@]}"; do
+    [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
+  done
+fi
 
 environment=$DEPLOY_ENVIRONMENT
 case "$environment" in
@@ -207,7 +215,9 @@ reconcile_deploy_secrets() {
   mapping_parent=$(dirname "$TLS_SECRET_MAPPING_FILE") || die 'could not resolve Secret mapping parent directory.'
   if [[ ! -w "$mapping_parent" ]]; then
     reconcile_mapping_file=$(mktemp "${SOPS_DEPLOY_STAGE_DIR}/secret-mapping.XXXXXX") || die 'could not create temporary Secret mapping.'
-    cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    if [[ -f "$TLS_SECRET_MAPPING_FILE" ]]; then
+      cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    fi
     chmod 600 "$reconcile_mapping_file"
     log 'using an ephemeral Secret mapping because the configured mapping directory is not writable.'
   fi
@@ -230,13 +240,17 @@ reconcile_deploy_secrets() {
   refresh_stack_secret_env
 }
 
-require_apply_authorization() {
-  [[ "$apply" == true ]] || die "--${operation} requires --apply."
-  if [[ "$environment" == production ]]; then
+require_production_authorization() {
     [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production requires a safe --approval-context identifier.'
     [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'production requires --release-tag vX.Y.Z.'
     [[ "$declared_deploy_ref" =~ ^[a-f0-9]{40}$ ]] || die 'production requires --declared-deploy-ref as a 40-character SHA.'
     [[ "$(git -C "$project_root" rev-parse HEAD)" == "$declared_deploy_ref" ]] || die 'declared deploy ref does not match checked-out control-plane SHA.'
+}
+
+require_apply_authorization() {
+  [[ "$apply" == true ]] || die "--${operation} requires --apply."
+  if [[ "$environment" == production ]]; then
+    require_production_authorization
   else
     [[ -z "$approval_context" && -z "$release_tag" && -z "$declared_deploy_ref" ]] || die 'development deploy does not accept production release options.'
   fi
@@ -252,7 +266,6 @@ case "$operation" in
     ;;
   deploy)
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
-    run_stack_config
     require_apply_authorization
     if [[ "$secret_mapping_already_reconciled" == true ]]; then
       [[ "$environment" == development ]] || die '--secret-mapping-already-reconciled is development-only.'
@@ -260,6 +273,9 @@ case "$operation" in
     else
       reconcile_deploy_secrets
     fi
+    for key in "${allowed_keys[@]}"; do
+      [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
+    done
     run_stack_config
     initialize_storage
     deploy_stack

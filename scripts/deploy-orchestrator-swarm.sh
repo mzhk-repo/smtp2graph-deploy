@@ -201,7 +201,18 @@ run_stack_config() {
   env "${stack_env[@]}" docker stack config -c "$stack_file" >/dev/null
 }
 
+ensure_overlay() {
+  local network_state
+  if network_state=$(docker network inspect "$SWARM_OVERLAY_NETWORK" --format '{{.Driver}} {{.Scope}} {{json .Options}}' 2>/dev/null); then
+    [[ "$network_state" == overlay\ swarm* ]] || die 'existing network must be a Swarm overlay.'
+    [[ "$network_state" == *'"encrypted":"true"'* || "$network_state" == *'"encrypted":""'* ]] || die 'existing overlay network is not encrypted.'
+    return
+  fi
+  docker network create --driver overlay --opt encrypted "$SWARM_OVERLAY_NETWORK" >/dev/null
+}
+
 deploy_stack() {
+  ensure_overlay
   env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
 }
 
@@ -304,6 +315,7 @@ case "$operation" in
     run_stack_config
     require_apply_authorization
     initialize_storage
+    ensure_overlay
     rollback_env=("${stack_env[@]}" "SMTP2GRAPH_IMAGE_DIGEST=${rollback_image}")
     env "${rollback_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
     log "PASS: explicit ${environment} rollback deploy submitted; verify queue and SMTP delivery before closing the change."

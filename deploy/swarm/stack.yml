@@ -127,9 +127,6 @@ services:
         mode: 0400
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.labels.${SMTP2GRAPH_NODE_LABEL:?SMTP2GRAPH_NODE_LABEL is required} == true
       resources:
         limits:
           cpus: "1.00"

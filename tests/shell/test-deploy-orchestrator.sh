@@ -76,6 +76,11 @@ fi
 case "${1:-} ${2:-}" in
   'secret inspect') test -f "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
   'secret create') cp "$4" "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
+  'network inspect')
+    printf '%s\n' 'overlay swarm {"encrypted":"true"}'
+    exit 0
+    ;;
+  'network create') exit 0 ;;
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
     printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"

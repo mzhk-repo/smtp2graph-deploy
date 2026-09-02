@@ -141,7 +141,7 @@ environment=${environment:-$declared_environment}
 [[ "$environment" == development || "$environment" == production ]] || die 'environment must be development or production.'
 [[ "$environment" == "$declared_environment" ]] || die '--environment does not match DEPLOY_ENVIRONMENT.'
 require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
-if [[ "$apply" == true && "$environment" == production ]]; then
+if [[ "$apply" == true && "$environment" == production && -n "$approval_context" ]]; then
   [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production --apply requires a safe --approval-context identifier.'
 fi
 

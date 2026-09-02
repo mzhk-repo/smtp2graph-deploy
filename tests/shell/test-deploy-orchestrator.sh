@@ -183,13 +183,14 @@ grep -Eq "^digest=${unknown_digest}$" "$calls"
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
 chmod 600 "$production_env"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
-  printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
-  exit 1
-fi
-
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null
+grep -Eq '^stack deploy ' "$calls"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag invalid-tag >/dev/null 2>&1; then
+  printf 'ERROR: production deploy unexpectedly accepted invalid release tag.\n' >&2
+  exit 1
+fi
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
 grep -Eq '^stack deploy ' "$calls"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then

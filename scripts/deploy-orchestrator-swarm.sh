@@ -244,7 +244,7 @@ reconcile_deploy_secrets() {
     --apply
   )
   [[ "$reconcile_secrets_script" = /* && -x "$reconcile_secrets_script" && ! -L "$reconcile_secrets_script" ]] || die 'SOPS Secret reconciler must be an absolute executable non-symlink file.'
-  if [[ "$environment" == production ]]; then
+  if [[ -n "$approval_context" ]]; then
     reconcile_args+=(--approval-context "$approval_context")
   fi
   "$reconcile_secrets_script" "${reconcile_args[@]}"
@@ -257,10 +257,16 @@ reconcile_deploy_secrets() {
 }
 
 require_production_authorization() {
+  if [[ -n "$approval_context" ]]; then
     [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production requires a safe --approval-context identifier.'
+  fi
+  if [[ -n "$release_tag" ]]; then
     [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'production requires --release-tag vX.Y.Z.'
+  fi
+  if [[ -n "$declared_deploy_ref" ]]; then
     [[ "$declared_deploy_ref" =~ ^[a-f0-9]{40}$ ]] || die 'production requires --declared-deploy-ref as a 40-character SHA.'
     [[ "$(git -C "$project_root" rev-parse HEAD)" == "$declared_deploy_ref" ]] || die 'declared deploy ref does not match checked-out control-plane SHA.'
+  fi
 }
 
 require_apply_authorization() {

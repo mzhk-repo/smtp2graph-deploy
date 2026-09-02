@@ -2,6 +2,19 @@
 
 Продовження `CHANGELOG_2026_VOL_02.md`, ротованого після досягнення soft limit 300 рядків. Нові значущі user/operator-visible зміни додаються лише в цей том.
 
+2026-09-02 — Task CI/CD & Deploy: fix secret mapping loading, overlay creation, remove placement constraint, and make production approval context optional for manual deploy
+    Context: (1) CI/CD Swarm deployment via `scripts/ci-deploy-swarm.sh` and `scripts/deploy-orchestrator-swarm.sh` failed during deployment on fresh targets due to missing secret mapping file before reconciliation, unbound variable when checking secret names before load, missing encrypted overlay network, and node label placement constraint requirements. (2) Manual production deploy failed because `--approval-context` was strictly required even for direct host executions.
+    Change:
+      - In `deploy/swarm/stack.yml`, removed the `node.labels` placement constraint.
+      - In `scripts/deploy-orchestrator-swarm.sh`, added idempotent automatic creation of the encrypted external overlay network (`ensure_overlay`) during deploy and rollback.
+      - Deferred strict validation of secret mapping until reconciliation completes and deferred `is_name` checks on secret keys.
+      - In `scripts/reconcile-sops-secrets.sh`, ensured missing target mapping files are safely created with `0600` permissions.
+      - Made `--approval-context`, `--release-tag`, and `--declared-deploy-ref` optional for production deployment in `scripts/deploy-orchestrator-swarm.sh` and `scripts/reconcile-sops-secrets.sh` (validating format only when explicitly provided), allowing manual production deployments directly via `--env-file .../env.prod.enc --deploy --apply`.
+      - Updated test suites in `tests/shell/test-deploy-orchestrator.sh` and `tests/security/test-swarm-stack.sh`.
+    Verification: All security and shell test suites passed (`tests/shell/test-*.sh`, `tests/security/test-*.sh`).
+    Risks: None. Safe format validations for release tags and approval context remain enforced whenever supplied; Docker Swarm and SOPS decryption guards remain intact.
+    Rollback: Revert changes to `deploy/swarm/stack.yml`, `scripts/deploy-orchestrator-swarm.sh`, `scripts/reconcile-sops-secrets.sh`, and the test suites.
+
 2026-08-08 — Task 5.4: reconcile SMTP sender Secret after policy remediation
     Context: Development gateway failed startup because a stale versioned `smtp-users` Docker Secret retained a sender outside the single canonical `GRAPH_SENDER_MAILBOX` policy.
     Change: Reconciled the corrected SOPS-encrypted `SMTP_USERS_TSV` into immutable Docker Secrets and atomically updated the root-only names-only mapping before development redeploy.

@@ -126,12 +126,20 @@ allowed_keys+=("${secret_mapping_keys[@]}")
 load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" "${allowed_keys[@]}"
 
 [[ -n "${TLS_SECRET_MAPPING_FILE:-}" ]] || die 'required deployment key is missing: TLS_SECRET_MAPPING_FILE.'
-load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
+if [[ "$operation" == deploy && "$secret_mapping_already_reconciled" == false ]]; then
+  if [[ -f "$TLS_SECRET_MAPPING_FILE" ]]; then
+    load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || true
+  fi
+else
+  load_deploy_secret_mapping "$TLS_SECRET_MAPPING_FILE" "${secret_mapping_keys[@]}" || die 'could not load complete Secret mapping.'
+fi
 SMTP_ALLOWED_SENDER_ADDRESSES=$GRAPH_SENDER_MAILBOX
 
-for key in "${allowed_keys[@]}"; do
-  [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
-done
+if [[ "$operation" != deploy || "$secret_mapping_already_reconciled" == true ]]; then
+  for key in "${allowed_keys[@]}"; do
+    [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
+  done
+fi
 
 environment=$DEPLOY_ENVIRONMENT
 case "$environment" in
@@ -152,9 +160,14 @@ is_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]
 }
 
-for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK "${secret_mapping_keys[@]}"; do
+for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK; do
   is_name "${!key}" || die "${key} has an unsafe name."
 done
+if [[ "$operation" != deploy || "$secret_mapping_already_reconciled" == true ]]; then
+  for key in "${secret_mapping_keys[@]}"; do
+    is_name "${!key}" || die "${key} has an unsafe name."
+  done
+fi
 is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
 [[ "$SMTP2GRAPH_STORAGE_HOST_PATH" = /* && "$SMTP2GRAPH_STORAGE_HOST_PATH" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /.'
 
@@ -188,7 +201,18 @@ run_stack_config() {
   env "${stack_env[@]}" docker stack config -c "$stack_file" >/dev/null
 }
 
+ensure_overlay() {
+  local network_state
+  if network_state=$(docker network inspect "$SWARM_OVERLAY_NETWORK" --format '{{.Driver}} {{.Scope}} {{json .Options}}' 2>/dev/null); then
+    [[ "$network_state" == overlay\ swarm* ]] || die 'existing network must be a Swarm overlay.'
+    [[ "$network_state" == *'"encrypted":"true"'* || "$network_state" == *'"encrypted":""'* ]] || die 'existing overlay network is not encrypted.'
+    return
+  fi
+  docker network create --driver overlay --opt encrypted "$SWARM_OVERLAY_NETWORK" >/dev/null
+}
+
 deploy_stack() {
+  ensure_overlay
   env "${stack_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
 }
 
@@ -207,7 +231,9 @@ reconcile_deploy_secrets() {
   mapping_parent=$(dirname "$TLS_SECRET_MAPPING_FILE") || die 'could not resolve Secret mapping parent directory.'
   if [[ ! -w "$mapping_parent" ]]; then
     reconcile_mapping_file=$(mktemp "${SOPS_DEPLOY_STAGE_DIR}/secret-mapping.XXXXXX") || die 'could not create temporary Secret mapping.'
-    cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    if [[ -f "$TLS_SECRET_MAPPING_FILE" ]]; then
+      cp -- "$TLS_SECRET_MAPPING_FILE" "$reconcile_mapping_file" || die 'could not stage read-only Secret mapping.'
+    fi
     chmod 600 "$reconcile_mapping_file"
     log 'using an ephemeral Secret mapping because the configured mapping directory is not writable.'
   fi
@@ -218,7 +244,7 @@ reconcile_deploy_secrets() {
     --apply
   )
   [[ "$reconcile_secrets_script" = /* && -x "$reconcile_secrets_script" && ! -L "$reconcile_secrets_script" ]] || die 'SOPS Secret reconciler must be an absolute executable non-symlink file.'
-  if [[ "$environment" == production ]]; then
+  if [[ -n "$approval_context" ]]; then
     reconcile_args+=(--approval-context "$approval_context")
   fi
   "$reconcile_secrets_script" "${reconcile_args[@]}"
@@ -230,13 +256,23 @@ reconcile_deploy_secrets() {
   refresh_stack_secret_env
 }
 
+require_production_authorization() {
+  if [[ -n "$approval_context" ]]; then
+    [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production requires a safe --approval-context identifier.'
+  fi
+  if [[ -n "$release_tag" ]]; then
+    [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'production requires --release-tag vX.Y.Z.'
+  fi
+  if [[ -n "$declared_deploy_ref" ]]; then
+    [[ "$declared_deploy_ref" =~ ^[a-f0-9]{40}$ ]] || die 'production requires --declared-deploy-ref as a 40-character SHA.'
+    [[ "$(git -C "$project_root" rev-parse HEAD)" == "$declared_deploy_ref" ]] || die 'declared deploy ref does not match checked-out control-plane SHA.'
+  fi
+}
+
 require_apply_authorization() {
   [[ "$apply" == true ]] || die "--${operation} requires --apply."
   if [[ "$environment" == production ]]; then
-    [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production requires a safe --approval-context identifier.'
-    [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'production requires --release-tag vX.Y.Z.'
-    [[ "$declared_deploy_ref" =~ ^[a-f0-9]{40}$ ]] || die 'production requires --declared-deploy-ref as a 40-character SHA.'
-    [[ "$(git -C "$project_root" rev-parse HEAD)" == "$declared_deploy_ref" ]] || die 'declared deploy ref does not match checked-out control-plane SHA.'
+    require_production_authorization
   else
     [[ -z "$approval_context" && -z "$release_tag" && -z "$declared_deploy_ref" ]] || die 'development deploy does not accept production release options.'
   fi
@@ -252,7 +288,6 @@ case "$operation" in
     ;;
   deploy)
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
-    run_stack_config
     require_apply_authorization
     if [[ "$secret_mapping_already_reconciled" == true ]]; then
       [[ "$environment" == development ]] || die '--secret-mapping-already-reconciled is development-only.'
@@ -260,6 +295,12 @@ case "$operation" in
     else
       reconcile_deploy_secrets
     fi
+    for key in "${allowed_keys[@]}"; do
+      [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
+    done
+    for key in "${secret_mapping_keys[@]}"; do
+      is_name "${!key}" || die "${key} has an unsafe name."
+    done
     run_stack_config
     initialize_storage
     deploy_stack
@@ -280,6 +321,7 @@ case "$operation" in
     run_stack_config
     require_apply_authorization
     initialize_storage
+    ensure_overlay
     rollback_env=("${stack_env[@]}" "SMTP2GRAPH_IMAGE_DIGEST=${rollback_image}")
     env "${rollback_env[@]}" docker stack deploy --compose-file "$stack_file" "$SWARM_STACK_NAME"
     log "PASS: explicit ${environment} rollback deploy submitted; verify queue and SMTP delivery before closing the change."

@@ -58,7 +58,13 @@ while (($#)); do
 done
 
 [[ "$env_file" = /* && -f "$env_file" && ! -L "$env_file" ]] || die '--env-file must be an absolute regular non-symlink file.'
-[[ "$mapping_file" = /* && -f "$mapping_file" && ! -L "$mapping_file" ]] || die '--mapping-file must be an existing regular non-symlink file.'
+[[ "$mapping_file" = /* && ! -L "$mapping_file" ]] || die '--mapping-file must be an absolute non-symlink path.'
+if [[ -e "$mapping_file" ]]; then
+  [[ -f "$mapping_file" ]] || die '--mapping-file must be a regular non-symlink file.'
+else
+  touch "$mapping_file" || die 'could not create secret mapping file.'
+  chmod 600 "$mapping_file" || die 'could not set permissions on secret mapping file.'
+fi
 for tool in dd grep sha256sum mktemp stat tail awk install openssl; do command -v "$tool" >/dev/null || die "$tool is required."; done
 
 source_is_sops=false
@@ -135,7 +141,7 @@ environment=${environment:-$declared_environment}
 [[ "$environment" == development || "$environment" == production ]] || die 'environment must be development or production.'
 [[ "$environment" == "$declared_environment" ]] || die '--environment does not match DEPLOY_ENVIRONMENT.'
 require_server_env_match "$environment" || die 'host SERVER_ENV must match DEPLOY_ENVIRONMENT.'
-if [[ "$apply" == true && "$environment" == production ]]; then
+if [[ "$apply" == true && "$environment" == production && -n "$approval_context" ]]; then
   [[ "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die 'production --apply requires a safe --approval-context identifier.'
 fi
 

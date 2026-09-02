@@ -76,6 +76,11 @@ fi
 case "${1:-} ${2:-}" in
   'secret inspect') test -f "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
   'secret create') cp "$4" "${FAKE_DOCKER_SECRET_DIR}/${3}" ;;
+  'network inspect')
+    printf '%s\n' 'overlay swarm {"encrypted":"true"}'
+    exit 0
+    ;;
+  'network create') exit 0 ;;
   'stack config')
     printf 'mapped-secret=%s\n' "${SMTP_CREDENTIALS_SECRET_NAME}" >>"${FAKE_DOCKER_CALLS}"
     printf 'derived-sender=%s\n' "${SMTP_ALLOWED_SENDER_ADDRESSES}" >>"${FAKE_DOCKER_CALLS}"
@@ -178,13 +183,14 @@ grep -Eq "^digest=${unknown_digest}$" "$calls"
 production_env="$tmp/production.env"
 sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$env_file" >"$production_env"
 chmod 600 "$production_env"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null 2>&1; then
-  printf 'ERROR: production deploy was unexpectedly accepted.\n' >&2
-  exit 1
-fi
-
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null
+grep -Eq '^stack deploy ' "$calls"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag invalid-tag >/dev/null 2>&1; then
+  printf 'ERROR: production deploy unexpectedly accepted invalid release tag.\n' >&2
+  exit 1
+fi
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
 grep -Eq '^stack deploy ' "$calls"
 if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
@@ -233,6 +239,19 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   exit 1
 fi
 chmod 600 "$mapping_file"
+
+nonexistent_mapping_file="$tmp/nonexistent-secret-mapping.env"
+nonexistent_mapping_env="$tmp/nonexistent-mapping.env"
+sed "s#^TLS_SECRET_MAPPING_FILE=.*#TLS_SECRET_MAPPING_FILE=${nonexistent_mapping_file}#" "$env_file" >"$nonexistent_mapping_env"
+chmod 600 "$nonexistent_mapping_env"
+if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$nonexistent_mapping_env" --deploy --apply >/dev/null; then
+  printf 'ERROR: fresh deploy unexpectedly failed when Secret mapping file does not exist initially.\n' >&2
+  exit 1
+fi
+if [[ ! -f "$nonexistent_mapping_file" ]]; then
+  printf 'ERROR: Secret mapping file was not created by fresh deploy.\n' >&2
+  exit 1
+fi
 
 fallback_root="$tmp/fallback-root"
 mkdir -p "$fallback_root"

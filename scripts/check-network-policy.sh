@@ -43,6 +43,7 @@ grep -Fq 'mode: host' "$stack_file" || die 'SMTP publish mode must be host.'
 grep -Fq 'iifname "lo" tcp dport 2525 accept' "$nft_file" || die 'development loopback smoke rule is missing.'
 grep -Fq 'tcp dport 2525 ip saddr @smtp2graph_smtp_clients accept' "$nft_file" || die 'nftables allowlist rule is missing.'
 grep -Fq 'tcp dport 2525 drop' "$nft_file" || die 'nftables deny rule is missing.'
+docker network inspect "$network" >/dev/null 2>&1 || die "network '${network}' not found. Verify overlay network name (e.g. smtp2graph_internal_enc)."
 docker network inspect "$network" --format '{{json .Options}}' | grep -Eq '"encrypted":"(true)?"' || die 'Swarm overlay encryption is not enabled.'
 nft list ruleset | grep -Fq 'smtp2graph_smtp_clients' || die 'smtp2graph nftables policy is not loaded.'
 secret_spec=$(docker service inspect "${stack_name}_gateway" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.File.Name}} {{.File.UID}} {{.File.GID}} {{printf "%#o" .File.Mode}}{{"\n"}}{{end}}') || die 'could not inspect gateway Secret mounts.'

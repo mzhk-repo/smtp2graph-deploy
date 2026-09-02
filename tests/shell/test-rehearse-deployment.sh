@@ -33,6 +33,9 @@ printf '%s\n' \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${storage}" \
+  "SMTP2GRAPH_BACKUP_LOCAL_DIR=${storage}/backups" \
+  'SMTP2GRAPH_BACKUP_RCLONE_REMOTE=gdrive-backup' \
+  'SMTP2GRAPH_BACKUP_RCLONE_PATH=smtp2graph/dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \
@@ -85,6 +88,11 @@ case "${1:-} ${2:-}" in
     if [[ "$*" == *'{{.ID}}'* ]]; then printf '%s\n' task123
     else printf '%s\n' 'Running 1 second ago|'; fi
     ;;
+  'network inspect')
+    printf '%s\n' 'overlay swarm {"encrypted":"true"}'
+    exit 0
+    ;;
+  'network create') exit 0 ;;
   'secret inspect') [[ -f "${FAKE_SECRET_STATE}" ]] ;;
   'secret create') touch "${FAKE_SECRET_STATE}" ;;
   'secret rm') rm -f -- "${FAKE_SECRET_STATE}" ;;

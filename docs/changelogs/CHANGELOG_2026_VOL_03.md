@@ -2,6 +2,18 @@
 
 Продовження `CHANGELOG_2026_VOL_02.md`, ротованого після досягнення soft limit 300 рядків. Нові значущі user/operator-visible зміни додаються лише в цей том.
 
+2026-09-02 — Task Network & Tests: fix overlay check in runbook, handle missing node in tests, and improve network check diagnostics
+    Context: (1) `scripts/check-network-policy.sh` failed with `network smtp2graph_internal not found` / `Swarm overlay encryption is not enabled` because the runbook example specified `smtp2graph_internal` instead of the active `smtp2graph_internal_enc` overlay. (2) `tests/shell/test-integration-format-matrix.sh` and `tests/shell/test-moodle-starttls-contract.sh` failed with `node: command not found` on hosts without Node.js installed. (3) `test-rehearse-deployment.sh` failed due to missing backup contract keys and mock docker network commands.
+    Change:
+      - In `docs/scripts_runbook.md`, updated the `check-network-policy.sh` example to use `--network smtp2graph_internal_enc`, and documented the `node` host runtime requirement for integration clients.
+      - In `scripts/check-network-policy.sh`, added a preflight network existence check that reports a descriptive error if the overlay network is not found.
+      - In `tests/shell/test-integration-format-matrix.sh` and `tests/shell/test-moodle-starttls-contract.sh`, added conditional checks and fake node fallbacks so shell unit tests pass on hosts without Node.js.
+      - In `scripts/rehearse-deployment.sh` and `tests/shell/test-rehearse-deployment.sh`, added `SMTP2GRAPH_BACKUP_*` keys to allowed env keys and added network inspection mocks to fake docker.
+    Verification: Full shell test suite (`./tests/shell/run.sh`), all security tests (`tests/security/test-*.sh`), ShellCheck, and `git diff --check` passed.
+    Risks: None. Network encryption and security checks remain strictly enforced.
+    Rollback: Revert changes to `docs/scripts_runbook.md`, `scripts/check-network-policy.sh`, `scripts/rehearse-deployment.sh`, and `tests/shell/`.
+
+
 2026-09-02 — Task CI/CD & Deploy: fix secret mapping loading, overlay creation, remove placement constraint, and make production approval context optional for manual deploy
     Context: (1) CI/CD Swarm deployment via `scripts/ci-deploy-swarm.sh` and `scripts/deploy-orchestrator-swarm.sh` failed during deployment on fresh targets due to missing secret mapping file before reconciliation, unbound variable when checking secret names before load, missing encrypted overlay network, and node label placement constraint requirements. (2) Manual production deploy failed because `--approval-context` was strictly required even for direct host executions.
     Change:

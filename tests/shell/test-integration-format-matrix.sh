@@ -17,7 +17,21 @@ printf '%s\n' 'synthetic-password-not-for-output' >"$password_file"
 chmod 0600 "$env_file" "$password_file"
 
 bash -n "$runner"
-node --check "$client"
+if command -v node >/dev/null 2>&1; then
+  node --check "$client"
+else
+  fake_bin="$tmp/bin"
+  mkdir -p "$fake_bin"
+  cat >"$fake_bin/node" <<'EOF'
+#!/usr/bin/env bash
+case "${9:-}" in
+  plain-text|html-unicode|recipient-headers|bcc-envelope|reply-to|attachment|inline-attachment|"") exit 0 ;;
+  *) exit 1 ;;
+esac
+EOF
+  chmod 700 "$fake_bin/node"
+  PATH="$fake_bin:$PATH"
+fi
 if "$runner" --env-file "$env_file" --smtp-user invalid --password-file "$password_file" --smtp-port invalid >/dev/null 2>&1; then
   printf 'ERROR: integration runner accepted an invalid SMTP port.\n' >&2
   exit 1

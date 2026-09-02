@@ -160,9 +160,14 @@ is_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]
 }
 
-for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK "${secret_mapping_keys[@]}"; do
+for key in SWARM_STACK_NAME SWARM_OVERLAY_NETWORK; do
   is_name "${!key}" || die "${key} has an unsafe name."
 done
+if [[ "$operation" != deploy || "$secret_mapping_already_reconciled" == true ]]; then
+  for key in "${secret_mapping_keys[@]}"; do
+    is_name "${!key}" || die "${key} has an unsafe name."
+  done
+fi
 is_digest "$SMTP2GRAPH_IMAGE_DIGEST" || die 'SMTP2GRAPH_IMAGE_DIGEST must be an immutable sha256 digest.'
 [[ "$SMTP2GRAPH_STORAGE_HOST_PATH" = /* && "$SMTP2GRAPH_STORAGE_HOST_PATH" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /.'
 
@@ -275,6 +280,9 @@ case "$operation" in
     fi
     for key in "${allowed_keys[@]}"; do
       [[ -n "${!key:-}" ]] || die "required deployment key is missing: ${key}."
+    done
+    for key in "${secret_mapping_keys[@]}"; do
+      is_name "${!key}" || die "${key} has an unsafe name."
     done
     run_stack_config
     initialize_storage

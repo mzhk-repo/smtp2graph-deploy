@@ -221,7 +221,7 @@ fi
 emit_pem() {
   local key=$1 file=$2
   printf '%s="' "$key"
-  awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); printf "%s\\\\n", $0 }' "$file"
+  awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); printf "%s\\n", $0 }' "$file"
   printf '"\n'
 }
 staging_tmp=$(mktemp "$(dirname "$staging_file")/.env.certificates.XXXXXX")

@@ -121,6 +121,21 @@ extract_secret() {
       mv "$decoded_target" "$target"
       ;;
   esac
+  case "$key" in
+    TLS_CERTIFICATE_PEM | TLS_PRIVATE_KEY_PEM | GRAPH_CERT_PRIVATE_KEY_PEM)
+      if grep -Fq '\n' "$target"; then
+        decoded_target="$target.decoded"
+        value=$(cat "$target")
+        printf '%b' "$value" >"$decoded_target"
+        mv "$decoded_target" "$target"
+      fi
+      if grep -q '\\$' "$target"; then
+        decoded_target="$target.decoded"
+        sed 's/\\$//' "$target" >"$decoded_target"
+        mv "$decoded_target" "$target"
+      fi
+      ;;
+  esac
   chmod 400 "$target"
   [[ -s "$target" ]] || die "environment value is empty: $key."
   ! grep -q '^REPLACE_WITH_' "$target" || die "required environment value is still a placeholder: $key."

@@ -41,6 +41,16 @@ names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment de
 grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v' <<<"$names"
 names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$plain" --mapping-file "$mapping")
 grep -Eq '^GRAPH_TENANT_ID_SECRET_NAME=smtp2graph_graph_tenant_id_v' <<<"$names"
+legacy_pem="$tmp/legacy-pem.env"
+sed -E '/^TLS_(CERTIFICATE|PRIVATE_KEY)_PEM=/ s/\\/\\\\/g' "$plain" >"$legacy_pem"
+chmod 600 "$legacy_pem"
+names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$legacy_pem" --mapping-file "$mapping")
+grep -Eq '^TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_v' <<<"$names"
+legacy_trailing_slashes="$tmp/legacy-trailing-slashes.env"
+sed -E '/^TLS_(CERTIFICATE|PRIVATE_KEY)_PEM=/ s/\\n/\\\\\n/g' "$plain" >"$legacy_trailing_slashes"
+chmod 600 "$legacy_trailing_slashes"
+names=$(SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --environment development --env-file "$legacy_trailing_slashes" --mapping-file "$mapping")
+grep -Eq '^TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_v' <<<"$names"
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail

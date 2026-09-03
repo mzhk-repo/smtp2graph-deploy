@@ -272,3 +272,17 @@
     Verification: The certificate preparation script passes Bash syntax and ShellCheck validation.
     Risks: The selected Entra tenant application-management policy may reject certificates exceeding its configured maximum lifetime; shorten the generation period if upload is refused.
     Rollback: Change the OpenSSL `-days` value in `scripts/prepare-certificate-env.sh` back to `365` and regenerate the pending certificate staging.
+
+2026-09-03 — Certificate bootstrap: emit valid escaped PEM for SOPS handoff
+    Context: TLS certificate material copied from `.env.certificates` failed reconciliation because its line endings were double-escaped and decoded as literal `\\n` text rather than PEM newlines.
+    Change: The staging emitter now writes one Dotenv `\n` escape per PEM line. The certificate preparation regression decodes its staged TLS values and validates both with OpenSSL.
+    Verification: Isolated certificate preparation security regression, Bash syntax, ShellCheck and `git diff --check` passed.
+    Risks: Existing staged TLS values require the reconciler's temporary legacy compatibility; newly emitted values use the canonical format. Graph material already uploaded to Entra is unaffected.
+    Rollback: Revert the staging emitter and its regression only together after replacing legacy staged TLS values.
+
+2026-09-03 — Secret reconciliation: accept legacy double-escaped certificate PEM
+    Context: Certificate staging generated before the PEM escaping correction may already have been copied into SOPS, including the Graph private key and TLS pair.
+    Change: The reconciler now decodes PEM values a second time only when the first decode still contains literal `\\n`, and removes only legacy trailing backslashes before PEM newlines; canonical one-escape values remain unchanged.
+    Verification: Reconciler regression validates encrypted, plaintext and legacy double-escaped/trailing-backslash TLS contracts.
+    Risks: Legacy compatibility is limited to PEM fields and does not relax OpenSSL certificate/key validation.
+    Rollback: Remove the second decode after every legacy SOPS contract has been replaced by newly emitted canonical values.

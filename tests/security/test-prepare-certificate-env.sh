@@ -55,6 +55,12 @@ grep -Eq '^GRAPH_CERTIFICATE_THUMBPRINT=[a-f0-9]{40}$' "$staging"
 grep -q '^TLS_CERTIFICATE_PEM=".*\\n' "$staging"
 grep -q '^TLS_PRIVATE_KEY_PEM=".*\\n' "$staging"
 openssl x509 -in "$tmp/output/graph-client-certificate.pem" -noout >/dev/null
+staged_tls_certificate=$(sed -n 's/^TLS_CERTIFICATE_PEM="\(.*\)"$/\1/p' "$staging")
+staged_tls_private_key=$(sed -n 's/^TLS_PRIVATE_KEY_PEM="\(.*\)"$/\1/p' "$staging")
+printf '%b' "$staged_tls_certificate" >"$tmp/staged-tls-cert.pem"
+printf '%b' "$staged_tls_private_key" >"$tmp/staged-tls-key.pem"
+openssl x509 -in "$tmp/staged-tls-cert.pem" -noout >/dev/null
+openssl pkey -in "$tmp/staged-tls-key.pem" -noout >/dev/null
 [[ $(wc -l <"$tmp/calls") -eq 1 ]]
 if PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_CERT_CALLS="$tmp/calls" "$script" --env-file "$env_file" --staging-file "$staging" --apply >/dev/null 2>&1; then
   printf 'ERROR: pending staging unexpectedly continued without SOPS handoff.\n' >&2

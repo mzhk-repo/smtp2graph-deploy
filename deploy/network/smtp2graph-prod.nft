@@ -2,7 +2,6 @@ destroy table inet smtp2graph_prod
 
 table inet smtp2graph_prod {
   chain input {
-    type filter hook input priority filter; policy accept;
     # Evaluate before UFW's filter-priority INPUT chain so reviewed SMTP
     # allowlist traffic is not dropped by the host default policy first.
     type filter hook input priority filter - 1; policy accept;

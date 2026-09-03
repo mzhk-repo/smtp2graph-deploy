@@ -153,7 +153,6 @@ if [[ -n "$env_file" ]]; then
       matched_password=''
       while IFS=$'\t' read -r u p _; do
         [[ -n "$u" && -n "$p" ]] || continue
-        if [[ "$u" == "$smtp_user" ]]; then
         if [[ -z "$smtp_user" || "$u" == "$smtp_user" ]]; then
           matched_user=$u
           matched_password=$p

@@ -35,8 +35,6 @@ for cidr in "${values[@]}"; do
   rendered+=("$cidr")
 done
 replacement=$(
-  IFS=,
-  printf '%s' "${rendered[*]}"
   python3 -c '
 import ipaddress, sys
 cidrs = sys.argv[1:]

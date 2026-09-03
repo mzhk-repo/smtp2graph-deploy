@@ -1,5 +1,14 @@
 # Script runbook
 
+## `prepare-certificate-env.sh`
+
+- Category: 1b (certificate bootstrap and manual rotation).
+- Inputs: explicit SOPS env, Certbot DNS-01 Cloudflare settings, and optional absolute staging path. `--apply` is required for issuance/generation; `--rotate-tls` and `--rotate-graph` are explicit manual rotations.
+- Side effects: creates or upgrades the TLS/Graph certificate material and writes only escaped Dotenv values to ignored mode-`0600` `.env.certificates`; it never writes SOPS, Docker Secrets, or a stack.
+- Safety: all decrypted values and Cloudflare credentials are staged only in `/dev/shm`; PEM values are never printed. A pending staging file is reused rather than silently replaced.
+- Check: `./tests/security/test-prepare-certificate-env.sh`, `bash -n scripts/prepare-certificate-env.sh`.
+- Follow [`CERTIFICATE_RUNBOOK.md`](CERTIFICATE_RUNBOOK.md) for Entra onboarding, SOPS handoff, rotation, and staging deletion.
+
 ## `backup.sh` / `restore.sh`
 
 - Category: 2 (manual backup and cold-recovery automation).

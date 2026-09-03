@@ -31,6 +31,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 init_storage_script=${SMTP_INIT_STORAGE_SCRIPT:-"${project_root}/scripts/init-storage.sh"}
 reconcile_secrets_script=${SMTP_RECONCILE_SOPS_SECRETS_SCRIPT:-"${project_root}/scripts/reconcile-sops-secrets.sh"}
 bootstrap_host_script=${SMTP_BOOTSTRAP_HOST_SCRIPT:-"${project_root}/scripts/bootstrap-swarm-host.sh"}
+certificate_prepare_script=${SMTP_CERTIFICATE_PREPARE_SCRIPT:-"${project_root}/scripts/prepare-certificate-env.sh"}
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
@@ -113,6 +114,7 @@ allowed_keys=(
   SEND_RETRY_LIMIT
   SEND_RETRY_INTERVAL_MINUTES
   TLS_SECRET_MAPPING_FILE
+  CERTBOT_MIN_VERSION CERTBOT_DNS_CLOUDFLARE_MIN_VERSION
 )
 secret_mapping_keys=(
   GRAPH_TENANT_ID_SECRET_NAME
@@ -311,6 +313,49 @@ require_apply_authorization() {
   [[ "$(docker info --format '{{.Swarm.ControlAvailable}}')" == true ]] || die 'Docker Swarm manager access is required.'
 }
 
+package_at_least() {
+  local package=$1 minimum=$2 installed
+  installed=$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null) || return 1
+  dpkg --compare-versions "$installed" ge "$minimum"
+}
+
+ensure_certbot_dns_cloudflare() {
+  local needs_install=false
+  for tool in apt-get dpkg dpkg-query; do command -v "$tool" >/dev/null || die "$tool is required for certificate tooling."; done
+  [[ "$CERTBOT_MIN_VERSION" =~ ^[A-Za-z0-9.+:~_-]+$ ]] || die 'CERTBOT_MIN_VERSION is unsafe.'
+  [[ "$CERTBOT_DNS_CLOUDFLARE_MIN_VERSION" =~ ^[A-Za-z0-9.+:~_-]+$ ]] || die 'CERTBOT_DNS_CLOUDFLARE_MIN_VERSION is unsafe.'
+  package_at_least certbot "$CERTBOT_MIN_VERSION" || needs_install=true
+  package_at_least python3-certbot-dns-cloudflare "$CERTBOT_DNS_CLOUDFLARE_MIN_VERSION" || needs_install=true
+  if [[ "$needs_install" == true ]]; then
+    if [[ $(id -u) -eq 0 ]]; then
+      DEBIAN_FRONTEND=noninteractive apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
+    else
+      command -v sudo >/dev/null || die 'sudo is required to install certificate tooling.'
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
+    fi
+  fi
+  package_at_least certbot "$CERTBOT_MIN_VERSION" || die 'installed certbot version is below CERTBOT_MIN_VERSION.'
+  package_at_least python3-certbot-dns-cloudflare "$CERTBOT_DNS_CLOUDFLARE_MIN_VERSION" || die 'installed dns-cloudflare plugin version is below CERTBOT_DNS_CLOUDFLARE_MIN_VERSION.'
+  command -v certbot >/dev/null || die 'certbot is unavailable after package verification.'
+  certbot plugins 2>/dev/null | grep -Fqx '* dns-cloudflare' || die 'certbot dns-cloudflare plugin is unavailable.'
+}
+
+prepare_certificates() {
+  local status
+  [[ "$certificate_prepare_script" = /* && -x "$certificate_prepare_script" && ! -L "$certificate_prepare_script" ]] || die 'certificate preparation script must be an absolute executable non-symlink file.'
+  if "$certificate_prepare_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --apply; then
+    return
+  else
+    status=$?
+  fi
+  if [[ "$status" -eq 75 ]]; then
+    log 'certificate material is staged; update env.*.enc with SOPS and rerun deploy.'
+  fi
+  return "$status"
+}
+
 case "$operation" in
   check)
     [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false && "$secret_mapping_already_reconciled" == false ]] || die '--check accepts no mutation or rollback options.'
@@ -320,6 +365,8 @@ case "$operation" in
   deploy)
     [[ -z "$rollback_image" && "$queue_compatibility_confirmed" == false ]] || die '--deploy accepts no rollback options.'
     require_apply_authorization
+    ensure_certbot_dns_cloudflare
+    prepare_certificates
     if [[ "$secret_mapping_already_reconciled" == true ]]; then
       [[ "$environment" == development ]] || die '--secret-mapping-already-reconciled is development-only.'
       log 'using explicitly prepared development Secret mapping for rehearsal.'

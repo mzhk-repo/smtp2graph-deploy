@@ -244,3 +244,10 @@
     Verification: Container-hardening regression proves local and fake-rclone directory initialization; deploy-orchestrator regression and `make validate` passed.
     Risks: A missing rclone binary or unavailable cloud remote blocks explicit deploy/rollback before stack submission; this is intentional to avoid a deployment that cannot meet the backup contract.
     Rollback: Stop the Ansible schedule or remove the reviewed backup contract only after retaining verified archives. Do not remove active cloud/local archives automatically.
+
+2026-09-03 — Certificate bootstrap: ACME dependency verification and staged SOPS handoff
+    Context: First deployment could not safely populate the required Graph and TLS PEM contract without manually serializing multiline private keys.
+    Change: Deploy now validates/install-upgrades env-minimum Certbot and DNS-Cloudflare packages before certificate preparation. Missing certificate values issue TLS through DNS-01, generate Graph X.509 material, and create ignored mode-0600 `.env.certificates` with escaped Dotenv values for manual SOPS handoff; no Docker or stack mutation follows until the encrypted contract is updated.
+    Verification: Isolated certificate bootstrap and deploy-orchestrator regressions cover package/plugin checks, escaped PEM staging, incomplete-input refusal, retry safety and pre-reconciliation stop behavior.
+    Risks: Explicit deploy apply can contact APT and Cloudflare when tooling/certificates are missing; failures stop before Secret or stack changes.
+    Rollback: Remove the staged file after SOPS handoff. Restore a reviewed prior SOPS contract and declaratively redeploy; do not delete active Docker Secrets or Entra certificates before verified cutover.

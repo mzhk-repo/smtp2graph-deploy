@@ -251,3 +251,17 @@
     Verification: Isolated certificate bootstrap and deploy-orchestrator regressions cover package/plugin checks, escaped PEM staging, incomplete-input refusal, retry safety and pre-reconciliation stop behavior.
     Risks: Explicit deploy apply can contact APT and Cloudflare when tooling/certificates are missing; failures stop before Secret or stack changes.
     Rollback: Remove the staged file after SOPS handoff. Restore a reviewed prior SOPS contract and declaratively redeploy; do not delete active Docker Secrets or Entra certificates before verified cutover.
+
+2026-09-03 — Certificate bootstrap: create caller-owned certificate directories
+    Context: CI certificate preparation ran before privileged host bootstrap and could not create a missing TLS output directory under `/srv/smtp2graph`.
+    Change: Certificate preparation now creates or reconciles `TLS_OUTPUT_DIR` and `TLS_ACME_STATE_DIR` as mode `0700` directories owned by the invoking user. It uses `sudo install` only when the caller lacks directory access, and rejects symlinked or unsafe paths.
+    Verification: Certificate preparation security regression covers the unprivileged fallback and verifies caller UID/GID ownership and mode `0700`; ShellCheck and `git diff --check` passed.
+    Risks: A caller that cannot create the configured direct child directory must have passwordless or interactive sudo access for `install`; parent directories remain unchanged.
+    Rollback: Revert the certificate-directory helper and restore privileged host bootstrap before certificate preparation only through a reviewed ordering change.
+
+2026-09-03 — Storage initialization: retain caller access without weakening gateway isolation
+    Context: Operators need ownership of the storage root and local backup directory created by `init-storage.sh`, while the gateway still runs as UID/GID `65532` and must create its direct runtime temp directory.
+    Change: The storage root now converges to invoking-user ownership, GID `65532` and mode `0730`; direct `queue` and `failed` children remain `65532:65532` mode `0700`. The local backup directory converges to invoking-user ownership and mode `0700`. Non-root execution uses sudo only for required ownership changes.
+    Verification: Container-hardening/storage regression verifies root, queue, failed and backup UID/GID/mode contracts; Bash syntax, ShellCheck and `git diff --check` passed.
+    Risks: The gateway runtime group has write/execute, but not read, access to the storage root so it can create `/data/temp`; payload directories remain runtime-private.
+    Rollback: Restore the root ownership/mode contract to `65532:65532/0700` only with a reviewed gateway runtime compatibility assessment.

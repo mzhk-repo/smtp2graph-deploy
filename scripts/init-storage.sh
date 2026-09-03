@@ -16,9 +16,10 @@ Usage: scripts/init-storage.sh --storage-root ABSOLUTE_PATH [--backup-local-dir 
 
 The default is validation-only. --apply requires a matching host SERVER_ENV and creates
 or corrects only the validated storage root and its direct queue and failed children
-with owner 65532:65532 and mode 0700. It never recursively changes ownership or
-traverses message payloads. Optional backup paths create only an owner-only local
-directory and an empty rclone destination during explicit apply.
+with caller ownership on the root and runtime ownership on queue and failed. It never
+recursively changes ownership or traverses message payloads. Optional backup paths
+create only an owner-only local directory and an empty rclone destination during
+explicit apply.
 USAGE
 }
 
@@ -71,7 +72,11 @@ if [[ -n "$backup_local_dir$backup_rclone_remote$backup_rclone_path" ]]; then
   [[ "$backup_rclone_remote" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die '--backup-rclone-remote is unsafe.'
   [[ "$backup_rclone_path" =~ ^[A-Za-z0-9][A-Za-z0-9_./-]{0,255}$ && "$backup_rclone_path" != *..* ]] || die '--backup-rclone-path is unsafe.'
 fi
-for tool in dirname basename find grep install realpath stat chown chmod; do command -v "$tool" >/dev/null || die "$tool is required."; done
+for tool in dirname basename find grep install realpath stat chown chmod id; do command -v "$tool" >/dev/null || die "$tool is required."; done
+caller_uid=${SUDO_UID:-$(id -u)}
+caller_gid=${SUDO_GID:-$(id -g)}
+[[ "$caller_uid" =~ ^[0-9]+$ && "$caller_gid" =~ ^[0-9]+$ ]] || die 'invoking user identity is unsafe.'
+[[ $(id -u) -eq 0 ]] || command -v sudo >/dev/null || die 'sudo is required when storage initialization runs as a non-root user.'
 if [[ "$apply" == true ]]; then
   [[ "$environment" == development || "$environment" == production ]] || die '--apply requires --environment development or production.'
   require_server_env_match "$environment" || die 'host SERVER_ENV must match --environment.'
@@ -91,7 +96,10 @@ prepare_storage_root() {
     [[ -d "$ancestor" && ! -L "$ancestor" && "$ancestor" != / ]] || die '--storage-root requires an existing non-symlink ancestor below /. '
     resolved_ancestor=$(realpath -e -- "$ancestor") || die 'could not resolve --storage-root ancestor.'
     [[ "$resolved_ancestor" == "$ancestor" ]] || die '--storage-root ancestor must not contain symlink components.'
-    mkdir -p -- "$storage_root"
+    if ! mkdir -p -- "$storage_root" 2>/dev/null; then
+      [[ $(id -u) -ne 0 ]] || die 'could not create --storage-root.'
+      sudo install -d -m 730 -o "$caller_uid" -g "$runtime_gid" -- "$storage_root" || die 'could not create --storage-root.'
+    fi
     needs_mutation=true
   fi
   [[ -d "$storage_root" && ! -L "$storage_root" ]] || die '--storage-root must be an existing non-symlink directory.'
@@ -108,21 +116,23 @@ prepare_backup_local_dir() {
       printf 'READY: backup local directory will be initialized mode 0700.\n'
       return
     }
-    mkdir -p -- "$backup_local_dir"
-    chmod 0700 -- "$backup_local_dir"
+    if ! mkdir -p -- "$backup_local_dir" 2>/dev/null; then
+      [[ $(id -u) -ne 0 ]] || die 'could not create --backup-local-dir.'
+      sudo install -d -m 700 -o "$caller_uid" -g "$caller_gid" -- "$backup_local_dir" || die 'could not create --backup-local-dir.'
+    fi
     needs_mutation=true
   fi
   [[ -d "$backup_local_dir" && ! -L "$backup_local_dir" ]] || die '--backup-local-dir must be a non-symlink directory.'
-  [[ "$(stat -c '%a' "$backup_local_dir")" =~ ^[67]00$ ]] || die '--backup-local-dir must not be group/world accessible.'
+  [[ "$(stat -c '%u:%g:%a' "$backup_local_dir")" == "$caller_uid:$caller_gid:700" ]] || needs_mutation=true
 }
 
 validate_storage_root_owner() {
   local owner mode
   owner=$(stat -c '%u:%g' "$storage_root") || die 'could not inspect storage root ownership.'
   mode=$(stat -c '%a' "$storage_root") || die 'could not inspect storage root permissions.'
-  if [[ "$owner" != "$runtime_uid:$runtime_gid" || "$mode" != 700 ]]; then
+  if [[ "$owner" != "$caller_uid:$runtime_gid" || "$mode" != 730 ]]; then
     needs_mutation=true
-    printf 'READY: storage root will be corrected to %s:%s mode 0700.\n' "$runtime_uid" "$runtime_gid"
+    printf 'READY: storage root will be corrected to %s:%s mode 0730.\n' "$caller_uid" "$runtime_gid"
     return
   fi
   printf 'PASS: storage root has reviewed owner and mode.\n'
@@ -162,15 +172,34 @@ if [[ "$needs_mutation" == false ]]; then
   printf 'PASS: storage root and children are initialized; deploy separately through approved orchestration.\n'
   exit 0
 fi
-chown "$runtime_uid:$runtime_gid" -- "$storage_root" 2>/dev/null || true
-chmod 0700 -- "$storage_root" 2>/dev/null || true
+if [[ $(id -u) -eq 0 ]]; then
+  chown "$caller_uid:$runtime_gid" -- "$storage_root"
+  chmod 0730 -- "$storage_root"
+else
+  sudo chown "$caller_uid:$runtime_gid" -- "$storage_root"
+  sudo chmod 0730 -- "$storage_root"
+fi
 for child in queue failed; do
   if [[ ! -e "$storage_root/$child" ]]; then
-    mkdir -p -- "$storage_root/$child" 2>/dev/null || true
+    mkdir -p -- "$storage_root/$child"
   fi
-  chown "$runtime_uid:$runtime_gid" -- "$storage_root/$child" 2>/dev/null || true
-  chmod 0700 -- "$storage_root/$child" 2>/dev/null || true
+  if [[ $(id -u) -eq 0 ]]; then
+    chown "$runtime_uid:$runtime_gid" -- "$storage_root/$child"
+    chmod 0700 -- "$storage_root/$child"
+  else
+    sudo chown "$runtime_uid:$runtime_gid" -- "$storage_root/$child"
+    sudo chmod 0700 -- "$storage_root/$child"
+  fi
 done
+if [[ -n "$backup_local_dir" ]]; then
+  if [[ $(id -u) -eq 0 ]]; then
+    chown "$caller_uid:$caller_gid" -- "$backup_local_dir"
+    chmod 0700 -- "$backup_local_dir"
+  else
+    sudo chown "$caller_uid:$caller_gid" -- "$backup_local_dir"
+    sudo chmod 0700 -- "$backup_local_dir"
+  fi
+fi
 if [[ -n "$backup_rclone_remote" ]]; then
   command -v rclone >/dev/null || die 'rclone is required to initialize backup destination.'
   rclone mkdir "$backup_rclone_remote:${backup_rclone_path%/}"

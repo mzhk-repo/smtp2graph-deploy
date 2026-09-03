@@ -95,6 +95,27 @@ fi
 [[ -n "${TLS_OUTPUT_DIR:-}" && "$TLS_OUTPUT_DIR" != REPLACE_WITH_* ]] || die 'required certificate input is missing: TLS_OUTPUT_DIR.'
 [[ "$TLS_OUTPUT_DIR" = /* && "$TLS_OUTPUT_DIR" != / ]] || die 'TLS_OUTPUT_DIR must be absolute and not /.'
 
+ensure_directory_for_caller() {
+  local directory=$1 parent leaf resolved_parent uid gid mode
+  parent=$(dirname "$directory") || die 'could not resolve certificate directory parent.'
+  leaf=$(basename "$directory") || die 'could not resolve certificate directory name.'
+  [[ -d "$parent" && ! -L "$parent" ]] || die "certificate directory parent must be an existing non-symlink directory: $parent."
+  resolved_parent=$(realpath -e -- "$parent") || die 'could not resolve certificate directory parent.'
+  [[ "$parent" == "$resolved_parent" && "$leaf" != . && "$leaf" != .. ]] || die 'certificate directory must not contain symlink components.'
+  directory="$resolved_parent/$leaf"
+  uid=$(id -u)
+  gid=$(id -g)
+  if ! install -d -m 700 -- "$directory" 2>/dev/null; then
+    [[ "$uid" -ne 0 ]] || die "could not create certificate directory: $directory."
+    command -v sudo >/dev/null || die "sudo is required to create certificate directory: $directory."
+    sudo install -d -m 700 -o "$uid" -g "$gid" -- "$directory" || die "could not create certificate directory: $directory."
+  fi
+  [[ -d "$directory" && ! -L "$directory" ]] || die "certificate directory is unsafe: $directory."
+  [[ $(stat -c '%u:%g' "$directory") == "$uid:$gid" ]] || die "certificate directory must be owned by the invoking user: $directory."
+  mode=$(stat -c '%a' "$directory") || die "could not inspect certificate directory mode: $directory."
+  [[ $((8#$mode & 077)) -eq 0 ]] || die "certificate directory must not be accessible by group or other: $directory."
+}
+
 # shellcheck disable=SC2317 # invoked through EXIT trap
 cleanup() {
   rm -rf -- "$stage_dir"
@@ -103,8 +124,7 @@ cleanup() {
 stage_dir=$(mktemp -d /dev/shm/smtp2graph-certificate.XXXXXX)
 trap cleanup EXIT
 chmod 700 "$stage_dir"
-mkdir -p "$TLS_OUTPUT_DIR"
-chmod 700 "$TLS_OUTPUT_DIR"
+ensure_directory_for_caller "$TLS_OUTPUT_DIR"
 
 graph_cert="$TLS_OUTPUT_DIR/graph-client-certificate.pem"
 tls_cert="$stage_dir/tls-cert.pem" tls_key="$stage_dir/tls-key.pem"
@@ -170,8 +190,7 @@ if [[ "$tls_missing" == true ]]; then
   done
   [[ "$SMTP_TLS_FQDN" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]] || die 'SMTP_TLS_FQDN is unsafe.'
   [[ "$TLS_ACME_STATE_DIR" = /* && "$TLS_ACME_STATE_DIR" != / ]] || die 'TLS_ACME_STATE_DIR must be absolute and not /.'
-  mkdir -p "$TLS_ACME_STATE_DIR"
-  chmod 700 "$TLS_ACME_STATE_DIR"
+  ensure_directory_for_caller "$TLS_ACME_STATE_DIR"
   credentials="$stage_dir/cloudflare.ini"
   printf 'dns_cloudflare_api_token = %s\n' "$CLOUDFLARE_DNS_API_TOKEN" >"$credentials"
   chmod 600 "$credentials"

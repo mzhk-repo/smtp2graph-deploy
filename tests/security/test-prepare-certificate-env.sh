@@ -62,6 +62,35 @@ if PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_CERT_CALLS="$tmp/calls"
 fi
 [[ $(wc -l <"$tmp/calls") -eq 1 ]]
 
+mkdir -p "$tmp/restricted"
+cat >"$bin/install" <<'EOF'
+#!/usr/bin/env bash
+target=${!#}
+if [[ "$target" == "$FAKE_DENIED_DIR" && "${FAKE_SUDO_USED:-}" != true ]]; then
+  exit 1
+fi
+exec /usr/bin/install "$@"
+EOF
+chmod 700 "$bin/install"
+cat >"$bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+printf 'sudo\n' >>"$FAKE_CERT_CALLS"
+FAKE_SUDO_USED=true "$@"
+EOF
+chmod 700 "$bin/sudo"
+cat >"$bin/id" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -u | -g) printf '1001\n' ;;
+  *) exec /usr/bin/id "$@" ;;
+esac
+EOF
+chmod 700 "$bin/id"
+sed "s|^TLS_OUTPUT_DIR=.*|TLS_OUTPUT_DIR=$tmp/restricted/output|" "$env_file" >"$tmp/escalated.env"
+PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_CERT_CALLS="$tmp/calls" FAKE_DENIED_DIR="$tmp/restricted/output" "$script" --env-file "$tmp/escalated.env" --staging-file "$tmp/escalated.stage" --apply >/dev/null 2>&1 || test $? -eq 75
+grep -q '^sudo$' "$tmp/calls"
+[[ $(stat -c '%u:%g:%a' "$tmp/restricted/output") == 1001:1001:700 ]]
+
 sed 's/^TLS_PRIVATE_KEY_PEM=.*/TLS_PRIVATE_KEY_PEM=existing/' "$env_file" >"$tmp/partial.env"
 if PATH="$bin:$PATH" "$script" --env-file "$tmp/partial.env" --staging-file "$tmp/partial.stage" --apply >/dev/null 2>&1; then
   printf 'ERROR: partial TLS input was accepted.\n' >&2

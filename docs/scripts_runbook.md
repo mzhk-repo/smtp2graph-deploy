@@ -63,7 +63,7 @@
 
 - Category: 1b (dev/prod Swarm orchestration).
 - Inputs: decrypts the selected SOPS-encrypted Dotenv contract only into `/dev/shm`, strictly parses allowlisted public stack inputs and resolves `TLS_SECRET_MAPPING_FILE`. `SMTP_TLS_FQDN` is attached as the private DNS alias of the gateway endpoint on `SWARM_OVERLAY_NETWORK`; client stacks join that external encrypted overlay and resolve the same TLS name without `extra_hosts` or the host-published SMTP port. The loader then requires a private names-only mapping with all seven versioned Docker Secret references and merges those references over the decrypted deployment config. The loader never sources either file; host `SERVER_ENV=dev|prod` remains mandatory.
-- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` reconciles content-addressed runtime Secrets from the selected SOPS contract, reloads the atomic names-only mapping, and invokes `init-storage.sh` before stack submission. If the configured mapping directory is not writable by CI, it is copied to `/dev/shm` and used only for that deploy; a changed secret name still changes the task template and Swarm creates a replacement task. Unchanged secret content leaves the task template unchanged. Production applies the same reconciliation only after `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA are validated. Normal deploy reads only the immutable digest from the environment contract. Rollback additionally requires an operator-reviewed exact digest pair and `--queue-compatibility-confirmed` before it initializes storage and submits the stack.
+- Operations: `--check` renders and validates the canonical stack without Docker API mutation. Both environments derive the placement label from `DEPLOY_ENVIRONMENT` (`smtp2graph_dev=true` or `smtp2graph_prod=true`). Development `--deploy --apply` idempotently invokes `bootstrap-swarm-host.sh` (ensuring node label, encrypted overlay network, storage root, and nftables policy are applied), reconciles content-addressed runtime Secrets from the selected SOPS contract, reloads the atomic names-only mapping, and invokes `init-storage.sh` before stack submission. If the configured mapping directory is not writable by CI, it is copied to `/dev/shm` and used only for that deploy; a changed secret name still changes the task template and Swarm creates a replacement task. Unchanged secret content leaves the task template unchanged. Production applies the same reconciliation and host bootstrap only after `SERVER_ENV=prod`, immutable digest, `--release-tag`, `--approval-context` and a matching `--declared-deploy-ref` SHA are validated. Normal deploy reads only the immutable digest from the environment contract. Rollback additionally requires an operator-reviewed exact digest pair and `--queue-compatibility-confirmed` before it initializes storage and submits the stack.
 - Safety: missing, incomplete, duplicate, unsafe or owner-readable-by-group/other Secret mappings fail closed. Only immutable `@sha256:` image references and safe stack/Secret/network names are accepted. The script does not use `--prune` and never deletes stacks, services, networks, configs, Secrets or queue data.
 - Idempotency: repeated deploy submits the same declarative stack without cleanup or new generated state; Docker Swarm reconciles it to the declared state.
 - Exception: `--secret-mapping-already-reconciled` is development-only and reserved for the reviewed two-release rehearsal, whose temporary invalid credential mapping must remain intact while testing queue recovery. Normal deploy and every production deploy always reconcile SOPS secret content first.
@@ -226,7 +226,26 @@
 - Inputs: optional `--env-file FILE` (or manual `--smtp-user`, `--password-file`, `--sender`, `--recipient`), optional `--smtp-host` (default `127.0.0.1`), `--smtp-port` (default `2525`), and `--insecure`.
 - Side effects: connects to the live gateway, performs STARTTLS, authenticates, and submits a synthetic test email. Verifies `250 OK` acceptance by the gateway.
 - Safety: does not print passwords or tokens; supports mode-`0600` password files or auto-extracts temporary credentials to `/dev/shm` from an owner-only env file.
-- Manual execution:
+- Safe execution with ephemeral SOPS decryption in `/dev/shm`:
+  ```bash
+  cd /opt/smtp2graph-deploy
+  sh -c '
+    set -euo pipefail
+    stage_dir=$(mktemp -d /dev/shm/smtp2graph-e2e.XXXXXX)
+    chmod 700 "$stage_dir"
+    decrypted_env="$stage_dir/decrypted.env"
+    trap "rm -rf -- \"\$stage_dir\"" EXIT
+    export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/home/pinokew/.config/sops/age/keys.txt}"
+    sops --decrypt --input-type dotenv --output-type dotenv /opt/smtp2graph-deploy/env.dev.enc > "$decrypted_env"
+    chmod 600 "$decrypted_env"
+    ./tests/integration/test-e2e-send-mail.sh \
+      --env-file "$decrypted_env" \
+      --smtp-user gateway \
+      --insecure
+  '
+  ```
+  *(Для продакшн замініть `/opt/smtp2graph-deploy/env.dev.enc` на `/opt/smtp2graph-deploy/env.prod.enc`)*.
+- Manual execution with pre-existing password file:
   ```bash
   ./tests/integration/test-e2e-send-mail.sh \
     --smtp-host 127.0.0.1 --smtp-port 2525 \

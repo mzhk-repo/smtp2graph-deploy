@@ -132,13 +132,18 @@ cat >"$fake_bin/init-storage" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 EOF
+cat >"$fake_bin/bootstrap-host" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
 cat >"$fake_bin/node" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 touch "${FAKE_QUEUE_DIR}/rehearsal.eml"
 printf 'PASS: fake SMTP submit\n'
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage"
+chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host"
+export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
 
 PATH="$fake_bin:$PATH" \
   FAKE_QUEUE_DIR="$storage/queue" FAKE_SECRET_STATE="$secret_state" \

@@ -134,6 +134,16 @@ printf 'bootstrap-host %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
 EOF
 chmod 700 "$fake_bin/bootstrap-host"
 export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
+cat >"$fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == env ]]; then
+  shift
+  while [[ "${1:-}" == *=* ]]; do shift; done
+fi
+exec "$@"
+EOF
+chmod 700 "$fake_bin/sudo"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 grep -Eq '^stack config ' "$calls"

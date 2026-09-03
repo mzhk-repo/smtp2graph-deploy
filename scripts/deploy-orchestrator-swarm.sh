@@ -239,7 +239,21 @@ bootstrap_host() {
   if [[ -n "$bootstrap_context" ]]; then
     bootstrap_args+=(--approval-context "$bootstrap_context")
   fi
-  "$bootstrap_host_script" "${bootstrap_args[@]}"
+
+  if [[ $(id -u) -eq 0 ]]; then
+    "$bootstrap_host_script" "${bootstrap_args[@]}"
+  else
+    command -v sudo >/dev/null || die 'sudo is required for host bootstrap when running as non-root.'
+    local env_vars=()
+    [[ -z "${SOPS_AGE_KEY_FILE:-}" ]] || env_vars+=("SOPS_AGE_KEY_FILE=$SOPS_AGE_KEY_FILE")
+    [[ -z "${SOPS_AGE_KEY:-}" ]] || env_vars+=("SOPS_AGE_KEY=$SOPS_AGE_KEY")
+    [[ -z "${SMTP2GRAPH_SERVER_ENV_FILE:-}" ]] || env_vars+=("SMTP2GRAPH_SERVER_ENV_FILE=$SMTP2GRAPH_SERVER_ENV_FILE")
+    if [[ ${#env_vars[@]} -gt 0 ]]; then
+      sudo env "${env_vars[@]}" "$bootstrap_host_script" "${bootstrap_args[@]}"
+    else
+      sudo "$bootstrap_host_script" "${bootstrap_args[@]}"
+    fi
+  fi
 }
 
 reconcile_deploy_secrets() {

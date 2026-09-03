@@ -142,7 +142,16 @@ set -euo pipefail
 touch "${FAKE_QUEUE_DIR}/rehearsal.eml"
 printf 'PASS: fake SMTP submit\n'
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host"
+cat >"$fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == env ]]; then
+  shift
+  while [[ "${1:-}" == *=* ]]; do shift; done
+fi
+exec "$@"
+EOF
+chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host" "$fake_bin/sudo"
 export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
 
 PATH="$fake_bin:$PATH" \

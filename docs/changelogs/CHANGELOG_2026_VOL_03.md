@@ -8,9 +8,9 @@
       - Added `tests/integration/smtp-send-mail.py` and `tests/integration/test-e2e-send-mail.sh`, providing a zero-dependency Python 3 E2E test runner that performs STARTTLS negotiation, SMTP AUTH, and synthetic message submission.
       - Added `tests/shell/test-e2e-send-mail.sh` to validate E2E runner input boundaries and added it to `tests/shell/run.sh`.
       - Updated `scripts/check-network-policy.sh` to support both `smtp2graph_smtp_clients` and `smtp2graph_prod_smtp_clients` sets and provide actionable instructions when nftables policy is not loaded.
-      - Added idempotent execution of `bootstrap-swarm-host.sh` directly within `scripts/deploy-orchestrator-swarm.sh` during `--deploy --apply` and `--rollback`, ensuring node labels, encrypted overlay network, storage root, and host nftables firewall policy are automatically enforced on every deploy.
+      - Added idempotent execution of `bootstrap-swarm-host.sh` directly within `scripts/deploy-orchestrator-swarm.sh` during `--deploy --apply` and `--rollback` (running via `sudo` with preserved SOPS age credentials when executed by non-root users), ensuring node labels, encrypted overlay network, storage root, and host nftables firewall policy are automatically enforced on every deploy from user or CI/CD context.
       - Updated `docs/scripts_runbook.md` with instructions for `test-e2e-send-mail.sh`, including the safe ephemeral SOPS decryption command in `/dev/shm` with guaranteed `trap` cleanup.
-    Verification: Executed live SMTP connection and STARTTLS against the gateway; ran `tests/shell/test-e2e-send-mail.sh`, `tests/shell/test-deploy-orchestrator.sh`, and full shell suite `tests/shell/run.sh`; all security tests pass (`tests/security/test-*.sh`); ShellCheck and `git diff --check` passed.
+    Verification: Executed live SMTP connection and STARTTLS against the gateway; verified passwordless sudo support; ran `tests/shell/test-e2e-send-mail.sh`, `tests/shell/test-deploy-orchestrator.sh`, and full shell suite `tests/shell/run.sh`; all security tests pass (`tests/security/test-*.sh`); ShellCheck and `git diff --check` passed.
     Risks: None. Host bootstrap is idempotent and safe for repeated execution.
     Rollback: Remove `bootstrap_host` invocation from `deploy-orchestrator-swarm.sh`, and revert changes to `docs/scripts_runbook.md`.
 

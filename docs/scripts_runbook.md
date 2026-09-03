@@ -230,12 +230,14 @@
   ```bash
   cd /opt/smtp2graph-deploy
   sh -c '
+  bash -c '
     set -euo pipefail
     stage_dir=$(mktemp -d /dev/shm/smtp2graph-e2e.XXXXXX)
     chmod 700 "$stage_dir"
     decrypted_env="$stage_dir/decrypted.env"
     trap "rm -rf -- \"\$stage_dir\"" EXIT
     export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/home/pinokew/.config/sops/age/keys.txt}"
+    export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
     sops --decrypt --input-type dotenv --output-type dotenv /opt/smtp2graph-deploy/env.dev.enc > "$decrypted_env"
     chmod 600 "$decrypted_env"
     ./tests/integration/test-e2e-send-mail.sh \

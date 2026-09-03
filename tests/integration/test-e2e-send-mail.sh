@@ -9,6 +9,7 @@ env_file=''
 smtp_host='127.0.0.1'
 smtp_port=''
 smtp_user='gateway'
+smtp_user=''
 password_file=''
 sender=''
 recipient=''
@@ -148,28 +149,35 @@ if [[ -n "$env_file" ]]; then
       password_file="$stage_dir/password"
 
       users=$(printf '%b' "$users_escaped")
+      matched_user=''
       matched_password=''
       while IFS=$'\t' read -r u p _; do
         [[ -n "$u" && -n "$p" ]] || continue
         if [[ "$u" == "$smtp_user" ]]; then
+        if [[ -z "$smtp_user" || "$u" == "$smtp_user" ]]; then
+          matched_user=$u
           matched_password=$p
           break
         fi
       done <<<"$users"
 
       if [[ -n "$matched_password" ]]; then
+        smtp_user=$matched_user
         umask 077
         printf '%s\n' "$matched_password" >"$password_file"
         chmod 600 "$password_file"
       else
         die "user '${smtp_user}' not found in SMTP_USERS_TSV."
+        die "user '${smtp_user:-<any>}' not found in SMTP_USERS_TSV."
       fi
       unset users users_escaped matched_password
+      unset users users_escaped matched_user matched_password
     fi
   fi
 fi
 
 # Fallback defaults
+[[ -n "$smtp_user" ]] || smtp_user='gateway'
 [[ -n "$smtp_port" ]] || smtp_port='2525'
 [[ -n "$tls_name" ]] || tls_name='smtp-int.ldubgd.edu.ua'
 

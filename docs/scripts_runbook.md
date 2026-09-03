@@ -70,7 +70,7 @@
 - Manual development deploy: run only on the authorised privileged development Swarm manager, after successful host bootstrap. If the approved age identity is private to the operator account, pass only its path into the privileged process; do not copy the identity to `/root`, relax its permissions or print its contents:
   ```bash
   cd /opt/smtp2graph-deploy
-  sudo sh -c '
+   sh -c '
     export SOPS_AGE_KEY_FILE=/home/pinokew/.config/sops/age/keys.txt
     exec ./scripts/deploy-orchestrator-swarm.sh \
       --env-file /opt/smtp2graph-deploy/env.dev.enc \
@@ -162,7 +162,6 @@
   cd /opt/smtp2graph-deploy
     sudo ./scripts/check-network-policy.sh \
       --network smtp2graph_internal_enc \
-      --stack-name smtp2graph
   ```
 
 ## `render-network-policy.sh`
@@ -207,7 +206,6 @@
 
 - Category: 1a (non-production Task 6.1 gateway format submission).
 - Prerequisites: `node` (Node.js runtime, e.g. `sudo apt-get install -y nodejs`) is required on the host to execute the JavaScript client.
-- Inputs: explicit owner-only development env file, SMTP username, owner-only password file, optional connect host/port. It strictly reads only `GRAPH_SENDER_MAILBOX`, `NONPRODUCTION_RECIPIENT_ALLOWLIST` and `SMTP_TLS_FQDN`; it does not source an environment file.
 - Side effects: sends seven synthetic format messages through STARTTLS to the one allowlisted recipient: plain text, HTML/Unicode, To/CC headers, a separate BCC-envelope case, Reply-To, attachment and inline attachment. `--case bcc-envelope` sends only that outstanding case. It uses no Moodle profile.
 - Safety: certificate validation is enabled with `SMTP_TLS_FQDN`; the password is read only from its file and never placed in arguments or output. The runner rejects group/other-readable input files and does not persist message identifiers or content as evidence.
 - Check: `./tests/shell/test-integration-format-matrix.sh`.
@@ -216,7 +214,6 @@
 
 - Category: 1a (Task 6.1 non-production Moodle SMTP preflight).
 - Prerequisites: `node` (Node.js runtime, e.g. `sudo apt-get install -y nodejs`) is required on the host to execute the JavaScript client.
-- Inputs: explicit owner-only development env file and optional connect host/port. It strictly reads `SMTP_TLS_FQDN` and `SMTP_LISTEN_PORT`; by default it extracts the `moodle` record from `SMTP_USERS_TSV`, but an explicit owner-only `--password-file` can replace that source on the Moodle VM. It does not source an environment file.
 - Side effects: when it extracts the password, it writes only to a mode-`0600` temporary file below a mode-`0700` directory in `/dev/shm`, then removes it through an exit trap. It submits no SMTP message.
 - Safety: verifies trusted TLS against `SMTP_TLS_FQDN`, asserts AUTH is denied before STARTTLS and succeeds after STARTTLS, and never prints credentials or SMTP commands. Do not copy `.env` to Moodle; run there with an approved temporary password file and the gateway FQDN to establish the actual client-network path.
 - Check: `./tests/shell/test-moodle-starttls-contract.sh`.

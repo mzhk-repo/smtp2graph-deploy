@@ -8,7 +8,6 @@ python_helper="${script_dir}/smtp-send-mail.py"
 env_file=''
 smtp_host='127.0.0.1'
 smtp_port=''
-smtp_user='gateway'
 smtp_user=''
 password_file=''
 sender=''
@@ -30,7 +29,7 @@ Options:
   --env-file FILE          Decrypted or plaintext environment file to read defaults from
   --smtp-host HOST         SMTP gateway host (default: 127.0.0.1)
   --smtp-port PORT         SMTP gateway port (default: 2525 or from env)
-  --smtp-user USER         SMTP user for authentication (default: gateway)
+  --smtp-user USER         SMTP user for authentication (default: first SMTP_USERS_TSV user, otherwise gateway)
   --password-file FILE     Path to file containing password (mode 0600)
   --sender SENDER          MAIL FROM address (default: GRAPH_SENDER_MAILBOX from env)
   --recipient RECIPIENT    RCPT TO address (default: NONPRODUCTION_RECIPIENT_ALLOWLIST from env)
@@ -166,10 +165,8 @@ if [[ -n "$env_file" ]]; then
         printf '%s\n' "$matched_password" >"$password_file"
         chmod 600 "$password_file"
       else
-        die "user '${smtp_user}' not found in SMTP_USERS_TSV."
         die "user '${smtp_user:-<any>}' not found in SMTP_USERS_TSV."
       fi
-      unset users users_escaped matched_password
       unset users users_escaped matched_user matched_password
     fi
   fi

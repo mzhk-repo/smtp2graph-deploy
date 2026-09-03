@@ -293,3 +293,23 @@
     Verification: Live Swarm task logs identified the exact failure; storage hardening regression asserts the revised ownership/mode contract.
     Risks: Members of GID `65532` may list the storage-root child names, but payload access remains restricted to the runtime-owned queue and failed directories.
     Rollback: Restore mode `0730` only if the gateway metrics implementation no longer scans `/data`.
+
+2026-09-03 — E2E runbook: repair ephemeral SOPS execution command
+    Context: The documented E2E command used malformed nested shell quoting, causing the terminal invocation to fail before decrypting the temporary environment file.
+    Change: The runbook now uses one correctly quoted `bash -c` invocation and a single caller-derived `SOPS_AGE_KEY_FILE` default. The E2E runner removes unreachable duplicate cleanup/error lines.
+    Verification: E2E runner shell regression, Bash syntax and `git diff --check` passed.
+    Risks: The command still intentionally decrypts the selected SOPS contract into a mode-`0600` file in `/dev/shm` for the duration of the live synthetic SMTP submission.
+    Rollback: Restore the prior runbook command only if replacing it with another syntactically validated wrapper.
+
+2026-09-03 — E2E runner: select the configured SMTP user by default
+    Context: The development SOPS contract uses `noreply`, while the runbook forced a nonexistent `gateway` user and the runner's default-selection behavior was obscured by duplicate initialization.
+    Change: With an env file, the runner now selects the first valid `SMTP_USERS_TSV` user unless `--smtp-user` is supplied. The runbook leaves user selection automatic; manual invocation without an env file still defaults to `gateway`.
+    Verification: Live command reaches credential selection without shell failure; E2E shell regression, Bash syntax and `git diff --check` passed.
+    Risks: A multi-user environment should pass `--smtp-user` explicitly to select a non-first account.
+    Rollback: Pass the required username explicitly through `--smtp-user`; do not expose its password.
+
+2026-09-03 — Development E2E SMTP submission accepted
+    Context: The gateway was redeployed after certificate, secret and storage-permission corrections.
+    Change: None; this is runtime evidence.
+    Verification: Local synthetic E2E test completed STARTTLS and SMTP AUTH with the configured development user, then received gateway `250` acceptance.
+    Risks: SMTP acceptance proves durable gateway submission only; independent recipient-mailbox evidence remains required to claim end-to-end Graph delivery.

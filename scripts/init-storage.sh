@@ -98,7 +98,7 @@ prepare_storage_root() {
     [[ "$resolved_ancestor" == "$ancestor" ]] || die '--storage-root ancestor must not contain symlink components.'
     if ! mkdir -p -- "$storage_root" 2>/dev/null; then
       [[ $(id -u) -ne 0 ]] || die 'could not create --storage-root.'
-      sudo install -d -m 730 -o "$caller_uid" -g "$runtime_gid" -- "$storage_root" || die 'could not create --storage-root.'
+      sudo install -d -m 770 -o "$caller_uid" -g "$runtime_gid" -- "$storage_root" || die 'could not create --storage-root.'
     fi
     needs_mutation=true
   fi
@@ -130,9 +130,9 @@ validate_storage_root_owner() {
   local owner mode
   owner=$(stat -c '%u:%g' "$storage_root") || die 'could not inspect storage root ownership.'
   mode=$(stat -c '%a' "$storage_root") || die 'could not inspect storage root permissions.'
-  if [[ "$owner" != "$caller_uid:$runtime_gid" || "$mode" != 730 ]]; then
+  if [[ "$owner" != "$caller_uid:$runtime_gid" || "$mode" != 770 ]]; then
     needs_mutation=true
-    printf 'READY: storage root will be corrected to %s:%s mode 0730.\n' "$caller_uid" "$runtime_gid"
+    printf 'READY: storage root will be corrected to %s:%s mode 0770.\n' "$caller_uid" "$runtime_gid"
     return
   fi
   printf 'PASS: storage root has reviewed owner and mode.\n'
@@ -174,10 +174,10 @@ if [[ "$needs_mutation" == false ]]; then
 fi
 if [[ $(id -u) -eq 0 ]]; then
   chown "$caller_uid:$runtime_gid" -- "$storage_root"
-  chmod 0730 -- "$storage_root"
+  chmod 0770 -- "$storage_root"
 else
   sudo chown "$caller_uid:$runtime_gid" -- "$storage_root"
-  sudo chmod 0730 -- "$storage_root"
+  sudo chmod 0770 -- "$storage_root"
 fi
 for child in queue failed; do
   if [[ ! -e "$storage_root/$child" ]]; then

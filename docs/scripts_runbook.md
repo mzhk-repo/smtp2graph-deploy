@@ -112,7 +112,7 @@
 
 - Category: 1b (dev/prod persistent-storage initialization).
 - Inputs: explicit canonical `--storage-root`; optional backup local directory, rclone remote and rclone path must be supplied together. Local paths must be absolute non-symlink directories; rclone names/paths are strictly validated.
-- Side effects: default mode is validation-only. `--apply` requires `--environment development|production` and matching `SERVER_ENV`; it converges the storage root to the invoking user and runtime GID `65532` with mode `0730`, its direct queue/failed children to UID/GID `65532` mode `0700`, creates the owner-only local backup directory for the invoking user and invokes `rclone mkdir` for the configured cloud path. The runtime can then create its required direct `/data/temp` path.
+- Side effects: default mode is validation-only. `--apply` requires `--environment development|production` and matching `SERVER_ENV`; it converges the storage root to the invoking user and runtime GID `65532` with mode `0770`, its direct queue/failed children to UID/GID `65532` mode `0700`, creates the owner-only local backup directory for the invoking user and invokes `rclone mkdir` for the configured cloud path. The runtime can then create its required direct `/data/temp` path and scan storage metrics.
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads. Cloud mutation occurs only with explicit `--apply`.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
@@ -170,7 +170,7 @@
   ```bash
   cd /opt/smtp2graph-deploy
     sudo ./scripts/check-network-policy.sh \
-      --network smtp2graph_internal_enc \
+      --network smtp2graph_internal_enc
   ```
 
 ## `render-network-policy.sh`

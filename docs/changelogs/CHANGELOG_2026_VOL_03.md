@@ -286,3 +286,10 @@
     Verification: Reconciler regression validates encrypted, plaintext and legacy double-escaped/trailing-backslash TLS contracts.
     Risks: Legacy compatibility is limited to PEM fields and does not relax OpenSSL certificate/key validation.
     Rollback: Remove the second decode after every legacy SOPS contract has been replaced by newly emitted canonical values.
+
+2026-09-03 — Storage initialization: allow gateway metrics to scan the storage root
+    Context: Caller-owned storage root mode `0730` allowed the runtime group to create `/data/temp` but denied the gateway metrics handler's required `scandir('/data')`, causing every Swarm task to exit with `EACCES`.
+    Change: The storage root now converges to mode `0770` with invoking-user ownership and runtime GID `65532`; `queue` and `failed` remain `65532:65532/0700`.
+    Verification: Live Swarm task logs identified the exact failure; storage hardening regression asserts the revised ownership/mode contract.
+    Risks: Members of GID `65532` may list the storage-root child names, but payload access remains restricted to the runtime-owned queue and failed directories.
+    Rollback: Restore mode `0730` only if the gateway metrics implementation no longer scans `/data`.

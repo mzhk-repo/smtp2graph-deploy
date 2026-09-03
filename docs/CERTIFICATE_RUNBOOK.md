@@ -34,13 +34,18 @@ DNS-01 та зашифрований токен Cloudflare для видачі T
 Починайте ротацію Graph-сертифіката **не пізніше ніж за 30 днів** до закінчення
 терміну дії. Порядок дій:
 
-1. Згенеруйте новий сертифікат: `prepare-certificate-env.sh --rotate-graph --apply`.
+1. Згенеруйте новий сертифікат: 
+`./scripts/prepare-certificate-env.sh \
+  --env-file /opt/smtp2graph-deploy/env.dev.enc \
+  --rotate-tls --apply`.
 2. Завантажте новий публічний PEM до Entra та звірте відбиток.
 3. Скопіюйте підготовлений ключ Graph і відбиток у SOPS.
 4. Видаліть проміжний файл і повторно розгорніть.
 5. Попередній сертифікат в Entra та Docker Secret зберігайте, доки smoke-тестування не пройде успішно.
 
-Для TLS-сертифіката запустіть `prepare-certificate-env.sh --rotate-tls --apply`,
+Для TLS-сертифіката запустіть `./scripts/prepare-certificate-env.sh \
+  --env-file /opt/smtp2graph-deploy/env.dev.enc \
+  --rotate-tls --apply`,
 скопіюйте два TLS-рядки до SOPS, видаліть проміжний файл і повторно розгорніть.
 Скрипт виконує примусове оновлення через Certbot і перевіряє відповідність
 виданого імені хоста та ключа. Автоматичного запису до SOPS, розгортання чи

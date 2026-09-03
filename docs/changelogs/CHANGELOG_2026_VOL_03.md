@@ -2,6 +2,18 @@
 
 Продовження `CHANGELOG_2026_VOL_02.md`, ротованого після досягнення soft limit 300 рядків. Нові значущі user/operator-visible зміни додаються лише в цей том.
 
+2026-09-03 — Task E2E & Network: add zero-dependency live E2E delivery test and support dev/prod nftables sets
+    Context: (1) Operators needed a direct, zero-dependency end-to-end test to verify live email submission through the deployed gateway without Node.js dependencies. (2) `scripts/check-network-policy.sh` checked only the development nftables set name, failing on production hosts or environments where production policy was applied.
+    Change:
+      - Added `tests/integration/smtp-send-mail.py` and `tests/integration/test-e2e-send-mail.sh`, providing a zero-dependency Python 3 E2E test runner that performs STARTTLS negotiation, SMTP AUTH, and synthetic message submission.
+      - Added `tests/shell/test-e2e-send-mail.sh` to validate E2E runner input boundaries and added it to `tests/shell/run.sh`.
+      - Updated `scripts/check-network-policy.sh` to support both `smtp2graph_smtp_clients` and `smtp2graph_prod_smtp_clients` sets and provide actionable instructions when nftables policy is not loaded.
+      - Updated `docs/scripts_runbook.md` with instructions for `test-e2e-send-mail.sh`.
+    Verification: Executed live SMTP connection and STARTTLS against the gateway; ran `tests/shell/test-e2e-send-mail.sh` and full shell suite `tests/shell/run.sh`; ShellCheck and `git diff --check` passed.
+    Risks: None. E2E test respects credentials and safe permission boundaries.
+    Rollback: Remove `tests/integration/test-e2e-send-mail.sh`, `tests/integration/smtp-send-mail.py`, and revert changes to `check-network-policy.sh`.
+
+
 2026-09-02 — Task Network & Tests: fix overlay check in runbook, handle missing node in tests, and improve network check diagnostics
     Context: (1) `scripts/check-network-policy.sh` failed with `network smtp2graph_internal not found` / `Swarm overlay encryption is not enabled` because the runbook example specified `smtp2graph_internal` instead of the active `smtp2graph_internal_enc` overlay. (2) `tests/shell/test-integration-format-matrix.sh` and `tests/shell/test-moodle-starttls-contract.sh` failed with `node: command not found` on hosts without Node.js installed. (3) `test-rehearse-deployment.sh` failed due to missing backup contract keys and mock docker network commands.
     Change:

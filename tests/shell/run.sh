@@ -9,6 +9,7 @@ tests=(
   tests/shell/test-entrypoint.sh
   tests/shell/test-integration-format-matrix.sh
   tests/shell/test-moodle-starttls-contract.sh
+  tests/shell/test-e2e-send-mail.sh
   tests/shell/test-monitoring-contract.sh
   tests/shell/test-purge-failed.sh
   tests/shell/test-render-config.sh

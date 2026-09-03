@@ -214,9 +214,27 @@
 
 - Category: 1a (Task 6.1 non-production Moodle SMTP preflight).
 - Prerequisites: `node` (Node.js runtime, e.g. `sudo apt-get install -y nodejs`) is required on the host to execute the JavaScript client.
+- Inputs: explicit owner-only development env file and optional connect host/port. It strictly reads `SMTP_TLS_FQDN` and `SMTP_LISTEN_PORT`; by default it extracts the `moodle` record from `SMTP_USERS_TSV`, but an explicit owner-only `--password-file` can replace that source on the Moodle VM. It does not source an environment file.
 - Side effects: when it extracts the password, it writes only to a mode-`0600` temporary file below a mode-`0700` directory in `/dev/shm`, then removes it through an exit trap. It submits no SMTP message.
 - Safety: verifies trusted TLS against `SMTP_TLS_FQDN`, asserts AUTH is denied before STARTTLS and succeeds after STARTTLS, and never prints credentials or SMTP commands. Do not copy `.env` to Moodle; run there with an approved temporary password file and the gateway FQDN to establish the actual client-network path.
 - Check: `./tests/shell/test-moodle-starttls-contract.sh`.
+
+## `tests/integration/test-e2e-send-mail.sh`
+
+- Category: 1a (live end-to-end SMTP delivery verification).
+- Prerequisites: `python3` (uses standard library `smtplib` and `ssl`, zero external dependencies).
+- Inputs: optional `--env-file FILE` (or manual `--smtp-user`, `--password-file`, `--sender`, `--recipient`), optional `--smtp-host` (default `127.0.0.1`), `--smtp-port` (default `2525`), and `--insecure`.
+- Side effects: connects to the live gateway, performs STARTTLS, authenticates, and submits a synthetic test email. Verifies `250 OK` acceptance by the gateway.
+- Safety: does not print passwords or tokens; supports mode-`0600` password files or auto-extracts temporary credentials to `/dev/shm` from an owner-only env file.
+- Manual execution:
+  ```bash
+  ./tests/integration/test-e2e-send-mail.sh \
+    --smtp-host 127.0.0.1 --smtp-port 2525 \
+    --smtp-user <USER> --password-file <PASSWORD_FILE> \
+    --sender <SENDER_EMAIL> --recipient <RECIPIENT_EMAIL> \
+    --insecure
+  ```
+- Check: `./tests/shell/test-e2e-send-mail.sh`.
 
 ## `purge-failed.sh`
 

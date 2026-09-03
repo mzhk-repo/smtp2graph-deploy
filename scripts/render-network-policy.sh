@@ -8,6 +8,7 @@ die() {
 }
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/lib/read-deploy-env.sh
+# shellcheck disable=SC1091
 . "${root}/scripts/lib/read-deploy-env.sh"
 template=${SMTP_NFT_TEMPLATE:-}
 env_file=''
@@ -34,8 +35,13 @@ for cidr in "${values[@]}"; do
   rendered+=("$cidr")
 done
 replacement=$(
-  IFS=,
-  printf '%s' "${rendered[*]}"
+  python3 -c '
+import ipaddress, sys
+cidrs = sys.argv[1:]
+nets = [ipaddress.ip_network(c) for c in cidrs]
+collapsed = list(ipaddress.collapse_addresses(nets))
+print(",".join(str(n) for n in collapsed))
+' "${rendered[@]}"
 )
 tmp=$(mktemp "$(dirname "$output")/.smtp2graph-nft.XXXXXX")
 chmod 600 "$tmp"

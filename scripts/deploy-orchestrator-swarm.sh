@@ -30,6 +30,7 @@ USAGE
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 init_storage_script=${SMTP_INIT_STORAGE_SCRIPT:-"${project_root}/scripts/init-storage.sh"}
 reconcile_secrets_script=${SMTP_RECONCILE_SOPS_SECRETS_SCRIPT:-"${project_root}/scripts/reconcile-sops-secrets.sh"}
+bootstrap_host_script=${SMTP_BOOTSTRAP_HOST_SCRIPT:-"${project_root}/scripts/bootstrap-swarm-host.sh"}
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
@@ -225,6 +226,36 @@ initialize_storage() {
   "$init_storage_script" --storage-root "$SMTP2GRAPH_STORAGE_HOST_PATH" "${backup_args[@]}" --environment "$environment" --apply
 }
 
+bootstrap_host() {
+  [[ "$bootstrap_host_script" = /* && -x "$bootstrap_host_script" && ! -L "$bootstrap_host_script" ]] || die 'host bootstrap script must be an absolute executable non-symlink file.'
+  local bootstrap_context=$approval_context
+  if [[ "$environment" == production && -z "$bootstrap_context" ]]; then
+    bootstrap_context="manual-deploy-$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+  local bootstrap_args=(
+    --env-file "$SOPS_DEPLOY_SOURCE_FILE"
+    --apply
+  )
+  if [[ -n "$bootstrap_context" ]]; then
+    bootstrap_args+=(--approval-context "$bootstrap_context")
+  fi
+
+  if [[ $(id -u) -eq 0 ]]; then
+    "$bootstrap_host_script" "${bootstrap_args[@]}"
+  else
+    command -v sudo >/dev/null || die 'sudo is required for host bootstrap when running as non-root.'
+    local env_vars=()
+    [[ -z "${SOPS_AGE_KEY_FILE:-}" ]] || env_vars+=("SOPS_AGE_KEY_FILE=$SOPS_AGE_KEY_FILE")
+    [[ -z "${SOPS_AGE_KEY:-}" ]] || env_vars+=("SOPS_AGE_KEY=$SOPS_AGE_KEY")
+    [[ -z "${SMTP2GRAPH_SERVER_ENV_FILE:-}" ]] || env_vars+=("SMTP2GRAPH_SERVER_ENV_FILE=$SMTP2GRAPH_SERVER_ENV_FILE")
+    if [[ ${#env_vars[@]} -gt 0 ]]; then
+      sudo env "${env_vars[@]}" "$bootstrap_host_script" "${bootstrap_args[@]}"
+    else
+      sudo "$bootstrap_host_script" "${bootstrap_args[@]}"
+    fi
+  fi
+}
+
 reconcile_deploy_secrets() {
   local reconcile_mapping_file mapping_parent
   reconcile_mapping_file=$TLS_SECRET_MAPPING_FILE
@@ -302,6 +333,7 @@ case "$operation" in
       is_name "${!key}" || die "${key} has an unsafe name."
     done
     run_stack_config
+    bootstrap_host
     initialize_storage
     deploy_stack
     log "PASS: ${environment} stack deploy submitted; run check-network-policy.sh after service convergence."
@@ -320,6 +352,7 @@ case "$operation" in
     [[ "$secret_mapping_already_reconciled" == false ]] || die '--rollback does not accept --secret-mapping-already-reconciled.'
     run_stack_config
     require_apply_authorization
+    bootstrap_host
     initialize_storage
     ensure_overlay
     rollback_env=("${stack_env[@]}" "SMTP2GRAPH_IMAGE_DIGEST=${rollback_image}")

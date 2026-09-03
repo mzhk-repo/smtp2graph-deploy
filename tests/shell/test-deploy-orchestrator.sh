@@ -127,6 +127,23 @@ printf 'init-storage %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
 EOF
 chmod 700 "$fake_bin/init-storage"
 export SMTP_INIT_STORAGE_SCRIPT="$fake_bin/init-storage"
+cat >"$fake_bin/bootstrap-host" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'bootstrap-host %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
+EOF
+chmod 700 "$fake_bin/bootstrap-host"
+export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
+cat >"$fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == env ]]; then
+  shift
+  while [[ "${1:-}" == *=* ]]; do shift; done
+fi
+exec "$@"
+EOF
+chmod 700 "$fake_bin/sudo"
 
 PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 grep -Eq '^stack config ' "$calls"
@@ -155,6 +172,7 @@ PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/d
 second_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
 [[ "$second_smtp_secret" != "$first_smtp_secret" ]]
 test "$(grep -c '^stack deploy ' "$calls")" -eq 2
+test "$(grep -c '^bootstrap-host ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
 if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2

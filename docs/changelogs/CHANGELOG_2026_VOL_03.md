@@ -2,6 +2,33 @@
 
 Продовження `CHANGELOG_2026_VOL_02.md`, ротованого після досягнення soft limit 300 рядків. Нові значущі user/operator-visible зміни додаються лише в цей том.
 
+2026-09-03 — Task E2E & Network: add zero-dependency live E2E delivery test and support dev/prod nftables sets
+    Context: (1) Operators needed a direct, zero-dependency end-to-end test to verify live email submission through the deployed gateway without Node.js dependencies. (2) `scripts/check-network-policy.sh` checked only the development nftables set name, failing on production hosts or environments where production policy was applied.
+    Change:
+      - Added `tests/integration/smtp-send-mail.py` and `tests/integration/test-e2e-send-mail.sh`, providing a zero-dependency Python 3 E2E test runner that performs STARTTLS negotiation, SMTP AUTH, and synthetic message submission.
+      - Added `tests/shell/test-e2e-send-mail.sh` to validate E2E runner input boundaries and added it to `tests/shell/run.sh`.
+      - Updated `scripts/check-network-policy.sh` to support both `smtp2graph_smtp_clients` and `smtp2graph_prod_smtp_clients` sets and provide actionable instructions when nftables policy is not loaded.
+      - Added idempotent execution of `bootstrap-swarm-host.sh` directly within `scripts/deploy-orchestrator-swarm.sh` during `--deploy --apply` and `--rollback` (running via `sudo` with preserved SOPS age credentials when executed by non-root users), ensuring node labels, encrypted overlay network, storage root, and host nftables firewall policy are automatically enforced on every deploy from user or CI/CD context.
+      - In `deploy/network/smtp2graph-prod.nft`, removed duplicate input chain policy declaration that caused `Error: you cannot set chain policy twice`.
+      - In `scripts/render-network-policy.sh`, added automatic collapsing of overlapping IPv4 CIDRs using `ipaddress.collapse_addresses` to prevent nftables interval set conflicts (`Error: conflicting intervals specified`), and removed extraneous uncollapsed CIDR output.
+      - Updated `docs/scripts_runbook.md` with instructions for `test-e2e-send-mail.sh`, including the safe ephemeral SOPS decryption command in `/dev/shm` with guaranteed `trap` cleanup.
+    Verification: Executed live SMTP connection and STARTTLS against the gateway; verified passwordless sudo support; verified automatic CIDR collapse against nftables syntax check; ran `tests/shell/test-e2e-send-mail.sh`, `tests/shell/test-deploy-orchestrator.sh`, and full shell suite `tests/shell/run.sh`; all security tests pass (`tests/security/test-*.sh`); ShellCheck and `git diff --check` passed.
+    Risks: None. Host bootstrap is idempotent and safe for repeated execution.
+    Rollback: Remove `bootstrap_host` invocation from `deploy-orchestrator-swarm.sh`, and revert changes to `docs/scripts_runbook.md`.
+
+
+2026-09-02 — Task Network & Tests: fix overlay check in runbook, handle missing node in tests, and improve network check diagnostics
+    Context: (1) `scripts/check-network-policy.sh` failed with `network smtp2graph_internal not found` / `Swarm overlay encryption is not enabled` because the runbook example specified `smtp2graph_internal` instead of the active `smtp2graph_internal_enc` overlay. (2) `tests/shell/test-integration-format-matrix.sh` and `tests/shell/test-moodle-starttls-contract.sh` failed with `node: command not found` on hosts without Node.js installed. (3) `test-rehearse-deployment.sh` failed due to missing backup contract keys and mock docker network commands.
+    Change:
+      - In `docs/scripts_runbook.md`, updated the `check-network-policy.sh` example to use `--network smtp2graph_internal_enc`, and documented the `node` host runtime requirement for integration clients.
+      - In `scripts/check-network-policy.sh`, added a preflight network existence check that reports a descriptive error if the overlay network is not found.
+      - In `tests/shell/test-integration-format-matrix.sh` and `tests/shell/test-moodle-starttls-contract.sh`, added conditional checks and fake node fallbacks so shell unit tests pass on hosts without Node.js.
+      - In `scripts/rehearse-deployment.sh` and `tests/shell/test-rehearse-deployment.sh`, added `SMTP2GRAPH_BACKUP_*` keys to allowed env keys and added network inspection mocks to fake docker.
+    Verification: Full shell test suite (`./tests/shell/run.sh`), all security tests (`tests/security/test-*.sh`), ShellCheck, and `git diff --check` passed.
+    Risks: None. Network encryption and security checks remain strictly enforced.
+    Rollback: Revert changes to `docs/scripts_runbook.md`, `scripts/check-network-policy.sh`, `scripts/rehearse-deployment.sh`, and `tests/shell/`.
+
+
 2026-09-02 — Task CI/CD & Deploy: fix secret mapping loading, overlay creation, remove placement constraint, and make production approval context optional for manual deploy
     Context: (1) CI/CD Swarm deployment via `scripts/ci-deploy-swarm.sh` and `scripts/deploy-orchestrator-swarm.sh` failed during deployment on fresh targets due to missing secret mapping file before reconciliation, unbound variable when checking secret names before load, missing encrypted overlay network, and node label placement constraint requirements. (2) Manual production deploy failed because `--approval-context` was strictly required even for direct host executions.
     Change:

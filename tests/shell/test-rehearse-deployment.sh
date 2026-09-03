@@ -33,6 +33,9 @@ printf '%s\n' \
   'SWARM_STACK_NAME=smtp2graph' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${storage}" \
+  "SMTP2GRAPH_BACKUP_LOCAL_DIR=${storage}/backups" \
+  'SMTP2GRAPH_BACKUP_RCLONE_REMOTE=gdrive-backup' \
+  'SMTP2GRAPH_BACKUP_RCLONE_PATH=smtp2graph/dev' \
   'SMTP2GRAPH_MODE=full' \
   'GRAPH_AUTH_MODE=certificate' \
   'SMTP_MAX_MESSAGE_BYTES=26214400' \
@@ -85,6 +88,11 @@ case "${1:-} ${2:-}" in
     if [[ "$*" == *'{{.ID}}'* ]]; then printf '%s\n' task123
     else printf '%s\n' 'Running 1 second ago|'; fi
     ;;
+  'network inspect')
+    printf '%s\n' 'overlay swarm {"encrypted":"true"}'
+    exit 0
+    ;;
+  'network create') exit 0 ;;
   'secret inspect') [[ -f "${FAKE_SECRET_STATE}" ]] ;;
   'secret create') touch "${FAKE_SECRET_STATE}" ;;
   'secret rm') rm -f -- "${FAKE_SECRET_STATE}" ;;
@@ -124,13 +132,27 @@ cat >"$fake_bin/init-storage" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 EOF
+cat >"$fake_bin/bootstrap-host" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
 cat >"$fake_bin/node" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 touch "${FAKE_QUEUE_DIR}/rehearsal.eml"
 printf 'PASS: fake SMTP submit\n'
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage"
+cat >"$fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == env ]]; then
+  shift
+  while [[ "${1:-}" == *=* ]]; do shift; done
+fi
+exec "$@"
+EOF
+chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host" "$fake_bin/sudo"
+export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
 
 PATH="$fake_bin:$PATH" \
   FAKE_QUEUE_DIR="$storage/queue" FAKE_SECRET_STATE="$secret_state" \

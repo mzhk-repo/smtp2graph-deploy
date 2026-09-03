@@ -9,3 +9,4 @@ docs/hello-world.md
 .decrypted~env.*.enc
 cert.pem
 private.key
+.archive

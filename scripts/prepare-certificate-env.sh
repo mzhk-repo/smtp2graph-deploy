@@ -208,7 +208,7 @@ fi
 
 if [[ "$graph_missing" == true ]]; then
   [[ ! -L "$graph_cert" ]] || die 'Graph public certificate path must not be a symlink.'
-  openssl req -x509 -newkey rsa:3072 -nodes -days 365 \
+  openssl req -x509 -newkey rsa:3072 -nodes -days 730 \
     -subj "/CN=smtp2graph-graph-client-${environment}" \
     -keyout "$graph_key" -out "$stage_dir/graph-cert.pem" >/dev/null 2>&1
   install -m 400 "$stage_dir/graph-cert.pem" "$graph_cert"

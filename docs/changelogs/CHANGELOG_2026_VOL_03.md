@@ -265,3 +265,10 @@
     Verification: Container-hardening/storage regression verifies root, queue, failed and backup UID/GID/mode contracts; Bash syntax, ShellCheck and `git diff --check` passed.
     Risks: The gateway runtime group has write/execute, but not read, access to the storage root so it can create `/data/temp`; payload directories remain runtime-private.
     Rollback: Restore the root ownership/mode contract to `65532:65532/0700` only with a reviewed gateway runtime compatibility assessment.
+
+2026-09-03 — Certificate bootstrap: generate two-year Graph certificates
+    Context: The operator requested a longer Graph certificate lifetime for the initial Entra onboarding attempt.
+    Change: Generated Graph X.509 certificates now use a 730-day validity period instead of 365 days.
+    Verification: The certificate preparation script passes Bash syntax and ShellCheck validation.
+    Risks: The selected Entra tenant application-management policy may reject certificates exceeding its configured maximum lifetime; shorten the generation period if upload is refused.
+    Rollback: Change the OpenSSL `-days` value in `scripts/prepare-certificate-env.sh` back to `365` and regenerate the pending certificate staging.

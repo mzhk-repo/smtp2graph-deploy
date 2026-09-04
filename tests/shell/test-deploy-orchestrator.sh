@@ -289,6 +289,14 @@ if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE=
   exit 1
 fi
 
+missing_certbot_version_env="$tmp/missing-certbot-version.env"
+sed '/^CERTBOT_MIN_VERSION=/d' "$env_file" >"$missing_certbot_version_env"
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$missing_certbot_version_env" --deploy --apply >"$tmp/missing-certbot-version.out" 2>&1; then
+  printf 'ERROR: deploy unexpectedly accepted a missing Certbot version floor.\n' >&2
+  exit 1
+fi
+grep -Fq 'required deployment key is missing: CERTBOT_MIN_VERSION.' "$tmp/missing-certbot-version.out"
+
 incomplete_mapping="$tmp/incomplete-secret-mapping.env"
 sed '$d' "$mapping_file" >"$incomplete_mapping"
 chmod 600 "$incomplete_mapping"

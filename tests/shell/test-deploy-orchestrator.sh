@@ -41,6 +41,8 @@ printf '%s\n' \
   'SEND_RETRY_LIMIT=1' \
   'SEND_RETRY_INTERVAL_MINUTES=1' \
   "TLS_SECRET_MAPPING_FILE=${mapping_file}" \
+  'CERTBOT_MIN_VERSION=2.9.0-1' \
+  'CERTBOT_DNS_CLOUDFLARE_MIN_VERSION=2.0.0-1' \
   'GRAPH_TENANT_ID="00000000-0000-0000-0000-000000000000"' \
   'GRAPH_CLIENT_ID="11111111-1111-1111-1111-111111111111"' \
   'GRAPH_CERTIFICATE_THUMBPRINT="synthetic-thumbprint"' \
@@ -144,8 +146,45 @@ fi
 exec "$@"
 EOF
 chmod 700 "$fake_bin/sudo"
+cat >"$fake_bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+if [[ ! -f "${FAKE_PACKAGE_READY}" ]]; then
+  exit 1
+fi
+printf '%s\n' '99.0.0-1'
+EOF
+chmod 700 "$fake_bin/dpkg-query"
+cat >"$fake_bin/dpkg" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == --compare-versions ]]
+exit 0
+EOF
+chmod 700 "$fake_bin/dpkg"
+cat >"$fake_bin/apt-get" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'apt-get %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
+touch "$FAKE_PACKAGE_READY"
+EOF
+chmod 700 "$fake_bin/apt-get"
+cat >"$fake_bin/certbot" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == plugins ]]
+printf '%s\n' '* dns-cloudflare'
+EOF
+chmod 700 "$fake_bin/certbot"
+cat >"$fake_bin/prepare-certificates" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'prepare-certificates %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
+[[ "${FAKE_CERTIFICATE_STAGE_ONLY:-false}" != true ]] || exit 75
+EOF
+chmod 700 "$fake_bin/prepare-certificates"
+export SMTP_CERTIFICATE_PREPARE_SCRIPT="$fake_bin/prepare-certificates"
+package_ready="$tmp/package-ready"
+touch "$package_ready"
 
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null
 grep -Eq '^stack config ' "$calls"
 grep -Eq '^mapped-secret=smtp2graph_smtp_users_vmapped$' "$calls"
 grep -Eq '^derived-sender=noreply@example.invalid$' "$calls"
@@ -164,38 +203,53 @@ fi
 chmod 500 "$tmp/mapping"
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" FAKE_CERTIFICATE_STAGE_ONLY=true SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null 2>&1; then
+  printf 'ERROR: certificate staging unexpectedly continued deployment.\n' >&2
+  exit 1
+fi
+grep -Eq '^prepare-certificates ' "$calls"
+if grep -Eq '^(secret |stack deploy|bootstrap-host|init-storage)' "$calls"; then
+  printf 'ERROR: certificate staging mutated deploy state.\n' >&2
+  exit 1
+fi
+
+: >"$calls"
+rm -f -- "$package_ready"
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+grep -Eq '^apt-get update$' "$calls"
+grep -Eq '^apt-get install -y certbot python3-certbot-dns-cloudflare$' "$calls"
 first_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
 [[ "$first_smtp_secret" != smtp2graph_smtp_users_vmapped ]]
 sed -i 's/synthetic-password/synthetic-password-rotated/' "$env_file"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --deploy --apply >/dev/null
 second_smtp_secret=$(awk -F= '/^mapped-secret=/ { value=$2 } END { print value }' "$calls")
 [[ "$second_smtp_secret" != "$first_smtp_secret" ]]
 test "$(grep -c '^stack deploy ' "$calls")" -eq 2
 test "$(grep -c '^bootstrap-host ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
+test "$(grep -c '^prepare-certificates ' "$calls")" -eq 2
 if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1
 fi
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --status >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --status >/dev/null
 grep -Eq '^service inspect smtp2graph_gateway$' "$calls"
 grep -Eq '^service ps smtp2graph_gateway --no-trunc$' "$calls"
 
 : >"$calls"
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --queue-compatibility-confirmed --apply >/dev/null
 grep -Eq '^stack deploy ' "$calls"
 grep -Eq "^digest=${rollback_digest}$" "$calls"
 
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$rollback_digest" --apply >/dev/null 2>&1; then
   printf 'ERROR: rollback unexpectedly skipped queue compatibility confirmation.\n' >&2
   exit 1
 fi
 
 unknown_digest='example.invalid/smtp2graph@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --rollback --image-digest "$unknown_digest" --queue-compatibility-confirmed --apply >/dev/null
 grep -Eq "^digest=${unknown_digest}$" "$calls"
 
 production_env="$tmp/production.env"
@@ -203,27 +257,27 @@ sed 's/^DEPLOY_ENVIRONMENT="development"$/DEPLOY_ENVIRONMENT="production"/' "$en
 chmod 600 "$production_env"
 printf '%s\n' 'SERVER_ENV=prod' >"$server_env_file"
 control_plane_sha=$(git -C "$root" rev-parse HEAD)
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply >/dev/null
 grep -Eq '^stack deploy ' "$calls"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag invalid-tag >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag invalid-tag >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly accepted invalid release tag.\n' >&2
   exit 1
 fi
-PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
+PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null
 grep -Eq '^stack deploy ' "$calls"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --secret-mapping-already-reconciled --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly skipped SOPS Secret reconciliation.\n' >&2
   exit 1
 fi
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --deploy --apply --release-tag v1.1.6 --approval-context release-approval-20260801 --declared-deploy-ref "$control_plane_sha" >/dev/null 2>&1; then
   printf 'ERROR: production deploy unexpectedly accepted SERVER_ENV mismatch.\n' >&2
   exit 1
 fi
 
 placeholder_env="$tmp/placeholder.env"
 sed 's#^SMTP2GRAPH_IMAGE_DIGEST=.*#SMTP2GRAPH_IMAGE_DIGEST=example.invalid/smtp2graph:latest#' "$env_file" >"$placeholder_env"
-if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$placeholder_env" --check >/dev/null 2>&1; then
+if PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$placeholder_env" --check >/dev/null 2>&1; then
   printf 'ERROR: mutable image tag was unexpectedly accepted.\n' >&2
   exit 1
 fi
@@ -262,7 +316,7 @@ nonexistent_mapping_file="$tmp/nonexistent-secret-mapping.env"
 nonexistent_mapping_env="$tmp/nonexistent-mapping.env"
 sed "s#^TLS_SECRET_MAPPING_FILE=.*#TLS_SECRET_MAPPING_FILE=${nonexistent_mapping_file}#" "$env_file" >"$nonexistent_mapping_env"
 chmod 600 "$nonexistent_mapping_env"
-if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$nonexistent_mapping_env" --deploy --apply >/dev/null; then
+if ! PATH="$fake_bin:$PATH" FAKE_DOCKER_CALLS="$calls" FAKE_DOCKER_SECRET_DIR="$tmp/docker-secrets" FAKE_PACKAGE_READY="$package_ready" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$nonexistent_mapping_env" --deploy --apply >/dev/null; then
   printf 'ERROR: fresh deploy unexpectedly failed when Secret mapping file does not exist initially.\n' >&2
   exit 1
 fi

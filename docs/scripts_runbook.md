@@ -1,5 +1,14 @@
 # Script runbook
 
+## `prepare-certificate-env.sh`
+
+- Category: 1b (certificate bootstrap and manual rotation).
+- Inputs: explicit SOPS env, Certbot DNS-01 Cloudflare settings, and optional absolute staging path. `--apply` is required for issuance/generation; `--rotate-tls` and `--rotate-graph` are explicit manual rotations.
+- Side effects: creates or upgrades the TLS/Graph certificate material and writes only escaped Dotenv values to ignored mode-`0600` `.env.certificates`; it never writes SOPS, Docker Secrets, or a stack.
+- Safety: all decrypted values and Cloudflare credentials are staged only in `/dev/shm`; PEM values are never printed. A pending staging file is reused rather than silently replaced.
+- Check: `./tests/security/test-prepare-certificate-env.sh`, `bash -n scripts/prepare-certificate-env.sh`.
+- Follow [`CERTIFICATE_RUNBOOK.md`](CERTIFICATE_RUNBOOK.md) for Entra onboarding, SOPS handoff, rotation, and staging deletion.
+
 ## `backup.sh` / `restore.sh`
 
 - Category: 2 (manual backup and cold-recovery automation).
@@ -103,7 +112,7 @@
 
 - Category: 1b (dev/prod persistent-storage initialization).
 - Inputs: explicit canonical `--storage-root`; optional backup local directory, rclone remote and rclone path must be supplied together. Local paths must be absolute non-symlink directories; rclone names/paths are strictly validated.
-- Side effects: default mode is validation-only. `--apply` requires `--environment development|production` and matching `SERVER_ENV`; it converges the storage root/direct queue/failed children to UID/GID `65532` mode `0700`, creates the owner-only local backup directory and invokes `rclone mkdir` for the configured cloud path. The runtime can then create its required direct `/data/temp` path.
+- Side effects: default mode is validation-only. `--apply` requires `--environment development|production` and matching `SERVER_ENV`; it converges the storage root to the invoking user and runtime GID `65532` with mode `0770`, its direct queue/failed children to UID/GID `65532` mode `0700`, creates the owner-only local backup directory for the invoking user and invokes `rclone mkdir` for the configured cloud path. The runtime can then create its required direct `/data/temp` path and scan storage metrics.
 - Safety: refuses `/`, symlink components, recursive ownership changes and non-empty child directories with incompatible owner/mode; it does not traverse, log or mutate message payloads. Cloud mutation occurs only with explicit `--apply`.
 - Rollback: no automatic ownership rollback. Restore the explicit prior ownership only after a queue/recovery review.
 - Check: `./tests/security/test-container-hardening.sh`.
@@ -161,7 +170,7 @@
   ```bash
   cd /opt/smtp2graph-deploy
     sudo ./scripts/check-network-policy.sh \
-      --network smtp2graph_internal_enc \
+      --network smtp2graph_internal_enc
   ```
 
 ## `render-network-policy.sh`
@@ -229,20 +238,17 @@
 - Safe execution with ephemeral SOPS decryption in `/dev/shm`:
   ```bash
   cd /opt/smtp2graph-deploy
-  sh -c '
   bash -c '
     set -euo pipefail
     stage_dir=$(mktemp -d /dev/shm/smtp2graph-e2e.XXXXXX)
     chmod 700 "$stage_dir"
     decrypted_env="$stage_dir/decrypted.env"
     trap "rm -rf -- \"\$stage_dir\"" EXIT
-    export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/home/pinokew/.config/sops/age/keys.txt}"
     export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
     sops --decrypt --input-type dotenv --output-type dotenv /opt/smtp2graph-deploy/env.dev.enc > "$decrypted_env"
     chmod 600 "$decrypted_env"
     ./tests/integration/test-e2e-send-mail.sh \
       --env-file "$decrypted_env" \
-      --smtp-user gateway \
       --insecure
   '
   ```

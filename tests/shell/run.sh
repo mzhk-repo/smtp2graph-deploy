@@ -15,6 +15,7 @@ tests=(
   tests/shell/test-render-config.sh
   tests/shell/test-rehearse-deployment.sh
   tests/shell/test-verify-env.sh
+  tests/security/test-prepare-certificate-env.sh
   tests/recovery/cold-restore.sh
 )
 

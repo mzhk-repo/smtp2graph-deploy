@@ -244,3 +244,72 @@
     Verification: Container-hardening regression proves local and fake-rclone directory initialization; deploy-orchestrator regression and `make validate` passed.
     Risks: A missing rclone binary or unavailable cloud remote blocks explicit deploy/rollback before stack submission; this is intentional to avoid a deployment that cannot meet the backup contract.
     Rollback: Stop the Ansible schedule or remove the reviewed backup contract only after retaining verified archives. Do not remove active cloud/local archives automatically.
+
+2026-09-03 — Certificate bootstrap: ACME dependency verification and staged SOPS handoff
+    Context: First deployment could not safely populate the required Graph and TLS PEM contract without manually serializing multiline private keys.
+    Change: Deploy now validates/install-upgrades env-minimum Certbot and DNS-Cloudflare packages before certificate preparation. Missing certificate values issue TLS through DNS-01, generate Graph X.509 material, and create ignored mode-0600 `.env.certificates` with escaped Dotenv values for manual SOPS handoff; no Docker or stack mutation follows until the encrypted contract is updated.
+    Verification: Isolated certificate bootstrap and deploy-orchestrator regressions cover package/plugin checks, escaped PEM staging, incomplete-input refusal, retry safety and pre-reconciliation stop behavior.
+    Risks: Explicit deploy apply can contact APT and Cloudflare when tooling/certificates are missing; failures stop before Secret or stack changes.
+    Rollback: Remove the staged file after SOPS handoff. Restore a reviewed prior SOPS contract and declaratively redeploy; do not delete active Docker Secrets or Entra certificates before verified cutover.
+
+2026-09-03 — Certificate bootstrap: create caller-owned certificate directories
+    Context: CI certificate preparation ran before privileged host bootstrap and could not create a missing TLS output directory under `/srv/smtp2graph`.
+    Change: Certificate preparation now creates or reconciles `TLS_OUTPUT_DIR` and `TLS_ACME_STATE_DIR` as mode `0700` directories owned by the invoking user. It uses `sudo install` only when the caller lacks directory access, and rejects symlinked or unsafe paths.
+    Verification: Certificate preparation security regression covers the unprivileged fallback and verifies caller UID/GID ownership and mode `0700`; ShellCheck and `git diff --check` passed.
+    Risks: A caller that cannot create the configured direct child directory must have passwordless or interactive sudo access for `install`; parent directories remain unchanged.
+    Rollback: Revert the certificate-directory helper and restore privileged host bootstrap before certificate preparation only through a reviewed ordering change.
+
+2026-09-03 — Storage initialization: retain caller access without weakening gateway isolation
+    Context: Operators need ownership of the storage root and local backup directory created by `init-storage.sh`, while the gateway still runs as UID/GID `65532` and must create its direct runtime temp directory.
+    Change: The storage root now converges to invoking-user ownership, GID `65532` and mode `0730`; direct `queue` and `failed` children remain `65532:65532` mode `0700`. The local backup directory converges to invoking-user ownership and mode `0700`. Non-root execution uses sudo only for required ownership changes.
+    Verification: Container-hardening/storage regression verifies root, queue, failed and backup UID/GID/mode contracts; Bash syntax, ShellCheck and `git diff --check` passed.
+    Risks: The gateway runtime group has write/execute, but not read, access to the storage root so it can create `/data/temp`; payload directories remain runtime-private.
+    Rollback: Restore the root ownership/mode contract to `65532:65532/0700` only with a reviewed gateway runtime compatibility assessment.
+
+2026-09-03 — Certificate bootstrap: generate two-year Graph certificates
+    Context: The operator requested a longer Graph certificate lifetime for the initial Entra onboarding attempt.
+    Change: Generated Graph X.509 certificates now use a 730-day validity period instead of 365 days.
+    Verification: The certificate preparation script passes Bash syntax and ShellCheck validation.
+    Risks: The selected Entra tenant application-management policy may reject certificates exceeding its configured maximum lifetime; shorten the generation period if upload is refused.
+    Rollback: Change the OpenSSL `-days` value in `scripts/prepare-certificate-env.sh` back to `365` and regenerate the pending certificate staging.
+
+2026-09-03 — Certificate bootstrap: emit valid escaped PEM for SOPS handoff
+    Context: TLS certificate material copied from `.env.certificates` failed reconciliation because its line endings were double-escaped and decoded as literal `\\n` text rather than PEM newlines.
+    Change: The staging emitter now writes one Dotenv `\n` escape per PEM line. The certificate preparation regression decodes its staged TLS values and validates both with OpenSSL.
+    Verification: Isolated certificate preparation security regression, Bash syntax, ShellCheck and `git diff --check` passed.
+    Risks: Existing staged TLS values require the reconciler's temporary legacy compatibility; newly emitted values use the canonical format. Graph material already uploaded to Entra is unaffected.
+    Rollback: Revert the staging emitter and its regression only together after replacing legacy staged TLS values.
+
+2026-09-03 — Secret reconciliation: accept legacy double-escaped certificate PEM
+    Context: Certificate staging generated before the PEM escaping correction may already have been copied into SOPS, including the Graph private key and TLS pair.
+    Change: The reconciler now decodes PEM values a second time only when the first decode still contains literal `\\n`, and removes only legacy trailing backslashes before PEM newlines; canonical one-escape values remain unchanged.
+    Verification: Reconciler regression validates encrypted, plaintext and legacy double-escaped/trailing-backslash TLS contracts.
+    Risks: Legacy compatibility is limited to PEM fields and does not relax OpenSSL certificate/key validation.
+    Rollback: Remove the second decode after every legacy SOPS contract has been replaced by newly emitted canonical values.
+
+2026-09-03 — Storage initialization: allow gateway metrics to scan the storage root
+    Context: Caller-owned storage root mode `0730` allowed the runtime group to create `/data/temp` but denied the gateway metrics handler's required `scandir('/data')`, causing every Swarm task to exit with `EACCES`.
+    Change: The storage root now converges to mode `0770` with invoking-user ownership and runtime GID `65532`; `queue` and `failed` remain `65532:65532/0700`.
+    Verification: Live Swarm task logs identified the exact failure; storage hardening regression asserts the revised ownership/mode contract.
+    Risks: Members of GID `65532` may list the storage-root child names, but payload access remains restricted to the runtime-owned queue and failed directories.
+    Rollback: Restore mode `0730` only if the gateway metrics implementation no longer scans `/data`.
+
+2026-09-03 — E2E runbook: repair ephemeral SOPS execution command
+    Context: The documented E2E command used malformed nested shell quoting, causing the terminal invocation to fail before decrypting the temporary environment file.
+    Change: The runbook now uses one correctly quoted `bash -c` invocation and a single caller-derived `SOPS_AGE_KEY_FILE` default. The E2E runner removes unreachable duplicate cleanup/error lines.
+    Verification: E2E runner shell regression, Bash syntax and `git diff --check` passed.
+    Risks: The command still intentionally decrypts the selected SOPS contract into a mode-`0600` file in `/dev/shm` for the duration of the live synthetic SMTP submission.
+    Rollback: Restore the prior runbook command only if replacing it with another syntactically validated wrapper.
+
+2026-09-03 — E2E runner: select the configured SMTP user by default
+    Context: The development SOPS contract uses `noreply`, while the runbook forced a nonexistent `gateway` user and the runner's default-selection behavior was obscured by duplicate initialization.
+    Change: With an env file, the runner now selects the first valid `SMTP_USERS_TSV` user unless `--smtp-user` is supplied. The runbook leaves user selection automatic; manual invocation without an env file still defaults to `gateway`.
+    Verification: Live command reaches credential selection without shell failure; E2E shell regression, Bash syntax and `git diff --check` passed.
+    Risks: A multi-user environment should pass `--smtp-user` explicitly to select a non-first account.
+    Rollback: Pass the required username explicitly through `--smtp-user`; do not expose its password.
+
+2026-09-03 — Development E2E SMTP submission accepted
+    Context: The gateway was redeployed after certificate, secret and storage-permission corrections.
+    Change: None; this is runtime evidence.
+    Verification: Local synthetic E2E test completed STARTTLS and SMTP AUTH with the configured development user, then received gateway `250` acceptance.
+    Risks: SMTP acceptance proves durable gateway submission only; independent recipient-mailbox evidence remains required to claim end-to-end Graph delivery.

@@ -36,7 +36,7 @@ fi
 
 mkdir -p "$tmp/storage"
 storage_out=$("$storage_init" --storage-root "$tmp/storage")
-printf '%s\n' "$storage_out" | grep -Eq '^READY: storage root will be corrected to 65532:65532 mode 0700\.$'
+printf '%s\n' "$storage_out" | grep -Eq "^READY: storage root will be corrected to $(id -u):65532 mode 0770\\.$"
 printf '%s\n' "$storage_out" | grep -Eq '^READY: queue will be initialized as 65532:65532 mode 0700\.$'
 if "$storage_init" --storage-root / >/dev/null 2>&1; then
   printf 'ERROR: storage initializer unexpectedly accepted /.\n' >&2
@@ -69,4 +69,8 @@ test -d "$tmp/storage/queue"
 test -d "$tmp/storage/failed"
 test -d "$tmp/backups"
 test -d "$tmp/rclone/smtp2graph/dev"
+[[ $(stat -c '%u:%g:%a' "$tmp/storage") == "$(id -u):65532:770" ]]
+[[ $(stat -c '%u:%g:%a' "$tmp/storage/queue") == 65532:65532:700 ]]
+[[ $(stat -c '%u:%g:%a' "$tmp/storage/failed") == 65532:65532:700 ]]
+[[ $(stat -c '%u:%g:%a' "$tmp/backups") == "$(id -u):$(id -g):700" ]]
 printf 'PASS: container hardening and storage initialization policies fail closed.\n'

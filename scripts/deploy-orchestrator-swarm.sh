@@ -322,6 +322,8 @@ package_at_least() {
 ensure_certbot_dns_cloudflare() {
   local needs_install=false
   for tool in apt-get dpkg dpkg-query; do command -v "$tool" >/dev/null || die "$tool is required for certificate tooling."; done
+  [[ -n "${CERTBOT_MIN_VERSION:-}" ]] || die 'required deployment key is missing: CERTBOT_MIN_VERSION.'
+  [[ -n "${CERTBOT_DNS_CLOUDFLARE_MIN_VERSION:-}" ]] || die 'required deployment key is missing: CERTBOT_DNS_CLOUDFLARE_MIN_VERSION.'
   [[ "$CERTBOT_MIN_VERSION" =~ ^[A-Za-z0-9.+:~_-]+$ ]] || die 'CERTBOT_MIN_VERSION is unsafe.'
   [[ "$CERTBOT_DNS_CLOUDFLARE_MIN_VERSION" =~ ^[A-Za-z0-9.+:~_-]+$ ]] || die 'CERTBOT_DNS_CLOUDFLARE_MIN_VERSION is unsafe.'
   package_at_least certbot "$CERTBOT_MIN_VERSION" || needs_install=true

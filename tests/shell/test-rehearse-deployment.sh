@@ -138,6 +138,17 @@ cat >"$fake_bin/bootstrap-host" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 EOF
+cat >"$fake_bin/renew-tls" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+env_file=''
+while (($#)); do case "$1" in --env-file) env_file=$2; shift 2;; *) shift;; esac; done
+mapping=$(awk -F= '$1 == "TLS_SECRET_MAPPING_FILE" {print $2; exit}' "$env_file")
+if [[ -n "$mapping" && ! -e "$mapping" ]]; then
+  printf '%s\n' 'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vtest' 'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vtest' >"$mapping"
+  chmod 600 "$mapping"
+fi
+EOF
 cat >"$fake_bin/node" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -153,8 +164,9 @@ if [[ "${1:-}" == env ]]; then
 fi
 exec "$@"
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host" "$fake_bin/sudo"
+chmod 700 "$fake_bin/docker" "$fake_bin/smoke" "$fake_bin/node" "$fake_bin/sops" "$fake_bin/init-storage" "$fake_bin/bootstrap-host" "$fake_bin/renew-tls" "$fake_bin/sudo"
 export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
+export SMTP_TLS_RENEW_SCRIPT="$fake_bin/renew-tls"
 
 PATH="$fake_bin:$PATH" \
   FAKE_QUEUE_DIR="$storage/queue" FAKE_SECRET_STATE="$secret_state" \

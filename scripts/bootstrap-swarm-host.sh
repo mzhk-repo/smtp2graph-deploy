@@ -105,6 +105,34 @@ prepare_storage_root() {
   [[ "$resolved_root" == "$resolved_parent/$storage_leaf" ]] || die 'storage root must not contain symlink components.'
 }
 
+install_tls_renewal_timer() {
+  local age_file age_mode config_dir config_file config_tmp systemd_dir libexec_dir
+  [[ "$apply" == true ]] || return
+  for tool in systemctl stat; do command -v "$tool" >/dev/null || die "$tool is required for TLS renewal scheduling."; done
+  age_file=${SOPS_AGE_KEY_FILE:-}
+  [[ "$age_file" = /* && -f "$age_file" && ! -L "$age_file" ]] || die 'TLS renewal requires SOPS_AGE_KEY_FILE as an absolute regular non-symlink file.'
+  age_mode=$(stat -c '%a' "$age_file") || die 'could not inspect SOPS age identity permissions.'
+  [[ $((8#$age_mode & 077)) -eq 0 ]] || die 'SOPS age identity must be owner-only.'
+  [[ -f "$project_root/deploy/systemd/smtp2graph-tls-renew.service" && -f "$project_root/deploy/systemd/smtp2graph-tls-renew.timer" && -x "$project_root/deploy/systemd/tls-renew-launcher.sh" ]] || die 'TLS renewal systemd assets are missing.'
+  config_dir=${SMTP_TLS_RENEW_CONFIG_DIR:-/etc/smtp2graph}
+  systemd_dir=${SMTP_TLS_RENEW_SYSTEMD_DIR:-/etc/systemd/system}
+  libexec_dir=${SMTP_TLS_RENEW_LIBEXEC_DIR:-/usr/local/libexec/smtp2graph}
+  for directory in "$config_dir" "$systemd_dir" "$libexec_dir"; do [[ "$directory" = /* && "$directory" != / ]] || die 'TLS renewal installation directory is unsafe.'; done
+  config_file="$config_dir/tls-renewal.env"
+  install -d -m 700 "$config_dir"
+  install -d -m 755 "$systemd_dir" "$libexec_dir"
+  install -m 644 "$project_root/deploy/systemd/smtp2graph-tls-renew.service" "$systemd_dir/smtp2graph-tls-renew.service"
+  install -m 644 "$project_root/deploy/systemd/smtp2graph-tls-renew.timer" "$systemd_dir/smtp2graph-tls-renew.timer"
+  install -m 755 "$project_root/deploy/systemd/tls-renew-launcher.sh" "$libexec_dir/tls-renew"
+  config_tmp=$(mktemp "$config_dir/.tls-renewal.XXXXXX")
+  chmod 600 "$config_tmp"
+  printf 'SMTP2GRAPH_PROJECT_ROOT=%s\nSMTP2GRAPH_ENV_FILE=%s\nSOPS_AGE_KEY_FILE=%s\n' "$project_root" "$SOPS_DEPLOY_SOURCE_FILE" "$age_file" >"$config_tmp"
+  mv "$config_tmp" "$config_file"
+  chmod 600 "$config_file"
+  systemctl daemon-reload
+  systemctl enable --now smtp2graph-tls-renew.timer >/dev/null
+}
+
 require_manager() {
   docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'
   [[ "$(docker info --format '{{.Swarm.ControlAvailable}}')" == true ]] || die 'Docker Swarm manager access is required.'
@@ -158,6 +186,7 @@ nft --check --file "$rendered_nft" >/dev/null
 if [[ "$apply" == true ]]; then
   nft --file "$rendered_nft"
   nft list table inet "$nft_table" | grep -Fq -- "set ${nft_set}" || die 'applied nftables policy is not present after apply.'
+  install_tls_renewal_timer
 fi
 
 if [[ "$apply" == true ]]; then

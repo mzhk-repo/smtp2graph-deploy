@@ -10,7 +10,10 @@ state="$tmp/state"
 storage_parent="$tmp/storage-parent"
 env_file="$tmp/deploy.env"
 server_env_file="$tmp/server.environment"
+age_key="$tmp/age.txt"
 mkdir -p "$fake_bin" "$state" "$storage_parent"
+printf '%s\n' 'AGE-SECRET-KEY-1synthetic' >"$age_key"
+chmod 600 "$age_key"
 
 printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
@@ -62,6 +65,11 @@ cat >"$fake_bin/id" <<'EOF'
 [[ "${1:-}" == -u ]] && { printf '%s\n' 0; exit 0; }
 exec /usr/bin/id "$@"
 EOF
+cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_STATE}/systemctl.calls"
+EOF
 cat >"$fake_bin/chown" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -74,15 +82,15 @@ target=${!#}
 mkdir -p -- "$target"
 chmod 0700 -- "$target"
 EOF
-chmod 700 "$fake_bin/docker" "$fake_bin/nft" "$fake_bin/sops" "$fake_bin/id" "$fake_bin/chown" "$fake_bin/install"
+chmod 700 "$fake_bin/docker" "$fake_bin/nft" "$fake_bin/sops" "$fake_bin/id" "$fake_bin/chown" "$fake_bin/install" "$fake_bin/systemctl"
 
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted missing prerequisites.\n' >&2
   exit 1
 fi
 
-PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
-PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SOPS_AGE_KEY_FILE="$age_key" SMTP_TLS_RENEW_CONFIG_DIR="$tmp/etc/smtp2graph" SMTP_TLS_RENEW_SYSTEMD_DIR="$tmp/etc/systemd/system" SMTP_TLS_RENEW_LIBEXEC_DIR="$tmp/libexec/smtp2graph" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SOPS_AGE_KEY_FILE="$age_key" SMTP_TLS_RENEW_CONFIG_DIR="$tmp/etc/smtp2graph" SMTP_TLS_RENEW_SYSTEMD_DIR="$tmp/etc/systemd/system" SMTP_TLS_RENEW_LIBEXEC_DIR="$tmp/libexec/smtp2graph" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --apply >/dev/null
 test -f "$state/network"
 test "$(cat "$state/label")" = true
 grep -Fq -- '--check --file' "$state/nft.calls"
@@ -119,6 +127,6 @@ if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$serve
   printf 'ERROR: production bootstrap unexpectedly accepted missing approval context.\n' >&2
   exit 1
 fi
-PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --apply --approval-context production-bootstrap-20260801 >/dev/null
+PATH="$fake_bin:$PATH" FAKE_STATE="$state" SOPS_AGE_KEY_FILE="$age_key" SMTP_TLS_RENEW_CONFIG_DIR="$tmp/etc/smtp2graph" SMTP_TLS_RENEW_SYSTEMD_DIR="$tmp/etc/systemd/system" SMTP_TLS_RENEW_LIBEXEC_DIR="$tmp/libexec/smtp2graph" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$production_env" --apply --approval-context production-bootstrap-20260801 >/dev/null
 
 printf 'PASS: Swarm bootstrap checks and applies only reviewed development prerequisites.\n'

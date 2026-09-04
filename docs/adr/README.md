@@ -18,5 +18,6 @@ ADR створюються лише для довготривалих архіт
 | [ADR-0008](ADR-0008-at-least-once-delivery-during-recovery.md) | At-Least-Once delivery під час rollback/recovery | Accepted | Task 5.4; Gate D |
 | [ADR-0010](ADR-0010-remove-mandatory-cold-recovery-rto.md) | Cold recovery без обов'язкового RTO | Accepted | Task 7.3; Gate D |
 | [ADR-0009](ADR-0009-digest-only-deployment-inputs.md) | Digest-only deploy input; external release evidence | Accepted | Task 5.3; Gate D |
+| [ADR-0011](ADR-0011-automate-acme-tls-secret-rotation.md) | ACME TLS renewal outside SOPS via systemd and Docker Secrets | Accepted | Tasks 4.2, 4.3, 5.2 |
 
 `Accepted` означає прийняту baseline-архітектурну політику, а не завершене runtime-тестування. Qualification evidence залишається обов’язковим за відповідним gate.

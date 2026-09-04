@@ -181,6 +181,23 @@ printf 'prepare-certificates %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
 EOF
 chmod 700 "$fake_bin/prepare-certificates"
 export SMTP_CERTIFICATE_PREPARE_SCRIPT="$fake_bin/prepare-certificates"
+cat >"$fake_bin/renew-tls" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'renew-tls %s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
+env_file=''
+while (($#)); do
+  case "$1" in --env-file) env_file=$2; shift 2;; *) shift;; esac
+done
+mapping=$(awk -F= '$1 == "TLS_SECRET_MAPPING_FILE" { print $2; exit }' "$env_file")
+if [[ -n "$mapping" && ! -e "$mapping" ]]; then
+  mkdir -p "$(dirname "$mapping")"
+  printf '%s\n' 'TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_vrenewed' 'TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_vrenewed' >"$mapping"
+  chmod 600 "$mapping"
+fi
+EOF
+chmod 700 "$fake_bin/renew-tls"
+export SMTP_TLS_RENEW_SCRIPT="$fake_bin/renew-tls"
 package_ready="$tmp/package-ready"
 touch "$package_ready"
 
@@ -228,6 +245,7 @@ test "$(grep -c '^stack deploy ' "$calls")" -eq 2
 test "$(grep -c '^bootstrap-host ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
 test "$(grep -c '^prepare-certificates ' "$calls")" -eq 2
+test "$(grep -c '^renew-tls ' "$calls")" -eq 2
 if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1

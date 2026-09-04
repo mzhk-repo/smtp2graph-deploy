@@ -3,11 +3,19 @@
 ## `prepare-certificate-env.sh`
 
 - Category: 1b (certificate bootstrap and manual rotation).
-- Inputs: explicit SOPS env, Certbot DNS-01 Cloudflare settings, and optional absolute staging path. `--apply` is required for issuance/generation; `--rotate-tls` and `--rotate-graph` are explicit manual rotations.
-- Side effects: creates or upgrades the TLS/Graph certificate material and writes only escaped Dotenv values to ignored mode-`0600` `.env.certificates`; it never writes SOPS, Docker Secrets, or a stack.
+- Inputs: explicit SOPS env and optional absolute staging path. `--apply` is required only for Graph certificate issuance/generation; `--rotate-graph` is explicit.
+- Side effects: writes only Graph certificate/key staging material to ignored mode-`0600` `.env.certificates`; STARTTLS is owned by `renew-tls-certificate.sh`.
 - Safety: all decrypted values and Cloudflare credentials are staged only in `/dev/shm`; PEM values are never printed. A pending staging file is reused rather than silently replaced.
 - Check: `./tests/security/test-prepare-certificate-env.sh`, `bash -n scripts/prepare-certificate-env.sh`.
 - Follow [`CERTIFICATE_RUNBOOK.md`](CERTIFICATE_RUNBOOK.md) for Entra onboarding, SOPS handoff, rotation, and staging deletion.
+
+## `renew-tls-certificate.sh`
+
+- Category: 2 (scheduled ACME maintenance).
+- Inputs: SOPS-encrypted deployment contract, Certbot DNS-01 token, local Certbot lineage and names-only Docker Secret mapping. Host paths are read from the contract; systemd passes only validated project/env/age-key paths through `/etc/smtp2graph/tls-renewal.env`.
+- Side effects: `--apply` renews when due, creates missing immutable TLS Secrets, updates only `smtp-tls-cert`/`smtp-tls-key` service mounts and atomically records names after a matching STARTTLS fingerprint probe. `--prepare-only` does not require a service update.
+- Safety: a `/dev/shm` lock and protected temporary Cloudflare credentials prevent overlap or persistence; failed update/probe requests a Swarm rollback. The script never prints PEM values or removes old Secrets.
+- Check: `./tests/security/test-renew-tls-certificate.sh`, `bash -n scripts/renew-tls-certificate.sh`.
 
 ## `backup.sh` / `restore.sh`
 
@@ -92,9 +100,9 @@
 ## `reconcile-sops-secrets.sh`
 
 - Category: 1b (SOPS + age Docker Secret reconciliation).
-- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS, or an owner-only plaintext file supplied by the CI deployer after its controlled decryption, and an existing absolute `--mapping-file`. It extracts only the required Graph, SMTP and TLS values; values are never logged or sourced by a shell. Group- or world-readable plaintext input is rejected. Escaped `\n` is decoded for PEM material and the resulting SMTP users TSV, TLS certificate/key PEM syntax, expiration, hostname and public-key match are preflight-validated before Docker Secret creation.
+- Inputs: explicit absolute Dotenv-format `--env-file` encrypted by SOPS, or an owner-only plaintext file supplied by the CI deployer after its controlled decryption, and an existing absolute `--mapping-file`. It extracts only Graph and SMTP values; values are never logged or sourced by a shell. Group- or world-readable plaintext input is rejected. Escaped `\n` is decoded only for Graph PEM material, while TLS is reconciled from the Certbot lineage by `renew-tls-certificate.sh`.
 - Side effects: default mode validates and emits versioned Secret names only. `--apply` requires matching `SERVER_ENV`; production additionally needs an approval context. SOPS values are decrypted only into a mode-`0700` directory under `/dev/shm`; owner-only CI plaintext is staged only there before creating missing immutable Docker Secrets and atomically updating the names-only mapping file.
-- Rotation: update the encrypted value, run validation, apply to create the new content-addressed Secret, deploy through the future approved Task 5.2 orchestration, complete smoke verification, then remove the prior Secret only by an explicitly approved cleanup operation.
+- Rotation: Graph/SMTP rotation updates encrypted values; TLS rotation is automatic through the dedicated ACME renewal job. Neither reconciler removes an existing Docker Secret.
 - Rollback: restore the explicit prior names-only mapping and redeploy after queue assessment. The reconciler never removes an existing Docker Secret.
 - Check: `./tests/security/test-reconcile-sops-secrets.sh`.
 

@@ -1,5 +1,24 @@
 # Ініціалізація та ротація сертифікатів
 
+## STARTTLS ACME lifecycle
+
+STARTTLS `fullchain.pem` і `privkey.pem` не зберігаються в SOPS. Cloudflare
+DNS-01 token залишається в `env.*.enc`; root systemd timer
+`smtp2graph-tls-renew.timer` дешифрує contract лише в `/dev/shm`, оновлює
+Certbot lineage, versioned Docker Secrets і тільки TLS mounts gateway. Реальні
+host paths передаються через `/etc/smtp2graph/tls-renewal.env`, створений
+bootstrap, а не через hardcode у unit.
+
+Перед увімкненням timer оператор одноразово запускає
+`renew-tls-certificate.sh --env-file ... --prepare-only --apply`, виконує
+звичайний deploy і перевіряє STARTTLS. Для diagnosis доступні `--check` та
+`--dry-run`; `--force-renewal` дозволений лише в development. При невдалому
+cutover job виконує service rollback і залишає попередні Docker Secrets.
+
+Видаліть legacy `TLS_CERTIFICATE_PEM` і `TLS_PRIVATE_KEY_PEM` з кожного
+`env.*.enc` через SOPS після першого успішного cutover. Нижче описаний старий
+ручний TLS handoff більше не застосовується.
+
 `scripts/deploy-orchestrator-swarm.sh --deploy --apply` перевіряє наявність
 інструментів для роботи із сертифікатами на хості перед узгодженням секретів
 (Secret). На хостах Ubuntu використовуються APT-пакети не старіші за
@@ -43,13 +62,8 @@ DNS-01 та зашифрований токен Cloudflare для видачі T
 4. Видаліть проміжний файл і повторно розгорніть.
 5. Попередній сертифікат в Entra та Docker Secret зберігайте, доки smoke-тестування не пройде успішно.
 
-Для TLS-сертифіката запустіть `./scripts/prepare-certificate-env.sh \
-  --env-file /opt/smtp2graph-deploy/env.dev.enc \
-  --rotate-tls --apply`,
-скопіюйте два TLS-рядки до SOPS, видаліть проміжний файл і повторно розгорніть.
-Скрипт виконує примусове оновлення через Certbot і перевіряє відповідність
-виданого імені хоста та ключа. Автоматичного запису до SOPS, розгортання чи
-видалення старих секретів **не відбувається**.
+TLS renewal виконується автоматично timer-ом; ручний PEM handoff до SOPS не
+використовується.
 
 ## Відновлення та відкат
 

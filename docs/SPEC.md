@@ -651,7 +651,7 @@ Production gateway надає SMTP, а не custom HTTP API.
 - Single-node Docker Swarm.
 - Docker Secrets mounted у `/run/secrets/`.
 - Жодних production secrets у `.env`, stack YAML, Git, image layers, build args, CI artifacts або logs.
-- SOPS + age використовується для шифрування статичних файлів середовища у Git. Дешифрування та передача в Docker Secrets відбуваються в CI/CD.
+- SOPS + age використовується для шифрування статичних файлів середовища у Git. Дешифрування та передача в Docker Secrets відбуваються в CI/CD. Короткоживучі ACME TLS PEM не зберігаються у SOPS: Certbot lineage materializes them directly as versioned Docker Secrets through reviewed host automation.
 - Age private identity не зберігається в тому самому repository та не доступна untrusted CI.
 - Rotation використовує versioned secret names, оскільки Docker Secrets є immutable. Оновлення секретів потребує оновлення сервісу Docker Swarm (service update / redeploy), що викликає короткочасний перезапуск контейнера. Цей запланований перезапуск повністю вкладається в рамки SLA 99.5% доступності (допускає ~3.6 годин простою на місяць).
 

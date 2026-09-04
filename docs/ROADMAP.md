@@ -656,7 +656,7 @@ Write-Host "Certificate Thumbprint: $thumbprint"
 | Умова, що не блокує завершення Task 4.2 | Власник | Причина |
 |---|---|---|
 | Formal functional Gate B approval для fork revision | Task 2.5 — Gate B review | Це component decision gate, передумова фаз 3–4, а не TLS/network implementation detail. |
-| SOPS-encrypted `env.*.enc`, Graph/SMTP credential materialization і TLS renewal → Secret reconciliation | Task 4.3 — SOPS + age і versioned Docker Secrets lifecycle | Єдиний секретний lifecycle має бути спільним для всіх runtime credentials, а не окремим TLS workaround. |
+| SOPS-encrypted `env.*.enc` для Graph/SMTP/Cloudflare credentials та ACME TLS lineage → versioned Docker Secrets | Task 4.3 — SOPS + age і versioned Docker Secrets lifecycle | Статичні credentials і короткоживучий ACME матеріал мають окремі lifecycle, але спільний immutable Docker Secret runtime boundary. |
 | Encrypted overlay creation, node label/constraint, storage/tmpfs/entrypoint mounts, nftables apply і live `check-network-policy.sh` | Task 5.1 — Single-node Swarm stack і storage/network IaC | Потребує повного pinned runtime stack і staging deployment boundary. |
 | Idempotent render/apply/status/rollback orchestration | Task 5.2 — Idempotent orchestration scripts | Side effects мають проходити лише через reviewed deploy automation. |
 | Immutable GHCR image digest, Trivy/Syft/OCI evidence | Task 5.3 — Secure CI/CD pipeline | Release artifact і supply-chain evidence не створюються в Task 4.2. |

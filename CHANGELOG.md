@@ -6,7 +6,8 @@
 
 1. [CHANGELOG_2026_VOL_01.md](docs/changelogs/CHANGELOG_2026_VOL_01.md) — archived
 2. [CHANGELOG_2026_VOL_02.md](docs/changelogs/CHANGELOG_2026_VOL_02.md) — archived
-3. [CHANGELOG_2026_VOL_03.md](docs/changelogs/CHANGELOG_2026_VOL_03.md) — active volume
+3. [CHANGELOG_2026_VOL_03.md](docs/changelogs/CHANGELOG_2026_VOL_03.md) — archived
+4. [CHANGELOG_2026_VOL_04.md](docs/changelogs/CHANGELOG_2026_VOL_04.md) — active volume
 
 ## Політика ротації
 

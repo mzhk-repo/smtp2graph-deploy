@@ -361,7 +361,16 @@ prepare_certificates() {
 
 prepare_tls_secrets() {
   [[ "$tls_renew_script" = /* && -x "$tls_renew_script" && ! -L "$tls_renew_script" ]] || die 'TLS renewal script must be an absolute executable non-symlink file.'
-  "$tls_renew_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --prepare-only --apply
+  if [[ $(id -u) -eq 0 ]]; then
+    "$tls_renew_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --prepare-only --apply
+  else
+    command -v sudo >/dev/null || die 'sudo is required to reconcile TLS Secrets when running as non-root.'
+    local env_vars=()
+    [[ -z "${SOPS_AGE_KEY_FILE:-}" ]] || env_vars+=("SOPS_AGE_KEY_FILE=$SOPS_AGE_KEY_FILE")
+    [[ -z "${SOPS_AGE_KEY:-}" ]] || env_vars+=("SOPS_AGE_KEY=$SOPS_AGE_KEY")
+    [[ -z "${SMTP2GRAPH_SERVER_ENV_FILE:-}" ]] || env_vars+=("SMTP2GRAPH_SERVER_ENV_FILE=$SMTP2GRAPH_SERVER_ENV_FILE")
+    sudo env "${env_vars[@]}" "$tls_renew_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --prepare-only --apply
+  fi
 }
 
 case "$operation" in

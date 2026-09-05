@@ -15,3 +15,10 @@
     Verification: Isolated Certbot/Docker/SOPS renewal preparation, static Secret reconciliation, Graph certificate preparation and host bootstrap regressions passed.
     Risks: The singleton gateway briefly restarts for a TLS Secret update; old Secret versions are retained for rollback. Existing encrypted TLS PEM values must be removed from `env.*.enc` through an operator SOPS migration.
     Rollback: Disable `smtp2graph-tls-renew.timer`, restore the prior TLS Secret names through the mapping/service rollback path, and verify STARTTLS before re-enabling automation.
+
+2026-09-05 — Deploy orchestration: reconcile TLS Secret mapping with required host privileges
+    Context: A non-root CI deployment could create TLS Docker Secrets but could not atomically replace the persistent names-only mapping under root-owned `/srv/smtp2graph/<environment>`, causing `mktemp` to fail with `Permission denied`.
+    Change: The orchestrator now invokes only the TLS renewal/Secret preparation step through `sudo` when the deploy caller is non-root, preserving its required SOPS and server-environment inputs. The remaining Secret reconciliation and stack deploy path remain unprivileged.
+    Verification: `tests/shell/test-deploy-orchestrator.sh` asserts the non-root deploy path invokes the TLS renewal helper through `sudo`.
+    Risks: Non-root deploy callers require `sudo` authorization for the reviewed TLS renewal helper; this is already required later for host bootstrap.
+    Rollback: Restore the direct TLS renewal invocation only after the persistent TLS Secret mapping is moved to a safely writable, equally protected host location.

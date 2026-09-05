@@ -139,6 +139,7 @@ export SMTP_BOOTSTRAP_HOST_SCRIPT="$fake_bin/bootstrap-host"
 cat >"$fake_bin/sudo" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'sudo %s\n' "${!#}" >>"${FAKE_DOCKER_CALLS}"
 if [[ "${1:-}" == env ]]; then
   shift
   while [[ "${1:-}" == *=* ]]; do shift; done
@@ -246,6 +247,7 @@ test "$(grep -c '^bootstrap-host ' "$calls")" -eq 2
 test "$(grep -c '^init-storage ' "$calls")" -eq 2
 test "$(grep -c '^prepare-certificates ' "$calls")" -eq 2
 test "$(grep -c '^renew-tls ' "$calls")" -eq 2
+grep -Eq '^sudo .*/renew-tls$' "$calls"
 if grep -Fq -- '--prune' "$calls"; then
   printf 'ERROR: deploy unexpectedly used --prune.\n' >&2
   exit 1

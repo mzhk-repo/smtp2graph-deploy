@@ -114,7 +114,7 @@ extract_secret() {
     mv "$raw_target" "$target"
   fi
   case "$key" in
-    SMTP_USERS_TSV | TLS_CERTIFICATE_PEM | TLS_PRIVATE_KEY_PEM | GRAPH_CERT_PRIVATE_KEY_PEM)
+    SMTP_USERS_TSV | GRAPH_CERT_PRIVATE_KEY_PEM)
       decoded_target="$target.decoded"
       value=$(cat "$target")
       printf '%b' "$value" >"$decoded_target"
@@ -122,7 +122,7 @@ extract_secret() {
       ;;
   esac
   case "$key" in
-    TLS_CERTIFICATE_PEM | TLS_PRIVATE_KEY_PEM | GRAPH_CERT_PRIVATE_KEY_PEM)
+    GRAPH_CERT_PRIVATE_KEY_PEM)
       if grep -Fq '\n' "$target"; then
         decoded_target="$target.decoded"
         value=$(cat "$target")
@@ -163,19 +163,9 @@ fi
 extract_secret GRAPH_TENANT_ID "$stage_dir/graph-tenant-id"
 extract_secret GRAPH_CLIENT_ID "$stage_dir/graph-client-id"
 extract_secret SMTP_USERS_TSV "$stage_dir/smtp-users"
-extract_secret TLS_CERTIFICATE_PEM "$stage_dir/smtp-tls-cert"
-extract_secret TLS_PRIVATE_KEY_PEM "$stage_dir/smtp-tls-key"
 graph_sender_mailbox=$(extract_metadata GRAPH_SENDER_MAILBOX)
 global_sender=$(normalize_email "$graph_sender_mailbox") || die 'GRAPH_SENDER_MAILBOX is invalid.'
 render_smtp_users "$stage_dir/smtp-users" "$global_sender" >/dev/null || die 'SMTP_USERS_TSV does not satisfy the runtime SMTP policy.'
-smtp_tls_fqdn=$(extract_metadata SMTP_TLS_FQDN)
-openssl x509 -in "$stage_dir/smtp-tls-cert" -noout >/dev/null 2>&1 || die 'TLS_CERTIFICATE_PEM is not valid PEM.'
-openssl pkey -in "$stage_dir/smtp-tls-key" -noout >/dev/null 2>&1 || die 'TLS_PRIVATE_KEY_PEM is not valid PEM.'
-openssl x509 -in "$stage_dir/smtp-tls-cert" -checkend 1 -noout >/dev/null 2>&1 || die 'TLS certificate is expired or expires within one second.'
-openssl x509 -in "$stage_dir/smtp-tls-cert" -noout -checkhost "$smtp_tls_fqdn" >/dev/null 2>&1 || die 'TLS certificate does not match SMTP_TLS_FQDN.'
-cert_pub=$(openssl x509 -in "$stage_dir/smtp-tls-cert" -pubkey -noout | openssl pkey -pubin -pubout -outform DER | sha256sum | awk '{print $1}')
-key_pub=$(openssl pkey -in "$stage_dir/smtp-tls-key" -pubout -outform DER | sha256sum | awk '{print $1}')
-[[ "$cert_pub" == "$key_pub" ]] || die 'TLS certificate and private key do not match.'
 case "$graph_auth_mode" in
   certificate)
     extract_secret GRAPH_CERT_PRIVATE_KEY_PEM "$stage_dir/graph-credential"
@@ -195,13 +185,11 @@ secret_names[GRAPH_TENANT_ID_SECRET_NAME]=$(secret_for graph_tenant_id "$stage_d
 secret_names[GRAPH_CLIENT_ID_SECRET_NAME]=$(secret_for graph_client_id "$stage_dir/graph-client-id")
 secret_names[GRAPH_CREDENTIAL_SECRET_NAME]=$(secret_for graph_credential "$stage_dir/graph-credential")
 secret_names[SMTP_CREDENTIALS_SECRET_NAME]=$(secret_for smtp_users "$stage_dir/smtp-users")
-secret_names[TLS_CERTIFICATE_SECRET_NAME]=$(secret_for tls_certificate "$stage_dir/smtp-tls-cert")
-secret_names[TLS_PRIVATE_KEY_SECRET_NAME]=$(secret_for tls_private_key "$stage_dir/smtp-tls-key")
 if [[ "$graph_auth_mode" == certificate ]]; then
   secret_names[GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME]=$(secret_for graph_certificate_thumbprint "$stage_dir/graph-certificate-thumbprint")
 fi
 
-for key in GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME TLS_CERTIFICATE_SECRET_NAME TLS_PRIVATE_KEY_SECRET_NAME GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME; do
+for key in GRAPH_TENANT_ID_SECRET_NAME GRAPH_CLIENT_ID_SECRET_NAME GRAPH_CREDENTIAL_SECRET_NAME SMTP_CREDENTIALS_SECRET_NAME GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME; do
   [[ -z "${secret_names[$key]:-}" ]] || printf '%s=%s\n' "$key" "${secret_names[$key]}"
 done
 [[ "$apply" == true ]] || exit 0
@@ -213,8 +201,6 @@ for key in "${!secret_names[@]}"; do
     GRAPH_CREDENTIAL_SECRET_NAME) file=$stage_dir/graph-credential ;;
     GRAPH_CERTIFICATE_THUMBPRINT_SECRET_NAME) file=$stage_dir/graph-certificate-thumbprint ;;
     SMTP_CREDENTIALS_SECRET_NAME) file=$stage_dir/smtp-users ;;
-    TLS_CERTIFICATE_SECRET_NAME) file=$stage_dir/smtp-tls-cert ;;
-    TLS_PRIVATE_KEY_SECRET_NAME) file=$stage_dir/smtp-tls-key ;;
   esac
   docker secret inspect "${secret_names[$key]}" >/dev/null 2>&1 || docker secret create "${secret_names[$key]}" "$file" >/dev/null
 done

@@ -31,8 +31,6 @@ SMTP_TLS_FQDN|required|public|smtp-int.ldubgd.edu.ua
 TLS_ACME_EMAIL|required|public|operator@example.invalid
 TLS_ACME_STATE_DIR|required|public|/srv/smtp2graph/dev/acme
 TLS_OUTPUT_DIR|required|public|/srv/smtp2graph/dev/tls
-TLS_CERTIFICATE_FILE|required|public|/srv/smtp2graph/dev/tls/fullchain.pem
-TLS_PRIVATE_KEY_FILE|required|public|/srv/smtp2graph/dev/tls/privkey.pem
 TLS_SECRET_MAPPING_FILE|required|public|/srv/smtp2graph/dev/smtp2graph.env
 CERTBOT_MIN_VERSION|required|public|2.9.0-1
 CERTBOT_DNS_CLOUDFLARE_MIN_VERSION|required|public|2.0.0-1
@@ -47,8 +45,6 @@ GRAPH_CERTIFICATE_THUMBPRINT|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_S
 GRAPH_CERT_PRIVATE_KEY_PEM|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
 GRAPH_CLIENT_SECRET|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
 SMTP_USERS_TSV|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
-TLS_CERTIFICATE_PEM|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
-TLS_PRIVATE_KEY_PEM|required|secret-value|REPLACE_WITH_SOPS_ENCRYPTED_SECRET
 GRAPH_TENANT_ID_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME
 GRAPH_CLIENT_ID_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME
 GRAPH_CREDENTIAL_SECRET_NAME|required|secret-reference|REPLACE_WITH_VERSIONED_SECRET_NAME

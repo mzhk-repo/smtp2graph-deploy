@@ -8,3 +8,38 @@
     Verification: `tests/shell/test-deploy-orchestrator.sh`.
     Risks: Older encrypted environment contracts still require the documented public version fields before deployment can proceed; the change does not introduce implicit version defaults.
     Rollback: Revert the preflight and regression together only if Certbot version floors are removed from the deployment contract.
+
+2026-09-04 — TLS: automate ACME STARTTLS Secret rotation outside SOPS
+    Context: Manual copying of short-lived ACME PEM values into SOPS coupled ordinary certificate renewal to Git changes and full deployments.
+    Change: TLS PEM is no longer part of the static SOPS reconciliation contract. A root-owned systemd timer runs a reviewed renewal job that obtains the Certbot lineage with DNS-01, creates immutable TLS Docker Secrets, updates only the gateway TLS mounts, verifies the STARTTLS fingerprint and updates the names-only mapping only after success.
+    Verification: Isolated Certbot/Docker/SOPS renewal preparation, static Secret reconciliation, Graph certificate preparation and host bootstrap regressions passed.
+    Risks: The singleton gateway briefly restarts for a TLS Secret update; old Secret versions are retained for rollback. Existing encrypted TLS PEM values must be removed from `env.*.enc` through an operator SOPS migration.
+    Rollback: Disable `smtp2graph-tls-renew.timer`, restore the prior TLS Secret names through the mapping/service rollback path, and verify STARTTLS before re-enabling automation.
+
+2026-09-05 — Deploy orchestration: reconcile TLS Secret mapping with required host privileges
+    Context: A non-root CI deployment could create TLS Docker Secrets but could not atomically replace the persistent names-only mapping under root-owned `/srv/smtp2graph/<environment>`, causing `mktemp` to fail with `Permission denied`.
+    Change: The orchestrator now invokes only the TLS renewal/Secret preparation step through `sudo` when the deploy caller is non-root, preserving its required SOPS and server-environment inputs. The remaining Secret reconciliation and stack deploy path remain unprivileged.
+    Verification: `tests/shell/test-deploy-orchestrator.sh` asserts the non-root deploy path invokes the TLS renewal helper through `sudo`.
+    Risks: Non-root deploy callers require `sudo` authorization for the reviewed TLS renewal helper; this is already required later for host bootstrap.
+    Rollback: Restore the direct TLS renewal invocation only after the persistent TLS Secret mapping is moved to a safely writable, equally protected host location.
+
+2026-09-05 — TLS Secret reconciliation: accept protected pre-existing Certbot lineage under sudo
+    Context: Existing ACME lineage files created by the non-root deployment user remained correctly owner-only but were rejected after TLS preparation began running through `sudo`, because the reconciler required root ownership.
+    Change: When invoked by `sudo`, the TLS reconciler now accepts a protected certificate or key owned by either root or the original `SUDO_UID`; group- and world-writable inputs remain rejected.
+    Verification: `tests/security/test-reconcile-tls-secret.sh` simulates the root/sudo-owner boundary and preserves the writable-private-key rejection check.
+    Risks: The exception is limited to the original sudo caller and only applies while the file has safe permissions.
+    Rollback: Revert the sudo-owner allowance only after Certbot lineage ownership is reconciled to root before TLS Secret preparation.
+
+2026-09-06 — TLS renewal: parse mounted TLS Secret targets as separate lines
+    Context: Renewal incorrectly reported incomplete gateway TLS Secret targets even though both mounts existed, because its Docker Go template emitted literal `\\n` text instead of newline separators.
+    Change: The service-inspection template now emits real newline-delimited target/name pairs for the shell parser.
+    Verification: TLS renewal regression rejects the escaped-newline template and exercises the inspected target contract.
+    Risks: None; the change corrects only the read-only Docker inspection format.
+    Rollback: Revert the template correction only with a replacement parser that preserves one mount per record.
+
+2026-09-06 — Host bootstrap: reconcile Certbot state for root-owned TLS renewal
+    Context: Certificate preparation can initially create Certbot state as the deployment user, while the installed systemd timer renews as root and must not consume user-writable lineage state.
+    Change: Explicit host bootstrap now creates or reconciles the validated direct-child `TLS_ACME_STATE_DIR` as root-owned, mode-`0700`; all contained regular files become mode `0600`. The reconciliation is non-symlink, filesystem-bounded and runs only during `--apply`.
+    Verification: Bootstrap security regression verifies that apply invokes the root ownership reconciliation alongside the timer installation.
+    Risks: A legacy Certbot state directory becomes inaccessible to the former deployment user; normal issuance and renewal are owned by the root systemd service.
+    Rollback: Restore ownership only through a reviewed migration; do not make the root timer consume a user-writable state directory.

@@ -32,6 +32,7 @@ init_storage_script=${SMTP_INIT_STORAGE_SCRIPT:-"${project_root}/scripts/init-st
 reconcile_secrets_script=${SMTP_RECONCILE_SOPS_SECRETS_SCRIPT:-"${project_root}/scripts/reconcile-sops-secrets.sh"}
 bootstrap_host_script=${SMTP_BOOTSTRAP_HOST_SCRIPT:-"${project_root}/scripts/bootstrap-swarm-host.sh"}
 certificate_prepare_script=${SMTP_CERTIFICATE_PREPARE_SCRIPT:-"${project_root}/scripts/prepare-certificate-env.sh"}
+tls_renew_script=${SMTP_TLS_RENEW_SCRIPT:-"${project_root}/scripts/renew-tls-certificate.sh"}
 # shellcheck source=scripts/lib/read-deploy-env.sh
 # shellcheck disable=SC1091
 . "${project_root}/scripts/lib/read-deploy-env.sh"
@@ -358,6 +359,20 @@ prepare_certificates() {
   return "$status"
 }
 
+prepare_tls_secrets() {
+  [[ "$tls_renew_script" = /* && -x "$tls_renew_script" && ! -L "$tls_renew_script" ]] || die 'TLS renewal script must be an absolute executable non-symlink file.'
+  if [[ $(id -u) -eq 0 ]]; then
+    "$tls_renew_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --prepare-only --apply
+  else
+    command -v sudo >/dev/null || die 'sudo is required to reconcile TLS Secrets when running as non-root.'
+    local env_vars=()
+    [[ -z "${SOPS_AGE_KEY_FILE:-}" ]] || env_vars+=("SOPS_AGE_KEY_FILE=$SOPS_AGE_KEY_FILE")
+    [[ -z "${SOPS_AGE_KEY:-}" ]] || env_vars+=("SOPS_AGE_KEY=$SOPS_AGE_KEY")
+    [[ -z "${SMTP2GRAPH_SERVER_ENV_FILE:-}" ]] || env_vars+=("SMTP2GRAPH_SERVER_ENV_FILE=$SMTP2GRAPH_SERVER_ENV_FILE")
+    sudo env "${env_vars[@]}" "$tls_renew_script" --env-file "$SOPS_DEPLOY_SOURCE_FILE" --prepare-only --apply
+  fi
+}
+
 case "$operation" in
   check)
     [[ "$apply" == false && -z "$rollback_image" && "$queue_compatibility_confirmed" == false && "$secret_mapping_already_reconciled" == false ]] || die '--check accepts no mutation or rollback options.'
@@ -373,6 +388,7 @@ case "$operation" in
       [[ "$environment" == development ]] || die '--secret-mapping-already-reconciled is development-only.'
       log 'using explicitly prepared development Secret mapping for rehearsal.'
     else
+      prepare_tls_secrets
       reconcile_deploy_secrets
     fi
     for key in "${allowed_keys[@]}"; do

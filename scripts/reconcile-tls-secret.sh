@@ -74,12 +74,16 @@ for required in certificate_file key_file mapping_file; do [[ -n "${!required}" 
 for tool in openssl sha256sum mktemp stat awk; do command -v "$tool" >/dev/null || die "$tool is required."; done
 
 require_protected_file() {
-  local path=$1 mode owner
+  local path=$1 mode owner operator_uid owner_allowed=false
   [[ "$path" = /* && -f "$path" && ! -L "$path" ]] || die 'TLS input must be an absolute regular non-symlink file.'
   mode=$(stat -c '%a' "$path") || die 'could not inspect TLS input permissions.'
   owner=$(stat -c '%u' "$path") || die 'could not inspect TLS input owner.'
+  operator_uid=$(id -u)
   [[ "$mode" =~ ^[0-7]{3,4}$ ]] || die 'TLS input mode is invalid.'
-  [[ "$mode" != *[2367] && "$owner" == "$(id -u)" ]] || die 'TLS input must be owned by the invoking operator and not writable by group or other users.'
+  if [[ "$owner" == "$operator_uid" || ( "$operator_uid" == 0 && "${SUDO_UID:-}" =~ ^[0-9]+$ && "$owner" == "$SUDO_UID" ) ]]; then
+    owner_allowed=true
+  fi
+  [[ "$mode" != *[2367] && "$owner_allowed" == true ]] || die 'TLS input must be owned by the invoking operator and not writable by group or other users.'
 }
 require_protected_file "$certificate_file"
 require_protected_file "$key_file"

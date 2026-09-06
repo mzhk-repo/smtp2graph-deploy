@@ -190,3 +190,5 @@ If this file conflicts with `docs/SPEC.md`, `docs/ROADMAP.md`, or an applicable 
 ## Last Updated
 
 2026-08-27 — Task 6.2 durability/failure verification and observability integration are complete. Branch-based deployment validation triggers on pushes to main and dev, and tag-based triggers automate production deployments using the shared CI/CD workflows with hardened GitHub Actions permissions.
+
+2026-09-04 — ACME STARTTLS certificate/key lifecycle is separated from SOPS. Cloudflare DNS-01 credentials remain encrypted; Certbot lineage material is reconciled to immutable Docker Secrets by a root systemd timer that changes only TLS mounts and verifies the live STARTTLS certificate. Host-specific timer inputs are generated during bootstrap, not hardcoded in repository assets.

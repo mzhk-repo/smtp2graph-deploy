@@ -1,0 +1,16 @@
+[Unit]
+Description=Renew SMTP2Graph STARTTLS certificate
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/smtp2graph/tls-renewal.env
+ExecStart=/usr/bin/env /usr/local/libexec/smtp2graph/tls-renew
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv /run /dev/shm

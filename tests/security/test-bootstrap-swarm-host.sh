@@ -19,8 +19,13 @@ printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   "SMTP2GRAPH_STORAGE_HOST_PATH=${storage_parent}/data" \
+  "TLS_ACME_STATE_DIR=${tmp}/acme" \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$env_file"
 printf '%s\n' 'SERVER_ENV=dev' >"$server_env_file"
+mkdir -p "$tmp/acme/legacy"
+printf '%s\n' legacy >"$tmp/acme/legacy/privkey.pem"
+chmod 755 "$tmp/acme/legacy"
+chmod 644 "$tmp/acme/legacy/privkey.pem"
 
 cat >"$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -73,6 +78,7 @@ EOF
 cat >"$fake_bin/chown" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_STATE}/chown.calls"
 exit 0
 EOF
 cat >"$fake_bin/install" <<'EOF'
@@ -95,6 +101,9 @@ test -f "$state/network"
 test "$(cat "$state/label")" = true
 grep -Fq -- '--check --file' "$state/nft.calls"
 grep -Fq -- '--file' "$state/nft.calls"
+grep -Fq -- 'root:root' "$state/chown.calls"
+[[ $(stat -c '%a' "$tmp/acme/legacy") == 700 ]]
+[[ $(stat -c '%a' "$tmp/acme/legacy/privkey.pem") == 600 ]]
 
 sed -i 's/"encrypted":""/"encrypted":"false"/' "$fake_bin/docker"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$env_file" --check >/dev/null 2>&1; then
@@ -113,6 +122,7 @@ printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   'SWARM_OVERLAY_NETWORK=smtp2graph_internal' \
   'SMTP2GRAPH_STORAGE_HOST_PATH=/' \
+  "TLS_ACME_STATE_DIR=${tmp}/acme" \
   'SMTP_ALLOWED_SOURCE_CIDRS=10.42.0.0/24' >"$unsafe_env"
 if PATH="$fake_bin:$PATH" FAKE_STATE="$state" SMTP2GRAPH_SERVER_ENV_FILE="$server_env_file" "$script" --env-file "$unsafe_env" --check >/dev/null 2>&1; then
   printf 'ERROR: check unexpectedly accepted the storage root.\n' >&2

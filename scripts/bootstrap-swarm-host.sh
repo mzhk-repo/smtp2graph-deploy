@@ -56,11 +56,12 @@ done
 prepare_sops_deploy_env "$project_root" "$env_file" || die 'could not prepare encrypted deployment environment.'
 trap cleanup_sops_deploy_env EXIT
 load_deploy_env_file "$project_root" "$SOPS_DEPLOY_ENV_FILE" \
-  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP_ALLOWED_SOURCE_CIDRS
+  DEPLOY_ENVIRONMENT SWARM_OVERLAY_NETWORK SMTP2GRAPH_STORAGE_HOST_PATH SMTP_ALLOWED_SOURCE_CIDRS TLS_ACME_STATE_DIR
 
 environment=${DEPLOY_ENVIRONMENT:-}
 network=${SWARM_OVERLAY_NETWORK:-}
 storage_root=${SMTP2GRAPH_STORAGE_HOST_PATH:-}
+tls_acme_state_dir=${TLS_ACME_STATE_DIR:-}
 case "$environment" in
   development)
     node_label=smtp2graph_dev
@@ -83,6 +84,7 @@ fi
 [[ "$environment" != production || -z "$approval_context" || "$approval_context" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$ ]] || die '--approval-context has an unsafe value.'
 [[ "$network" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]] || die 'SWARM_OVERLAY_NETWORK has an unsafe name.'
 [[ "$storage_root" = /* && "$storage_root" != / ]] || die 'SMTP2GRAPH_STORAGE_HOST_PATH must be an absolute path other than /. '
+[[ "$tls_acme_state_dir" = /* && "$tls_acme_state_dir" != / ]] || die 'TLS_ACME_STATE_DIR must be an absolute path other than /. '
 [[ -n "${SMTP_ALLOWED_SOURCE_CIDRS:-}" ]] || die 'SMTP_ALLOWED_SOURCE_CIDRS is required.'
 for tool in docker nft install realpath dirname basename mktemp grep; do
   command -v "$tool" >/dev/null || die "$tool is required."
@@ -105,10 +107,29 @@ prepare_storage_root() {
   [[ "$resolved_root" == "$resolved_parent/$storage_leaf" ]] || die 'storage root must not contain symlink components.'
 }
 
+prepare_tls_acme_state() {
+  local parent leaf resolved_parent resolved_root
+  parent=$(dirname "$tls_acme_state_dir")
+  leaf=$(basename "$tls_acme_state_dir")
+  [[ "$leaf" != . && "$leaf" != .. ]] || die 'TLS_ACME_STATE_DIR has an unsafe final component.'
+  [[ -d "$parent" && ! -L "$parent" ]] || die 'TLS ACME state parent must be an existing non-symlink directory.'
+  resolved_parent=$(realpath -e -- "$parent") || die 'could not resolve TLS ACME state parent.'
+  [[ "$parent" == "$resolved_parent" ]] || die 'TLS ACME state parent must not contain symlink components.'
+  if [[ ! -e "$tls_acme_state_dir" ]]; then
+    install -d -o root -g root -m 700 -- "$resolved_parent/$leaf"
+  fi
+  [[ -d "$tls_acme_state_dir" && ! -L "$tls_acme_state_dir" ]] || die 'TLS ACME state directory must be a non-symlink directory.'
+  resolved_root=$(realpath -e -- "$tls_acme_state_dir") || die 'could not resolve TLS ACME state directory.'
+  [[ "$resolved_root" == "$resolved_parent/$leaf" ]] || die 'TLS ACME state directory must not contain symlink components.'
+  find -P "$resolved_root" -xdev -exec chown -h root:root {} +
+  find -P "$resolved_root" -xdev -type d -exec chmod 700 {} +
+  find -P "$resolved_root" -xdev -type f -exec chmod 600 {} +
+}
+
 install_tls_renewal_timer() {
   local age_file age_mode config_dir config_file config_tmp systemd_dir libexec_dir
   [[ "$apply" == true ]] || return
-  for tool in systemctl stat; do command -v "$tool" >/dev/null || die "$tool is required for TLS renewal scheduling."; done
+  for tool in systemctl stat find chown chmod; do command -v "$tool" >/dev/null || die "$tool is required for TLS renewal scheduling."; done
   age_file=${SOPS_AGE_KEY_FILE:-}
   [[ "$age_file" = /* && -f "$age_file" && ! -L "$age_file" ]] || die 'TLS renewal requires SOPS_AGE_KEY_FILE as an absolute regular non-symlink file.'
   age_mode=$(stat -c '%a' "$age_file") || die 'could not inspect SOPS age identity permissions.'
@@ -124,6 +145,7 @@ install_tls_renewal_timer() {
   install -m 644 "$project_root/deploy/systemd/smtp2graph-tls-renew.service" "$systemd_dir/smtp2graph-tls-renew.service"
   install -m 644 "$project_root/deploy/systemd/smtp2graph-tls-renew.timer" "$systemd_dir/smtp2graph-tls-renew.timer"
   install -m 755 "$project_root/deploy/systemd/tls-renew-launcher.sh" "$libexec_dir/tls-renew"
+  prepare_tls_acme_state
   config_tmp=$(mktemp "$config_dir/.tls-renewal.XXXXXX")
   chmod 600 "$config_tmp"
   printf 'SMTP2GRAPH_PROJECT_ROOT=%s\nSMTP2GRAPH_ENV_FILE=%s\nSOPS_AGE_KEY_FILE=%s\n' "$project_root" "$SOPS_DEPLOY_SOURCE_FILE" "$age_file" >"$config_tmp"

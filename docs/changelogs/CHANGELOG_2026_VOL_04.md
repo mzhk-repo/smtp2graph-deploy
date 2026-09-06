@@ -36,3 +36,10 @@
     Verification: TLS renewal regression rejects the escaped-newline template and exercises the inspected target contract.
     Risks: None; the change corrects only the read-only Docker inspection format.
     Rollback: Revert the template correction only with a replacement parser that preserves one mount per record.
+
+2026-09-06 — Host bootstrap: reconcile Certbot state for root-owned TLS renewal
+    Context: Certificate preparation can initially create Certbot state as the deployment user, while the installed systemd timer renews as root and must not consume user-writable lineage state.
+    Change: Explicit host bootstrap now creates or reconciles the validated direct-child `TLS_ACME_STATE_DIR` as root-owned, mode-`0700`; all contained regular files become mode `0600`. The reconciliation is non-symlink, filesystem-bounded and runs only during `--apply`.
+    Verification: Bootstrap security regression verifies that apply invokes the root ownership reconciliation alongside the timer installation.
+    Risks: A legacy Certbot state directory becomes inaccessible to the former deployment user; normal issuance and renewal are owned by the root systemd service.
+    Rollback: Restore ownership only through a reviewed migration; do not make the root timer consume a user-writable state directory.

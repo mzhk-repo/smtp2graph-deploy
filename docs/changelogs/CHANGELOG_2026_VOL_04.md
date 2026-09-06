@@ -22,3 +22,10 @@
     Verification: `tests/shell/test-deploy-orchestrator.sh` asserts the non-root deploy path invokes the TLS renewal helper through `sudo`.
     Risks: Non-root deploy callers require `sudo` authorization for the reviewed TLS renewal helper; this is already required later for host bootstrap.
     Rollback: Restore the direct TLS renewal invocation only after the persistent TLS Secret mapping is moved to a safely writable, equally protected host location.
+
+2026-09-05 — TLS Secret reconciliation: accept protected pre-existing Certbot lineage under sudo
+    Context: Existing ACME lineage files created by the non-root deployment user remained correctly owner-only but were rejected after TLS preparation began running through `sudo`, because the reconciler required root ownership.
+    Change: When invoked by `sudo`, the TLS reconciler now accepts a protected certificate or key owned by either root or the original `SUDO_UID`; group- and world-writable inputs remain rejected.
+    Verification: `tests/security/test-reconcile-tls-secret.sh` simulates the root/sudo-owner boundary and preserves the writable-private-key rejection check.
+    Risks: The exception is limited to the original sudo caller and only applies while the file has safe permissions.
+    Rollback: Revert the sudo-owner allowance only after Certbot lineage ownership is reconciled to root before TLS Secret preparation.

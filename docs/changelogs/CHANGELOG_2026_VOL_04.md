@@ -29,3 +29,10 @@
     Verification: `tests/security/test-reconcile-tls-secret.sh` simulates the root/sudo-owner boundary and preserves the writable-private-key rejection check.
     Risks: The exception is limited to the original sudo caller and only applies while the file has safe permissions.
     Rollback: Revert the sudo-owner allowance only after Certbot lineage ownership is reconciled to root before TLS Secret preparation.
+
+2026-09-06 — TLS renewal: parse mounted TLS Secret targets as separate lines
+    Context: Renewal incorrectly reported incomplete gateway TLS Secret targets even though both mounts existed, because its Docker Go template emitted literal `\\n` text instead of newline separators.
+    Change: The service-inspection template now emits real newline-delimited target/name pairs for the shell parser.
+    Verification: TLS renewal regression rejects the escaped-newline template and exercises the inspected target contract.
+    Risks: None; the change corrects only the read-only Docker inspection format.
+    Rollback: Revert the template correction only with a replacement parser that preserves one mount per record.

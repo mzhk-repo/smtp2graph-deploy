@@ -8,6 +8,7 @@ trap 'rm -rf -- "$tmp"' EXIT
 bin="$tmp/bin" mapping="$tmp/mapping.env" env_file="$tmp/env" server_env="$tmp/server.env"
 mkdir -p "$bin" "$tmp/secrets" "$tmp/source"
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=smtp-int.example.invalid' -addext 'subjectAltName=DNS:smtp-int.example.invalid' -keyout "$tmp/source/privkey.pem" -out "$tmp/source/fullchain.pem" >/dev/null 2>&1
+real_openssl=$(command -v openssl)
 printf '%s\n' \
   'DEPLOY_ENVIRONMENT=development' \
   'SMTP_TLS_FQDN=smtp-int.example.invalid' \
@@ -35,19 +36,34 @@ cp "$FAKE_CERT_SOURCE/privkey.pem" "$config/archive/$domain/privkey1.pem"
 ln -sfn "$config/archive/$domain/fullchain1.pem" "$config/live/$domain/fullchain.pem"
 ln -sfn "$config/archive/$domain/privkey1.pem" "$config/live/$domain/privkey.pem"
 EOF
+cat >"$bin/openssl" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == s_client ]]; then
+  cat "$FAKE_CERT_SOURCE/fullchain.pem"
+else
+  exec "$FAKE_REAL_OPENSSL" "$@"
+fi
+EOF
 cat >"$bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 case "${1:-} ${2:-}" in
   'secret inspect') test -f "$FAKE_SECRET_DIR/$3" ;;
   'secret create') cp "$4" "$FAKE_SECRET_DIR/$3" ;;
+  'info --format') printf '%s\n' true ;;
+  info\ *) exit 0 ;;
+  'service inspect')
+    [[ "${5:-}" == *'printf "%s=%s\n"'* ]] || exit 1
+    printf '%s\n' 'smtp-tls-cert=existing-cert' 'smtp-tls-key=existing-key'
+    ;;
+  'service update' | 'service rollback') exit 0 ;;
   *) exit 1 ;;
 esac
 EOF
 chmod 700 "$bin"/*
 PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_SECRET_DIR="$tmp/secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" "$script" --env-file "$env_file" --check >/dev/null
-PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_SECRET_DIR="$tmp/secrets" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" "$script" --env-file "$env_file" --prepare-only --apply >/dev/null
+PATH="$bin:$PATH" FAKE_CERT_SOURCE="$tmp/source" FAKE_SECRET_DIR="$tmp/secrets" FAKE_REAL_OPENSSL="$real_openssl" SMTP2GRAPH_SERVER_ENV_FILE="$server_env" "$script" --env-file "$env_file" --apply >/dev/null
 grep -Eq '^TLS_CERTIFICATE_SECRET_NAME=smtp2graph_tls_certificate_v' "$mapping"
 grep -Eq '^TLS_PRIVATE_KEY_SECRET_NAME=smtp2graph_tls_private_key_v' "$mapping"
 [[ $(find "$tmp/secrets" -type f | wc -l) -eq 2 ]]
-printf 'PASS: TLS renewal prepares lineage-backed immutable Secrets without a service update.\n'
+printf 'PASS: TLS renewal parses mounted Secret targets and verifies STARTTLS.\n'

@@ -108,7 +108,7 @@ fi
 docker info >/dev/null 2>&1 || die 'Docker API is unavailable or access is denied.'
 [[ "$(docker info --format '{{.Swarm.ControlAvailable}}')" == true ]] || die 'Docker Swarm manager access is required.'
 service="${SWARM_STACK_NAME}_gateway"
-secret_lines=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{printf "%s=%s\\n" .File.Name .SecretName}}{{end}}') || die 'gateway service is unavailable.'
+secret_lines=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{printf "%s=%s\n" .File.Name .SecretName}}{{end}}') || die 'gateway service is unavailable.'
 current_cert=$(awk -F= '$1 == "smtp-tls-cert" { print $2 }' <<<"$secret_lines")
 current_key=$(awk -F= '$1 == "smtp-tls-key" { print $2 }' <<<"$secret_lines")
 [[ -n "$current_cert" && -n "$current_key" ]] || die 'gateway TLS Secret targets are incomplete.'
